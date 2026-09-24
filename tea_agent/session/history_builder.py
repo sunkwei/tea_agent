@@ -20,6 +20,7 @@ from tea_agent.auto_compact import (
     classify_waterline,
     waterline_name,
 )
+from tea_agent.image_ref import build_data_url, parse_image_ref
 
 logger = logging.getLogger("session.history_builder")
 
@@ -91,7 +92,37 @@ def estimate_messages_tokens(messages: list[dict]) -> int:
     return total
 
 
-def to_multimodal(msg: dict, supports_vision: bool, original: dict | None = None) -> dict:
+def _image_resolver_of(context: Any):
+    """从 context 取图片解析器（``img:<id>`` → ``(mime, blob)``）。
+
+    图片二进制存于 ``images`` 表，此处按需取回 —— 仅当前轮图片会真正被解析
+    （历史轮在 ``strip_historical_images`` 中被剥离），避免每次请求搬运全部历史图。
+
+    Args:
+        context: SessionContext 实例（可能没有 storage）。
+
+    Returns:
+        解析回调；无 storage 时返回 ``None``。
+    """
+    storage = getattr(context, "storage", None)
+    if storage is None:
+        return None
+
+    def _resolve(image_id: int):
+        try:
+            img = storage.get_image(image_id)
+        except Exception as e:
+            logger.warning(f"get_image({image_id}) failed: {e}")
+            return None
+        if not img:
+            return None
+        return img.get("mime_type") or "image/png", img.get("blob") or b""
+
+    return _resolve
+
+
+def to_multimodal(msg: dict, supports_vision: bool, original: dict | None = None,
+                  image_resolver=None) -> dict:
     """如果消息包含 images 字段，将 content 转换为多模态格式。
 
     Args:
@@ -99,6 +130,9 @@ def to_multimodal(msg: dict, supports_vision: bool, original: dict | None = None
         supports_vision: 模型是否支持视觉输入
         original: context.messages 中的原始消息（用于回写 base64 快照缓存；
             A6: 同一图片文件被覆盖前各请求复用同一编码，避免前缀变化）
+        image_resolver: 可选回调 ``(image_id) -> (mime, blob) | None``，用于把
+            ``img:<id>`` 引用（图片二进制存于 images 表）解析为实际数据。
+            为 None 时引用项被跳过（历史轮本就会被 strip，无影响）。
 
     Returns:
         处理后的消息字典
@@ -164,6 +198,27 @@ def to_multimodal(msg: dict, supports_vision: bool, original: dict | None = None
                 continue
             _seen_url.add(img_path)
             parts.append({"type": "image_url", "image_url": {"url": img_path}})
+            continue
+        # img:<id> 引用（图片二进制存于 images 表）→ 经 resolver 取回
+        _ref_id = parse_image_ref(img_path)
+        if _ref_id is not None:
+            if image_resolver is None:
+                continue
+            try:
+                resolved = image_resolver(_ref_id)
+            except Exception as e:
+                logger.warning(f"图片引用解析失败 img:{_ref_id}: {e}")
+                continue
+            if not resolved:
+                continue
+            _mime, _blob = resolved
+            if not _blob:
+                continue
+            url = build_data_url(_blob, _mime)
+            if url in _seen_url:
+                continue
+            _seen_url.add(url)
+            parts.append({"type": "image_url", "image_url": {"url": url}})
             continue
         if not os.path.isfile(img_path):
             continue
@@ -1581,7 +1636,8 @@ def build_api_messages(context: Any, system_prompt: str) -> list[dict]:
                 and context.supports_reasoning
                 and "reasoning_content" not in msg_copy):
             msg_copy["reasoning_content"] = ""
-        msg_copy = to_multimodal(msg_copy, context.supports_vision, original=msg)
+        msg_copy = to_multimodal(msg_copy, context.supports_vision, original=msg,
+                                 image_resolver=_image_resolver_of(context))
         msg_copy.pop("_b64_cache", None)
         if isinstance(msg_copy.get("content"), list) and not context.supports_vision:
             text_parts = []

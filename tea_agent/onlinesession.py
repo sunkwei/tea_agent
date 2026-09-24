@@ -880,7 +880,7 @@ class OnlineToolSession(BaseChatSession):
         try:
             topic_id = getattr(self, "current_topic_id", None)
             storage = getattr(self, "storage", None) or getattr(
-                self.ctx, "storage", None
+                self.context, "storage", None
             )
             if not (topic_id and storage):
                 return
@@ -892,7 +892,14 @@ class OnlineToolSession(BaseChatSession):
                 payload["content"] = content
             if reasoning:
                 payload["reasoning"] = reasoning
-            events.append_event(topic_id, "assistant/chunk", payload)
+            # conversation_id 由回合入口 create_turn 写入 ``session.context``
+            # （回合**开始**即有 id），使助手增量事件能归属到具体轮次。
+            # ⚠️ 必须用 ``self.context``：OnlineToolSession **没有** ``ctx`` 属性
+            # （那是 SessionComponent 的写法），误用会静默取到空串 → NULL。
+            events.append_event(
+                topic_id, "assistant/chunk", payload,
+                conversation_id=getattr(self.context, "conversation_id", "") or "",
+            )
         except Exception:
             logger.debug(
                 "append assistant/chunk event failed (isolated)", exc_info=True
@@ -910,14 +917,18 @@ class OnlineToolSession(BaseChatSession):
         try:
             topic_id = getattr(self, "current_topic_id", None)
             storage = getattr(self, "storage", None) or getattr(
-                self.ctx, "storage", None
+                self.context, "storage", None
             )
             if not (topic_id and storage):
                 return
             events = getattr(storage, "events", None)
             if events is None:
                 return
-            events.append_event(topic_id, "turn/end", {"reason": reason})
+            # 中断标记同样带 conversation_id：否则「哪一轮中断了」无法归属
+            events.append_event(
+                topic_id, "turn/end", {"reason": reason},
+                conversation_id=getattr(self.context, "conversation_id", "") or "",
+            )
         except Exception:
             logger.debug("append turn/end marker failed (isolated)", exc_info=True)
 

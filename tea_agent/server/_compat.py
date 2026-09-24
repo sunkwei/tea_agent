@@ -82,13 +82,48 @@ def _schedule_buffer_cleanup(topic_id: str, delay: float = 30.0) -> None:
         threading.Timer(delay, lambda: cleanup_buffer(topic_id)).start()
 
 
+def _seed_buffer_from_snapshot(topic_id: str) -> int:
+    """把快照中「断连前已产出」的事件回放进后台缓冲区，返回下一可用序号。
+
+    前台 SSE 已消费的事件不会再进队列：它们被 yield 给客户端、同时记入
+    turn_snapshot，但**不会**再出现在 queue 里。若接管时不回放，切回主题的
+    用户只能拿到断连**之后**的新事件 —— 已产出的内容虽在快照里，却永远浮不
+    到 UI（实测：快照 partial_text 有三段内容，/stream-buffer 却是空数组）。
+
+    回放与队列事件共用同一套序号：快照里是 0..N，队列续 N+1，前端按 since
+    增量拉取时既不错位也不重复。
+
+    Args:
+        topic_id: 主题 ID。
+
+    Returns:
+        下一个可用事件序号（无快照时为 0）。
+    """
+    try:
+        snap = _snapshot.read_snapshot(topic_id)
+    except Exception:
+        return 0
+    if not snap:
+        return 0
+    for item in snap.get("events") or []:
+        idx = item.get("index")
+        ev = item.get("event")
+        if isinstance(idx, int) and isinstance(ev, dict):
+            append_to_buffer(topic_id, ev, idx)
+    try:
+        return int(snap.get("seen") or 0)
+    except (TypeError, ValueError):
+        return 0
+
+
 async def _background_buffer_reader(topic_id: str, queue: asyncio.Queue,
                                       event_loop=None):
     """从 queue 消费事件并写入后台缓冲区供前端轮询。"""
     create_background_buffer(topic_id)
     # 接管前台已开始的回合：保留已累积内容（不清空），序号由快照自动递增
     _snapshot.ensure_turn(topic_id)
-    index = 0
+    # ⭐ 先回放「断连前已产出」的事件，否则切回主题时看不到正在进行的内容
+    index = _seed_buffer_from_snapshot(topic_id)
     try:
         while True:
             try:

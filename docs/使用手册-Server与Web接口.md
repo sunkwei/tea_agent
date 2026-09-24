@@ -223,7 +223,7 @@ pip install starlette uvicorn
 
 ### 3.5 图片上传
 
-支持拖拽或点击上传图片，自动转换为 base64 发送。图片参数通过 `images` 字段传递，服务端保存到 `uploads/` 目录后传递给 LLM。
+支持拖拽或点击上传图片，自动转换为 base64 发送。图片参数通过 `images` 字段传递（`data:image/...;base64,` 或裸 base64），服务端**不落盘**，直接以 BLOB 存入数据库 `images` 表；`conversations.user_msg` 只保存 `img:<id>` 轻量引用。历史回放由 `GET /api/image/{id}` 回读，PDF/Markdown 导出会自动把图片带上。
 
 ---
 

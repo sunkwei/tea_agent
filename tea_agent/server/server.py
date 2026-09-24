@@ -412,6 +412,10 @@ class MinimalServer:
         from .modules.storage_module import StorageModule
         return StorageModule.get_topic_conversations(topic_id, limit)
 
+    def get_image(self, image_id):
+        from .modules.storage_module import StorageModule
+        return StorageModule.get_image(image_id)
+
     def get_topic_trajectory(self, topic_id, limit=0):
         from .modules.storage_module import StorageModule
         return StorageModule.get_topic_trajectory(topic_id, limit)
@@ -529,6 +533,7 @@ def _build_routes() -> list:
         Route("/api/topic/{topic_id:str}/status", rh.handle_web_topic_status),
         Route("/api/topic/{topic_id:str}/stream-buffer", rh.handle_web_topic_stream_buffer),
         Route("/api/topic/{topic_id:str}/conversations", rh.handle_web_topic_conversations),
+        Route("/api/image/{image_id:str}", rh.handle_web_image),
         Route("/api/topic/{topic_id:str}/trajectory", rh.handle_web_topic_trajectory),
         Route("/api/topic/{topic_id:str}/todos", rh.handle_web_topic_todos),
         Route("/api/topic/{topic_id:str}/todos/{idx:int}", rh.handle_web_topic_todo_update, methods=["PUT"]),
@@ -746,6 +751,23 @@ def run_server(host="127.0.0.1", port=8282,
         _requeued = _state.restore_queues()
         if _requeued:
             logger.info("restart recovery: %d queued message(s) restored", _requeued)
+
+        # 孤儿图片清理：回合没走完（崩溃/强杀）时，回合开始即入库的图片会停在
+        # conversation_id='' 且永不可达。**必须排除被在途快照引用的那些** ——
+        # 它们同样是未归属状态，却是刚恢复的回合要显示的内容，误删即「切回看不到图」。
+        try:
+            from tea_agent.server.turn_snapshot import snapshot_image_ids
+            from tea_agent.store import get_storage
+
+            _keep = snapshot_image_ids()
+            if _keep is None:
+                logger.warning("orphan image cleanup skipped (snapshot unreadable)")
+            else:
+                _n = get_storage().cleanup_orphan_images(keep_ids=_keep)
+                if _n:
+                    logger.info("restart recovery: %d orphan image(s) purged", _n)
+        except Exception:
+            logger.exception("orphan image cleanup failed (non-fatal)")
     except ImportError:
         logger.warning("restart recovery skipped (modules unavailable)")
     try:

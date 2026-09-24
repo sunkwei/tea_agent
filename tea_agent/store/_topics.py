@@ -107,46 +107,77 @@ class TopicStore(StoreComponent):
         c.close()
         return self.get_drift_count(topic_id)
 
-    def delete_topic(self, topic_id: str):
-        """Hard delete a topic and all associated data (cascade).
+    def soft_delete_topic(self, topic_id: str) -> bool:
+        """标记删除主题及其数据（append-only：只打标记，不物理删除）。
 
-        Deletes agent_rounds, images, conversations,
-        topic_token_stats, t_conv_summary, memories, and the topic itself.
+        为什么不再物理删除：删除动作本身也是事实，硬删会让「用户删过什么」
+        永久不可考（实测：删主题后 conversations/agent_rounds 行数归零，
+        无法回溯）。改为标记后，审计与恢复都还有依据；真正的硬删除留待将来
+        按保留期统一归档。
+
+        连带标记（均只写 ``deleted_at``）：conversations、agent_rounds、images。
+        **不触碰 session_events** —— 它是 append-only 审计日志，删除事实本身
+        也需要留痕（此前硬删路径下审计日志残留但引用悬空，两头不落好）。
 
         Args:
-            topic_id: The UUID of the topic to delete.
+            topic_id: 主题 ID。
+
+        Returns:
+            True=已标记；False=主题不存在或已被标记。
         """
         c = self.conn.cursor()
         try:
-            # 级联删除：先删孙表，再删子表，最后删主表
+            row = c.execute(
+                "SELECT 1 FROM topics WHERE topic_id = ? AND deleted_at IS NULL",
+                (topic_id,)).fetchone()
+            if not row:
+                return False
+            now = "datetime('now', 'localtime')"
+            c.execute(f"UPDATE topics SET deleted_at = {now}, is_active = 0 WHERE topic_id = ?",
+                      (topic_id,))
+            c.execute(f"UPDATE conversations SET deleted_at = {now} WHERE topic_id = ?",
+                      (topic_id,))
             c.execute(
-                "DELETE FROM agent_rounds WHERE conversation_id IN "
-                "(SELECT id FROM conversations WHERE topic_id = ?)",
-                (topic_id,))
+                f"UPDATE agent_rounds SET deleted_at = {now} WHERE conversation_id IN "
+                "(SELECT id FROM conversations WHERE topic_id = ?)", (topic_id,))
             c.execute(
-                "DELETE FROM images WHERE conversation_id IN "
-                "(SELECT id FROM conversations WHERE topic_id = ?)",
-                (topic_id,))
-            c.execute("DELETE FROM conversations WHERE topic_id = ?", (topic_id,))
-            c.execute("DELETE FROM topic_token_stats WHERE topic_id = ?", (topic_id,))
-            c.execute("DELETE FROM t_conv_summary WHERE topic_id = ?", (topic_id,))
-            c.execute("DELETE FROM memories WHERE source_topic_id = ?", (topic_id,))
-            c.execute("DELETE FROM topics WHERE topic_id = ?", (topic_id,))
+                f"UPDATE images SET deleted_at = {now} WHERE conversation_id IN "
+                "(SELECT id FROM conversations WHERE topic_id = ?)", (topic_id,))
             self.conn.commit()
+            return True
         except Exception:
             self.conn.rollback()
             raise
         finally:
             c.close()
 
-    def get_topic(self, topic_id: str) -> dict | None:
-        """Get the topic.
+    def delete_topic(self, topic_id: str) -> bool:
+        """删除主题 —— 语义为**标记删除**（append-only）。
+
+        保留本名以兼容既有调用方，行为委托 ``soft_delete_topic``。
+        历史实现是级联硬删（DELETE conversations/agent_rounds/images/topics），
+        已废弃：硬删不可回溯，且会漏掉 pending 状态的图片（conversation_id=''
+        匹配不到级联条件，实测删除后 images 残留）。
 
         Args:
-            topic_id: Description.
+            topic_id: 主题 ID。
+
+        Returns:
+            True=已标记删除。
+        """
+        return self.soft_delete_topic(topic_id)
+
+    def get_topic(self, topic_id: str) -> dict | None:
+        """获取主题（已标记删除的视为不存在）。
+
+        Args:
+            topic_id: 主题 ID。
+
+        Returns:
+            主题 dict；不存在或已标记删除时返回 None。
         """
         c = self.conn.cursor()
-        c.execute("SELECT * FROM topics WHERE topic_id = ?", (topic_id,))
+        c.execute("SELECT * FROM topics WHERE topic_id = ? AND deleted_at IS NULL", (topic_id,))
         r = c.fetchone()
         c.close()
         return dict(r) if r else None
@@ -185,7 +216,7 @@ class TopicStore(StoreComponent):
         c.close()
 
     def list_topics(self) -> list[dict]:
-        """List topics (only active ones)."""
+        """列出主题（仅未删除的）。"""
         c = self.conn.cursor()
         c.execute('''
             SELECT t.*,
@@ -193,7 +224,7 @@ class TopicStore(StoreComponent):
                    COALESCE(s.conversation_count, 0) as conversation_count
             FROM topics t
             LEFT JOIN topic_token_stats s ON t.topic_id = s.topic_id
-            WHERE t.is_active = 1
+            WHERE t.is_active = 1 AND t.deleted_at IS NULL
             ORDER BY t.last_update_stamp DESC
         ''')
         rows = c.fetchall()

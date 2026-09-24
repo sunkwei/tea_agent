@@ -4,10 +4,12 @@ Extracted from _core.py to reduce file size.
 """
 
 import contextlib
+import json
 import logging
 import os
 import shutil
 import sqlite3
+import uuid
 from datetime import datetime
 
 from ._component import Cursor
@@ -88,12 +90,35 @@ def init_tables(db):
     ''')
 
     # fork lineage：conversations 记录来源分支（session fork 支持）
+    # status/deleted_at：回合生命周期 + 软删除（append-only 语义，见下）
     for col, col_def in [
         ("fork_source_id", "TEXT DEFAULT NULL"),
         ("fork_stamp", "TEXT DEFAULT NULL"),
+        # 回合状态：pending=进行中（回合开始即建行）/ done / error / interrupted
+        ("status", "TEXT DEFAULT 'done'"),
+        # 软删除标记（append-only：删除是标记，不是物理删除）
+        ("deleted_at", "TEXT DEFAULT NULL"),
     ]:
         with contextlib.suppress(Exception):
             c.execute(f"ALTER TABLE conversations ADD COLUMN {safe_ident(col)} {safe_ddl(col_def)}")
+
+    # agent_rounds：单轮明细的 append-only 存储（conversations.rounds_json 的替代）
+    for col, col_def in [
+        # reasoning_content 独立成列：此前被拼进 content 的 "[思考] " 前缀，
+        # 无法还原为结构化 rounds（DeepSeek thinking 模式要求 RC 原样回传）
+        ("reasoning_content", "TEXT DEFAULT ''"),
+        ("deleted_at", "TEXT DEFAULT NULL"),
+    ]:
+        with contextlib.suppress(Exception):
+            c.execute(f"ALTER TABLE agent_rounds ADD COLUMN {safe_ident(col)} {safe_ddl(col_def)}")
+
+    # 软删除标记：topics / images 同样改为标记删除
+    for tbl, col, col_def in [
+        ("topics", "deleted_at", "TEXT DEFAULT NULL"),
+        ("images", "deleted_at", "TEXT DEFAULT NULL"),
+    ]:
+        with contextlib.suppress(Exception):
+            c.execute(f"ALTER TABLE {safe_ident(tbl)} ADD COLUMN {safe_ident(col)} {safe_ddl(col_def)}")
 
     # fork 元数据表：记录 fork 操作（源 topic → 目标 topic）
     c.execute('''
@@ -263,6 +288,63 @@ def init_tables(db):
     c.close()
 
 
+def backfill_rounds_from_json(c) -> int:
+    """把遗留 ``conversations.rounds_json`` 回填进 ``agent_rounds``（幂等）。
+
+    只为「agent_rounds 中没有任何行」的对话补写 —— 已有行的对话不动（避免
+    与既有明细重复）。回填成功后**保留** rounds_json 原文：它是原始记录，
+    清理由后续按保留期统一处理（append-only 精神：不主动销毁事实）。
+
+    Args:
+        c: 已打开的 DB cursor（事务由调用方管理）。
+
+    Returns:
+        回填的轮次总数（0 表示无需回填）。
+    """
+    try:
+        rows = c.execute(
+            "SELECT id, rounds_json FROM conversations "
+            "WHERE rounds_json IS NOT NULL AND rounds_json != '' "
+            "AND id NOT IN (SELECT DISTINCT conversation_id FROM agent_rounds)"
+        ).fetchall()
+    except sqlite3.Error:
+        return 0
+    total = 0
+    for row in rows:
+        conv_id, raw = row[0], row[1]
+        try:
+            rounds = json.loads(raw)
+        except (json.JSONDecodeError, TypeError):
+            continue          # 损坏的 JSON：跳过，不影响其他对话
+        if not isinstance(rounds, list):
+            continue
+        for i, r in enumerate(rounds):
+            if not isinstance(r, dict):
+                continue
+            try:
+                tc = r.get("tool_calls")
+                c.execute(
+                    "INSERT INTO agent_rounds "
+                    "(id, conversation_id, round_num, role, content, tool_calls, "
+                    " tool_call_id, reasoning_content, stamp) "
+                    "VALUES (?, ?, ?, ?, ?, ?, ?, ?, datetime('now', 'localtime'))",
+                    (uuid.uuid4().hex, conv_id, i, r.get("role", "") or "",
+                     r.get("content", "") or "",
+                     json.dumps(tc, ensure_ascii=False) if tc else None,
+                     r.get("tool_call_id"),
+                     r.get("reasoning_content", "") or ""),
+                )
+                total += 1
+            except sqlite3.Error:
+                continue      # 单项失败隔离：不拖垮整次迁移
+    if total:
+        c.connection.commit()
+        log = logging.getLogger("Store")
+        log.warning("已回填 %d 个轮次（%d 个对话）: rounds_json → agent_rounds",
+                    total, len(rows))
+    return total
+
+
 # ═══════════════════════════════════════════════
 #  Migration
 # ═══════════════════════════════════════════════
@@ -322,6 +404,26 @@ def migrate(db):
         created_at TIMESTAMP DEFAULT (datetime('now', 'localtime')),
         FOREIGN KEY (topic_id) REFERENCES topics(topic_id)
     )''')
+    c.connection.commit()
+
+    # ── 数据回填：rounds_json → agent_rounds ──
+    # schema 加列是自动的，但**数据层需要显式回填**：旧库若只写了
+    # conversations.rounds_json 而没写 agent_rounds，改成「从 agent_rounds
+    # 派生」后这些轮次就读不出来了（实测：有 rounds_json 但无 agent_rounds
+    # 行的对话，rounds_json_parsed 返回 None → 轮次静默丢失）。
+    # 必须放在 migrate 里（init_tables 阶段 rounds_json 列可能尚不存在）。
+    backfill_rounds_from_json(c)
+
+    # 索引：deleted_at 过滤与按会话查轮次都是热点（agent_rounds 已万行级）。
+    # 依赖 deleted_at 列，故必须在加列之后建。
+    for ddl in [
+        "CREATE INDEX IF NOT EXISTS idx_agent_rounds_conv "
+        "ON agent_rounds(conversation_id, deleted_at)",
+        "CREATE INDEX IF NOT EXISTS idx_conversations_topic "
+        "ON conversations(topic_id, deleted_at)",
+    ]:
+        with contextlib.suppress(Exception):
+            c.execute(ddl)
     c.connection.commit()
 
     c.close()

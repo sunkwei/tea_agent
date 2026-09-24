@@ -345,6 +345,27 @@ class Storage:
         """获取对话的 agent rounds。"""
         return self._conversations.get_agent_rounds(conversation_id)
 
+    def get_images(self, conversation_ids: list) -> dict:
+        """批量读取多轮对话的图片（导出用）。返回 {conversation_id: [img, ...]}。"""
+        return self._conversations.get_images(conversation_ids)
+
+    def get_image(self, image_id: int) -> dict | None:
+        """读取单张图片（HTTP 回读用）。返回 {id, conversation_id, mime_type, blob}。"""
+        return self._conversations.get_image(image_id)
+
+    def add_pending_image(self, blob: bytes, mime: str = "image/png") -> int:
+        """回合开始即入库图片（暂不归属会话），返回 images.id。"""
+        return self._conversations.add_pending_image(blob, mime)
+
+    def cleanup_orphan_images(self, keep_ids=None) -> int:
+        """删除崩溃遗留的未归属图片（启动时调用）。返回删除条数。
+
+        Args:
+            keep_ids: 需保留的图片 id（被在途快照引用的那些 —— 它们同样是
+                未归属状态，却是恢复中的回合要显示的内容）。
+        """
+        return self._conversations.cleanup_orphan_images(keep_ids=keep_ids)
+
     def search_conversations(self, query: str, limit: int = 30,
                               include_ai: bool = True, include_rounds: bool = True,
                               date_from: str = "", date_to: str = "") -> list:
@@ -361,6 +382,37 @@ class Storage:
             topic_id, user_msg, ai_msg, is_func,
             update_active_cb=self._topics.update_topic_active,
         )
+
+    def create_turn(self, topic_id: str, user_msg, status: str = "pending") -> str:
+        """回合开始即创建 conversation 行（回合中事件据此归属）。"""
+        return self._conversations.create_turn(topic_id, user_msg, status=status)
+
+    def append_round(self, conversation_id: str, round_num: int, role: str,
+                     content: str = "", tool_calls=None, tool_call_id=None,
+                     reasoning_content: str = "") -> bool:
+        """实时追加单轮明细（append-only，幂等）。"""
+        return self._conversations.append_round(
+            conversation_id, round_num, role, content,
+            tool_calls=tool_calls, tool_call_id=tool_call_id,
+            reasoning_content=reasoning_content,
+        )
+
+    def finalize_turn(self, conversation_id: str, ai_msg: str,
+                      is_func_calling: bool = False, rounds: list | None = None,
+                      status: str = "done") -> bool:
+        """回合结束定稿（补 ai_msg/状态 + 兜底补齐轮次）。"""
+        return self._conversations.finalize_turn(
+            conversation_id, ai_msg, is_func_calling=is_func_calling,
+            rounds=rounds, status=status,
+        )
+
+    def get_rounds(self, conversation_id: str) -> list:
+        """从 agent_rounds 派生结构化轮次（唯一事实源）。"""
+        return self._conversations.get_rounds(conversation_id)
+
+    def soft_delete_topic(self, topic_id: str) -> bool:
+        """标记删除主题及其数据（append-only：不物理删除）。"""
+        return self._topics.soft_delete_topic(topic_id)
 
     # ── Memory 操作 ──
     def add_memory(self, content: str, category: str = "general", priority: int = 2,

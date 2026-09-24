@@ -167,6 +167,18 @@ class StorageModule(HotReloadModule):
         return result
 
     @classmethod
+    def get_image(cls, image_id: int) -> dict | None:
+        """读取单张会话图片（二进制存于 images 表）。"""
+        storage = cls._instance
+        if storage is None:
+            return None
+        try:
+            return storage.get_image(image_id)
+        except Exception:
+            logger.exception("get_image failed")
+            return None
+
+    @classmethod
     def get_topic_trajectory(cls, topic_id: str, limit: int = 0) -> dict:
         """聚合 topic 轨迹时间线：事件流（tool/call, tool/result, user, assistant）+ 思考链轮次。
 

@@ -567,6 +567,15 @@ class AgentModule(HotReloadModule):
             _ga = get_agent() or cls._instance
             if _ga:
                 _ga.current_topic_id = topic_id
+            # 回合开始即建行（与 Web 路径一致）：回合中的工具/增量事件据此
+            # 归属到具体轮次，否则 conversation_id 恒为 NULL（轮次级审计失效）
+            try:
+                _conv_id = storage.create_turn(topic_id, user_msg)
+                _c = getattr(session, "context", None)
+                if _c is not None:
+                    _c.conversation_id = _conv_id
+            except Exception:
+                logger.exception("create_turn failed (will save at end)")
             # ⭐ 插话接线：/v1/chat/completions 流式路径
             cls._wire_steering(session, put=put)
             ai_msg, used_tools = session.chat_stream(
@@ -690,21 +699,37 @@ class AgentModule(HotReloadModule):
     def _save_chat_result(storage, session, topic_id, user_msg, ai_msg, used_tools):
         if not storage:
             return
-        user_text = user_msg if isinstance(user_msg, str) else (
-            user_msg.get("text", "") if isinstance(user_msg, dict) else str(user_msg)
-        )
-        try:
-            conv_id = storage.save_msg(topic_id, user_text, "", False)
-        except Exception:
-            logger.exception("save_msg failed")
-            return
+        # 用户文本（供后续 L2 推送使用）
+        if isinstance(user_msg, dict):
+            user_text = user_msg.get("text", "")
+        elif isinstance(user_msg, str):
+            user_text = user_msg
+        else:
+            user_text = str(user_msg)
+
+        # Web 路径在回合**开始**已建行（route_handlers.create_turn），此处只定稿，
+        # 不再重复建行；非 Web 路径没有提前建行，退回一次性写入（保持既有行为）。
+        conv_id = getattr(getattr(session, "context", None), "conversation_id", "") or ""
+        if not conv_id:
+            # 带图时保留 dict 形态：save_msg 据此把图片二进制写入 images 表
+            if isinstance(user_msg, dict) and user_msg.get("images"):
+                payload = {"text": user_msg.get("text", ""), "images": list(user_msg["images"])}
+            else:
+                payload = user_msg if isinstance(user_msg, str) else (
+                    user_msg.get("text", "") if isinstance(user_msg, dict) else str(user_msg)
+                )
+            try:
+                conv_id = storage.save_msg(topic_id, payload, "", False)
+            except Exception:
+                logger.exception("save_msg failed")
+                return
         rounds = session._rounds_collector
         try:
-            storage.update_msg_rounds(conversation_id=conv_id, ai_msg=ai_msg,
-                                       is_func_calling=used_tools,
-                                       rounds=rounds if rounds else None)
+            # finalize_turn 按 round_num 幂等补齐：回合中已实时落盘的轮次不会重复
+            storage.finalize_turn(conv_id, ai_msg, is_func_calling=used_tools,
+                                  rounds=rounds if rounds else None, status="done")
         except Exception:
-            logger.exception("update_msg_rounds failed")
+            logger.exception("finalize_turn failed")
         try:
             usage = session._last_usage
             cheap_usage = session._last_cheap_usage

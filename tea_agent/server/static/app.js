@@ -625,6 +625,36 @@ window.openImageOverlay = function(src) {
 let _msgCounter = 0; // 全局递增消息计数器
 let _turnCounter = 0; // 对话轮次计数器（每条用户消息 = 1 轮）
 
+/**
+ * 图片引用 img:<id> → /api/image/<id>（二进制存于数据库，无文件副本）。
+ * 已是 data URL / 其它 URL 的原样返回。
+ */
+function _mapImageRefs(arr) {
+  if (!Array.isArray(arr)) return [];
+  return arr.map(function(u) {
+    const m = /^img:(\d+)$/.exec(String(u || ''));
+    return m ? '/api/image/' + m[1] : u;
+  }).filter(Boolean);
+}
+
+/**
+ * 解析历史 user_msg（可能是 JSON {"text","images"} 或纯文本）。
+ * 解析失败按纯文本处理，保证旧数据可显示。
+ */
+function parseUserMsg(raw) {
+  if (typeof raw !== 'string') return { text: raw || '', images: null };
+  const s = raw.trim();
+  if (!s.startsWith('{')) return { text: raw, images: null };
+  try {
+    const d = JSON.parse(s);
+    if (!d || typeof d !== 'object' || Array.isArray(d)) return { text: raw, images: null };
+    const imgs = _mapImageRefs(d.images);
+    return { text: d.text || '', images: imgs.length ? imgs : null };
+  } catch (e) {
+    return { text: raw, images: null };
+  }
+}
+
 function addMessage(role, content, images, convId) {
   const welcome = document.querySelector('.welcome');
   if (welcome) welcome.remove();
@@ -2048,7 +2078,8 @@ window.openTopic = async function(id, title) {
     _userNearBottom = true;  // 切换话题重置滚动状态
     d.conversations.forEach(function(c) {
       // 传入会话 id：跳转栏据此把「历史 tag」映射为分叉边界点
-      if (c.user_msg) addMessage('user', c.user_msg, null, c.id);
+      const um = parseUserMsg(c.user_msg);
+      if (um.text || um.images) addMessage('user', um.text, um.images, c.id);
       if (c.ai_msg) addMessage('assistant', c.ai_msg, null, c.id);
     });
     // 加载旧话题 → 滚动到底部（显示最新消息）
@@ -2158,6 +2189,20 @@ function _throttledTaskRefresh() {
 function _renderBufferEvent(event) {
   const s = _ensureBufferStreamState();
   switch (event.type) {
+
+    case 'user_message': {
+      // 回合进行中切走再切回：该提问尚未写库，靠这条事件补渲染，
+      // 否则用户只看到一个没有问题的助手气泡。
+      // 去重：若切回时历史已从 DB 渲染出同一提问（回合恰在切换瞬间落库），
+      // 比对最后一条 user 气泡，相同则跳过，避免出现两条一样的提问。
+      const txt = event.text || '';
+      const bubbles = $('msgs').querySelectorAll('.msg.user .msg-bubble');
+      const lastBubble = bubbles[bubbles.length - 1];
+      if (lastBubble && lastBubble.textContent.trim() === txt.trim()) break;
+      const imgs = _mapImageRefs(event.images);
+      addMessage('user', txt, imgs.length ? imgs : null);
+      break;
+    }
 
     case 'token':
       s.fullText += event.text;
@@ -2485,7 +2530,8 @@ async function _reloadCurrentConversations() {
     _msgCounter = 0;
     _turnCounter = 0; // 重载会话时重置轮次计数器
     d.conversations.forEach(function(c) {
-      if (c.user_msg) addMessage('user', c.user_msg);
+      const um = parseUserMsg(c.user_msg);
+      if (um.text || um.images) addMessage('user', um.text, um.images);
       if (c.ai_msg) addMessage('assistant', c.ai_msg);
     });
     renderJumpBar(); // 后台 buffer 刷新后更新跳转栏
@@ -3056,7 +3102,7 @@ window.doSearch = async function() {
     if (results.conversations && results.conversations.length) {
       h += '<div style="font-size:13px;font-weight:600;margin:8px 0 4px;color:var(--primary)">💬 对话</div>';
       results.conversations.forEach(function(c) {
-        h += '<div class="search-result-item">' + esc(c.user_msg || c.ai_msg || '').slice(0, 200) + '<div class="src">' + (c.stamp || '') + '</div></div>';
+        h += '<div class="search-result-item">' + esc(parseUserMsg(c.user_msg).text || c.ai_msg || '').slice(0, 200) + '<div class="src">' + (c.stamp || '') + '</div></div>';
       });
     }
     if (results.memories && results.memories.length) {

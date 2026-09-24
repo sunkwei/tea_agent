@@ -21,6 +21,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import sqlite3
 import threading
 import time
@@ -40,6 +41,11 @@ _STATUS_ABANDONED = "abandoned"
 
 # 计入 partial_text 的事件类型（仅助手可见正文，不含 reasoning）
 _TEXT_EVENT_TYPES = ("content", "token")
+
+# 不参与窗口淘汰的事件类型（回合开头写入、对「切回后可见性」至关重要）。
+# user_message 由 /api/chat 在 begin_turn 后立即以 index 0 记入：回合进行中
+# 该提问尚未写库，它是切回主题时唯一的来源。
+_PINNED_EVENT_TYPES = ("user_message",)
 
 _lock = threading.RLock()
 _last_write: dict[str, float] = {}
@@ -185,10 +191,14 @@ def _drop_turn_caches(topic_id: str) -> None:
 
 
 def _merge_events(existing: list, incoming: list, max_events: int) -> list:
-    """按 index 归并去重，保留最近 max_events 条。
+    """按 index 归并去重，保留最近 max_events 条（回合开头的关键事件不挤出）。
 
     落盘时与 DB 现状归并（而非整体覆盖）：多进程同时写同一 topic 时，
     各自的 pending 互不可见，覆盖式写入会让后落盘的一方抹掉先落盘的一方。
+
+    **保头**：``user_message``（回合开头，index 0）不参与淘汰。长回合的事件数
+    可达数千（实测 1296 条），而窗口上限 300 —— 只留尾部会把提问挤出，于是
+    「回合进行中切走再切回」时用户看不到自己的问题（正是该事件存在的理由）。
     """
     merged: dict[int, dict] = {}
     for item in list(existing) + list(incoming):
@@ -202,7 +212,16 @@ def _merge_events(existing: list, incoming: list, max_events: int) -> list:
     if not merged:
         return []
     ordered = [merged[k] for k in sorted(merged)]
-    return ordered[-max_events:] if max_events > 0 else ordered
+    if max_events <= 0 or len(ordered) <= max_events:
+        return ordered
+    tail = ordered[-max_events:]
+    # 只从「将被淘汰的部分」里捞保头事件，天然不会与 tail 重复
+    pinned = [
+        e for e in ordered[:-max_events]
+        if isinstance(e.get("event"), dict)
+        and e["event"].get("type") in _PINNED_EVENT_TYPES
+    ]
+    return pinned + tail
 
 
 def _flush_locked(topic_id: str, conn, status: str, when: float,
@@ -459,6 +478,35 @@ def read_snapshot(topic_id: str, path: str | None = None) -> dict | None:
         "events": events,
         "created_at": row[7], "updated_at": row[8],
     }
+
+
+def snapshot_image_ids(path: str | None = None) -> set[int] | None:
+    """收集快照事件里引用的图片 id（``img:<n>``），供孤儿图片清理排除。
+
+    未归属（``conversation_id=''``）的图片有两种来源：崩溃遗留的孤儿，以及
+    **正在恢复中的回合**要显示的内容。后者绝不能删 —— 判据就是「是否被快照引用」。
+
+    Returns:
+        图片 id 集合；**读取失败返回 None**（表示"未知"，调用方应跳过清理）。
+        这里刻意不返回空集：空集会被当成"无引用"，从而把待恢复回合的图片一并删掉。
+    """
+    try:
+        with _lock:
+            conn = _connect(path)
+            try:
+                rows = conn.execute("SELECT events_json FROM turn_snapshots").fetchall()
+            finally:
+                conn.close()
+    except (sqlite3.Error, OSError, ValueError):
+        return None
+    ids: set[int] = set()
+    for row in rows:
+        raw = row[0] if row else None
+        if not raw:
+            continue
+        for m in re.finditer(r"img:(\d+)", raw):
+            ids.add(int(m.group(1)))
+    return ids
 
 
 def load_resumable(path: str | None = None, ttl: float = DEFAULT_TTL,

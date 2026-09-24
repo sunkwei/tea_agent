@@ -1,6 +1,7 @@
 # version: 2.1.0 — Printer-friendly PDF export with table support
 
 import contextlib
+import io
 import json
 import logging
 import os
@@ -8,6 +9,8 @@ import re
 import sqlite3
 import tempfile
 from pathlib import Path
+
+from tea_agent.image_ref import build_data_url, parse_image_ref
 
 logger = logging.getLogger("export_pdf")
 
@@ -687,7 +690,204 @@ def _pygments_to_rgb(ttype):
 #  PDF generation via fpdf2
 # ═══════════════════════════════════════════════════════════════
 
-def _make_pdf(topic_title, stamp, user_msg, ai_msg, reasoning_text, output_path):
+def _parse_user_payload(raw):
+    """拆解 ``conversations.user_msg`` 为 ``(text, [image_id, ...])``。
+
+    兼容三种形态：
+    - 现代：``{"text": "...", "images": ["img:<id>"]}``（图片二进制在 images 表）
+    - 旧版：``{"text": "...", "images": [路径|dataURL]}``（无 id，导出时跳过）
+    - 纯文本
+
+    Args:
+        raw: ``user_msg`` 原始值。
+
+    Returns:
+        ``(text, image_ids)``；``image_ids`` 为 ``images.id`` 列表（可能为空）。
+    """
+    if not isinstance(raw, str):
+        return str(raw or ""), []
+    try:
+        data = json.loads(raw)
+    except Exception:
+        return raw, []
+    if not isinstance(data, dict):
+        return str(data), []
+    text = data.get("text", raw)
+    ids: list[int] = []
+    for item in data.get("images") or []:
+        ref = parse_image_ref(item)
+        if ref is not None:
+            ids.append(ref)
+    return (text if isinstance(text, str) else str(text)), ids
+
+
+def _fetch_image_blobs(conn, ids):
+    """按 ``images.id`` 批量取回二进制。
+
+    Args:
+        conn: sqlite3 连接（row_factory=Row）。
+        ids: 图片主键列表。
+
+    Returns:
+        ``{id: (mime, blob)}``；缺失的 id 不出现。
+    """
+    out: dict = {}
+    wanted = sorted({int(i) for i in (ids or []) if i})
+    if not wanted:
+        return out
+    from tea_agent.store._sql_safety import safe_placeholders
+
+    cur = conn.cursor()
+    for i in range(0, len(wanted), 500):
+        chunk = wanted[i:i + 500]
+        ph = safe_placeholders(len(chunk))
+        cur.execute(
+            f"SELECT id, image_blob, mime_type FROM images WHERE id IN ({ph})", chunk
+        )
+        for row in cur.fetchall():
+            out[row["id"]] = (row["mime_type"] or "image/png", bytes(row["image_blob"] or b""))
+    return out
+
+
+def _probe_image_size(blob):
+    """探测图片像素尺寸。
+
+    Args:
+        blob: 图片二进制。
+
+    Returns:
+        ``(w, h)``；探测失败返回 ``None``。
+    """
+    try:
+        from PIL import Image as _PILImage
+
+        with _PILImage.open(io.BytesIO(blob)) as im:
+            w, h = im.size
+        return (w, h) if w > 0 and h > 0 else None
+    except Exception:
+        return None
+
+
+def _normalize_image(blob):
+    """把图片重编码为最朴素的 RGB PNG。
+
+    真实上传中存在 16bit / 调色板+alpha / 交错 PNG / CMYK JPEG 等形态，
+    fpdf2 的图像解析器对部分形态会抛错。重编码可规避，属于兜底手段。
+
+    Args:
+        blob: 原始图片二进制。
+
+    Returns:
+        重编码后的 PNG 字节；失败返回 ``None``。
+    """
+    try:
+        from PIL import Image as _PILImage
+
+        with _PILImage.open(io.BytesIO(blob)) as im:
+            if im.mode not in ("RGB", "L"):
+                im = im.convert("RGB")
+            buf = io.BytesIO()
+            im.save(buf, format="PNG")
+            return buf.getvalue()
+    except Exception:
+        return None
+
+
+def _embed_image(pdf, blob, w, h) -> None:
+    """嵌入单张图片；原数据失败时用重编码结果重试一次。
+
+    Args:
+        pdf: FPDF 实例。
+        blob: 图片二进制。
+        w: 目标宽度（mm）。
+        h: 目标高度（mm）；``None`` 表示按宽度自动等比。
+    """
+    try:
+        if h is None:
+            pdf.image(io.BytesIO(blob), w=w)
+        else:
+            pdf.image(io.BytesIO(blob), w=w, h=h)
+    except Exception:
+        normalized = _normalize_image(blob)
+        if not normalized:
+            raise
+        if h is None:
+            pdf.image(io.BytesIO(normalized), w=w)
+        else:
+            pdf.image(io.BytesIO(normalized), w=w, h=h)
+
+
+def _render_images(pdf, images, max_height_ratio: float = 0.62) -> None:
+    """把图片二进制嵌入 PDF 当前排版流。
+
+    按可用页宽等比缩放；过高则改由页高上限反推宽度，避免溢出版心。
+    单张图失败只告警跳过（fail-open），绝不中断导出。
+
+    Args:
+        pdf: FPDF 实例。
+        images: ``[(mime, blob), ...]``。
+        max_height_ratio: 单图最大高度占版心高度的比例。
+    """
+    if not images:
+        return
+    avail_w = pdf.w - pdf.l_margin - pdf.r_margin
+    avail_h = pdf.h - pdf.t_margin - pdf.b_margin
+    max_h = avail_h * max_height_ratio
+    for _mime, blob in images:
+        if not blob:
+            continue
+        try:
+            size = _probe_image_size(blob)
+            if size is None:
+                # 探测失败 → 先重编码，尽可能拿到尺寸（也顺带规避 fpdf 解析问题）
+                normalized = _normalize_image(blob)
+                if normalized:
+                    blob = normalized
+                    size = _probe_image_size(blob)
+            w, h = avail_w, None
+            if size:
+                iw, ih = size
+                ratio = ih / iw
+                h = avail_w * ratio
+                if h > max_h:
+                    h = max_h
+                    w = h / ratio
+            pdf.ln(2)
+            # 图前留足空间，避免图片跨页断裂
+            if pdf.get_y() + (h or max_h) > pdf.h - pdf.b_margin:
+                pdf.add_page()
+            _embed_image(pdf, blob, w, h)
+            pdf.ln(2)
+        except Exception:
+            logger.warning("PDF 图片嵌入失败（已跳过）", exc_info=True)
+
+
+def _render_image_markdown(images, indent: str = "") -> str:
+    """把图片二进制渲染为自包含 Markdown（内联 data URL）。
+
+    不落盘：Markdown 单文件即可携带图片，避免依赖临时目录文件存活。
+
+    Args:
+        images: ``[(mime, blob), ...]``。
+        indent: 每行前缀（用于嵌套在引用块中）。
+
+    Returns:
+        Markdown 片段（无图返回空串）。
+    """
+    if not images:
+        return ""
+    lines = []
+    for mime, blob in images:
+        if not blob:
+            continue
+        url = build_data_url(blob, mime)
+        if url:
+            lines.append(f"{indent}![图片]({url})")
+    return "\n".join(lines)
+
+
+def _make_pdf(topic_title, stamp, user_msg, ai_msg, reasoning_text, output_path,
+              images=None):
     """Generate a clean, printer-friendly PDF from conversation data.
 
     Features:
@@ -700,6 +900,10 @@ def _make_pdf(topic_title, stamp, user_msg, ai_msg, reasoning_text, output_path)
     - Inline code styling
     - Page numbers and running headers
     - Cross-platform CJK font support
+    - Embedded conversation images (from images table)
+
+    Args:
+        images: 会话图片 ``[(mime, blob), ...]``，嵌入用户请求段之后。
     """
     from fpdf import FPDF
 
@@ -741,6 +945,7 @@ def _make_pdf(topic_title, stamp, user_msg, ai_msg, reasoning_text, output_path)
     # ── User Request ──
     _draw_section_header(pdf, "User Request", body_font, symbol="◆", color=(60, 80, 200))
     _render_markdown(pdf, user_msg, body_font, code_font, text_color=(50, 50, 50))
+    _render_images(pdf, images)
 
     # ── Thinking Process ──
     if reasoning_text.strip():
@@ -837,7 +1042,8 @@ def _make_full_topic_pdf(topic_title, conversations, output_path):
 
     Args:
         topic_title: Topic title for cover.
-        conversations: list of dicts with keys 'user_msg', 'ai_msg', 'stamp'.
+        conversations: list of dicts with keys 'user_msg', 'ai_msg', 'stamp',
+            and optional 'images' (``[(mime, blob), ...]``).
         output_path: Output PDF path.
     """
     from fpdf import FPDF
@@ -895,6 +1101,7 @@ def _make_full_topic_pdf(topic_title, conversations, output_path):
         pdf.set_font(body_font, "", 10)
         pdf.set_text_color(50, 50, 50)
         _render_markdown(pdf, _sanitize(conv["user_msg"]), body_font, code_font, text_color=(50, 50, 50))
+        _render_images(pdf, conv.get("images") or [])
         pdf.ln(4)
 
         # Thinking Process (if filter=full)
@@ -967,19 +1174,18 @@ def export_topic_pdf(topic_id: str, output_path: str = None,
             (topic_id,),
         )
         all_conv = c.fetchall()
-        conn.close()
         if not all_conv:
+            conn.close()
             raise ValueError(f"No conversations for topic {topic_id}")
 
-        conversations = []
-        for conv in all_conv:
-            user_raw = conv["user_msg"]
-            try:
-                data = json.loads(user_raw)
-                user_msg = data.get("text", user_raw) if isinstance(data, dict) else str(data)
-            except Exception:
-                user_msg = str(user_raw)
+        # 图片：先收集全部引用再一次性取回（避免 N+1 查询）
+        parsed = [(_parse_user_payload(conv["user_msg"])) for conv in all_conv]
+        _all_ids = [i for _t, _ids in parsed for i in _ids]
+        blob_map = _fetch_image_blobs(conn, _all_ids)
+        conn.close()
 
+        conversations = []
+        for conv, (user_msg, image_ids) in zip(all_conv, parsed):
             reasoning_text = ""
             if filter_mode == "full":
                 rounds_json_raw = conv["rounds_json"]
@@ -993,6 +1199,7 @@ def export_topic_pdf(topic_id: str, output_path: str = None,
                 "ai_msg": _sanitize(conv["ai_msg"]),
                 "stamp": conv["stamp"],
                 "reasoning_text": reasoning_text,
+                "images": [blob_map[i] for i in image_ids if i in blob_map],
             })
 
         output_path = output_path or os.path.join(_default_export_dir(), f"export_{topic_id[:8]}_full.pdf")
@@ -1008,16 +1215,12 @@ def export_topic_pdf(topic_id: str, output_path: str = None,
         if not conv:
             conn.close()
             raise ValueError(f"No conversations for topic {topic_id}")
-        _conv_id, user_raw, ai_msg, stamp = conv["id"], conv["user_msg"], conv["ai_msg"], conv["stamp"]
-
-        try:
-            data = json.loads(user_raw)
-            user_msg = data.get("text", user_raw) if isinstance(data, dict) else str(data)
-        except Exception:
-            user_msg = str(user_raw)
-
+        user_msg, image_ids = _parse_user_payload(conv["user_msg"])
+        blob_map = _fetch_image_blobs(conn, image_ids)
+        images = [blob_map[i] for i in image_ids if i in blob_map]
         user_msg = _sanitize(user_msg)
-        ai_msg = _sanitize(ai_msg)
+        ai_msg = _sanitize(conv["ai_msg"])
+        stamp = conv["stamp"]
 
         if filter_mode == "full":
             # Full interaction timeline from rounds_json: thinking + tool calls + tool returns
@@ -1032,7 +1235,8 @@ def export_topic_pdf(topic_id: str, output_path: str = None,
 
         conn.close()
         output_path = output_path or os.path.join(_default_export_dir(), f"export_{topic_id[:8]}.pdf")
-        return _make_pdf(topic_title, stamp, user_msg, ai_msg, reasoning_text, output_path)
+        return _make_pdf(topic_title, stamp, user_msg, ai_msg, reasoning_text, output_path,
+                         images=images)
 
 
 # ═══════════════════════════════════════════════════════════════
@@ -1040,11 +1244,19 @@ def export_topic_pdf(topic_id: str, output_path: str = None,
 # ═══════════════════════════════════════════════════════════════
 
 def _build_markdown_doc(topic_title: str, stamp: str, user_msg: str,
-                        ai_msg: str, reasoning_text: str = "") -> str:
-    """Build a Markdown document from a single conversation."""
+                        ai_msg: str, reasoning_text: str = "",
+                        images: list | None = None) -> str:
+    """Build a Markdown document from a single conversation.
+
+    Args:
+        images: ``[(mime, blob), ...]``，以 data URL 内联（单文件自包含）。
+    """
     parts = [f"# {topic_title}\n", f"> 📅 导出时间: {stamp}\n", "---\n"]
     parts.append("\n## 💬 用户请求\n")
     parts.append(user_msg.rstrip() + "\n")
+    img_md = _render_image_markdown(images)
+    if img_md:
+        parts.append("\n" + img_md + "\n")
     if reasoning_text.strip():
         parts.append("\n## 💭 推理过程\n")
         parts.append(reasoning_text.rstrip() + "\n")
@@ -1054,12 +1266,19 @@ def _build_markdown_doc(topic_title: str, stamp: str, user_msg: str,
 
 
 def _build_full_topic_markdown(topic_title: str, conversations: list[dict]) -> str:
-    """Build a Markdown document from multiple conversations."""
+    """Build a Markdown document from multiple conversations.
+
+    ``conversations`` 条目可含 ``images``（``[(mime, blob), ...]``），
+    以 data URL 内联。
+    """
     parts = [f"# {topic_title}\n", f"> 共 {len(conversations)} 段对话\n", "---\n"]
     for idx, conv in enumerate(conversations, 1):
         stamp = conv.get("stamp", "")
         parts.append(f"\n## 💬 对话 {idx} — {stamp}\n")
         parts.append("**用户:**\n\n" + conv["user_msg"].rstrip() + "\n")
+        img_md = _render_image_markdown(conv.get("images") or [])
+        if img_md:
+            parts.append("\n" + img_md + "\n")
         reasoning = conv.get("reasoning_text", "")
         if reasoning.strip():
             parts.append(f"\n**💭 推理过程:**\n\n{reasoning.rstrip()}\n")
@@ -1099,13 +1318,6 @@ def export_topic_markdown(topic_id: str, output_path: str = None,
         raise ValueError(f"Topic {topic_id} not found")
     topic_title = _sanitize(row["title"] or "Untitled")
 
-    def _extract_user_msg(raw: str) -> str:
-        try:
-            data = json.loads(raw)
-            return data.get("text", raw) if isinstance(data, dict) else str(data)
-        except Exception:
-            return str(raw)
-
     def _extract_reasoning(rounds_json_raw: str) -> str:
         if filter_mode != "full" or not rounds_json_raw:
             return ""
@@ -1121,17 +1333,22 @@ def export_topic_markdown(topic_id: str, output_path: str = None,
             (topic_id,),
         )
         all_conv = c.fetchall()
-        conn.close()
         if not all_conv:
+            conn.close()
             raise ValueError(f"No conversations for topic {topic_id}")
 
+        parsed = [_parse_user_payload(conv["user_msg"]) for conv in all_conv]
+        blob_map = _fetch_image_blobs(conn, [i for _t, _ids in parsed for i in _ids])
+        conn.close()
+
         conversations = []
-        for conv in all_conv:
+        for conv, (user_text, image_ids) in zip(all_conv, parsed):
             conversations.append({
-                "user_msg": _sanitize(_extract_user_msg(conv["user_msg"])),
+                "user_msg": _sanitize(user_text),
                 "ai_msg": _sanitize(conv["ai_msg"]),
                 "stamp": conv["stamp"],
                 "reasoning_text": _extract_reasoning(conv["rounds_json"]),
+                "images": [blob_map[i] for i in image_ids if i in blob_map],
             })
 
         md_text = _build_full_topic_markdown(topic_title, conversations)
@@ -1142,16 +1359,21 @@ def export_topic_markdown(topic_id: str, output_path: str = None,
             (topic_id,),
         )
         conv = c.fetchone()
-        conn.close()
         if not conv:
+            conn.close()
             raise ValueError(f"No conversations for topic {topic_id}")
 
-        user_msg = _sanitize(_extract_user_msg(conv["user_msg"]))
+        user_text, image_ids = _parse_user_payload(conv["user_msg"])
+        blob_map = _fetch_image_blobs(conn, image_ids)
+        images = [blob_map[i] for i in image_ids if i in blob_map]
+        conn.close()
+
+        user_msg = _sanitize(user_text)
         ai_msg = _sanitize(conv["ai_msg"])
         reasoning_text = _extract_reasoning(conv["rounds_json"])
 
         md_text = _build_markdown_doc(topic_title, conv["stamp"], user_msg,
-                                      ai_msg, reasoning_text)
+                                      ai_msg, reasoning_text, images=images)
         output_path = output_path or os.path.join(_default_export_dir(), f"export_{topic_id[:8]}.md")
 
     with open(output_path, "w", encoding="utf-8") as f:

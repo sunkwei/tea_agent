@@ -41,6 +41,11 @@ class SessionContext:
     storage: Any = None
     memory: Any = None
     pipeline: Any = None
+    # 当前回合的 conversation_id（回合入口 create_turn 后同步写入）。
+    # 供 Component 把工具事件/轮次明细归属到具体轮次 —— 回合**开始**即有 id，
+    # 因此 tool/call 等事件不再出现 conversation_id=NULL（实测此前 100% 为空，
+    # 导致「第 N 轮调用了哪些工具」无法审计）。
+    conversation_id: str = ""
 
     # ── 配置参数 ──
     keep_turns: int = 5

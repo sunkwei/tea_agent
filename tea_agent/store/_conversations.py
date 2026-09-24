@@ -1,12 +1,13 @@
 """
 """
-import base64
 import json
 import logging
 import os
 import queue
 import sqlite3
 import threading
+
+from tea_agent.image_ref import MIME_BY_EXT, make_image_ref, parse_data_url, parse_image_ref
 
 from ._component import StoreComponent
 from ._sql_safety import safe_placeholders, safe_where_clause
@@ -16,57 +17,82 @@ logger = logging.getLogger("Storage.Conversations")
 class ConversationStore(StoreComponent):
     """对话管理：保存消息、更新轮次、查询对话历史、Agent 轮次记录。"""
 
-    def save_msg(self, topic_id: str, user_msg, ai_msg: str, is_func: bool,
-                 update_active_cb=None) -> str:
-        """
-        新增一条对话，返回 conversation_id。
-        若 user_msg 含图片，自动读取文件存入 images 表并转为 Base64。
+    # ── 回合生命周期（append-only）────────────────────────────────
+    #
+    # 回合开始 → create_turn   （建 pending 行，事件从此有 conversation_id 可挂）
+    # 回合进行 → append_round  （工具轮实时落盘，崩溃不丢）
+    # 回合结束 → finalize_turn （补 ai_msg + 状态，兜底补齐漏写的轮次）
+    #
+    # 此前只有"回合结束一次性写一条 conversation + 批量写 agent_rounds"，
+    # 导致：① 回合中的工具/增量事件无归属（实测 tool/call 的 conversation_id
+    # 100% 为 NULL）；② 崩溃即丢整轮明细。
+
+    @staticmethod
+    def _split_user_msg(user_msg) -> tuple[str, str]:
+        """把 user_msg 拆成 ``(json 文本, 纯文本)``。"""
+        if isinstance(user_msg, dict):
+            return json.dumps(user_msg, ensure_ascii=False), user_msg.get("text", "")
+        return str(user_msg), str(user_msg)
+
+    def create_turn(self, topic_id: str, user_msg, status: str = "pending") -> str:
+        """回合**开始**即创建 conversation 行，返回 conversation_id。
+
+        为什么必须提前建行：回合进行中的工具调用与助手增量事件都需要
+        ``conversation_id`` 才能归属到具体轮次。此前该 id 由回合结束时的
+        ``save_msg`` 生成，于是工具类事件的 conversation_id **100% 为 NULL**
+        （实测 404 条 tool/call 全部无归属），轮次级审计形同虚设。
+
+        Args:
+            topic_id: 主题 ID。
+            user_msg: 用户消息（str 或 {"text","images"}）。
+            status: 初始状态（默认 pending=进行中）。
+
+        Returns:
+            conversation_id
         """
         conv_id = self._new_id()
 
-        # 处理图片：存入 images 表 + 转换为 Base64
         if isinstance(user_msg, dict) and "images" in user_msg:
-            raw_imgs = user_msg["images"]
-            processed_imgs = []
-            c_img = self.conn.cursor()
-            for img_item in raw_imgs:
-                if os.path.isfile(img_item):
-                    try:
-                        with open(img_item, "rb") as f:
-                            blob = f.read()
-                        ext = os.path.splitext(img_item)[1].lower()
-                        mime_map = {
-                            ".png": "image/png", ".jpg": "image/jpeg",
-                            ".jpeg": "image/jpeg", ".gif": "image/gif",
-                            ".webp": "image/webp",
-                        }
-                        mime = mime_map.get(ext, "image/png")
-                        c_img.execute(
-                            "INSERT INTO images (conversation_id, image_blob, mime_type) VALUES (?, ?, ?)",
-                            (conv_id, blob, mime),
-                        )
-                        b64 = base64.b64encode(blob).decode("utf-8")
-                        processed_imgs.append(f"data:{mime};base64,{b64}")
-                    except Exception as e:
-                        logger.error(f"Failed to process image {img_item}: {e}")
-                        processed_imgs.append(img_item)
-                else:
-                    processed_imgs.append(img_item)
-            user_msg["images"] = processed_imgs
-            c_img.close()
+            user_msg["images"] = self._store_images(conv_id, user_msg.get("images") or [])
 
-        if isinstance(user_msg, dict):
-            user_msg_json = json.dumps(user_msg, ensure_ascii=False)
-            user_msg_text = user_msg.get("text", "")
-        else:
-            user_msg_json = str(user_msg)
-            user_msg_text = str(user_msg)
+        user_msg_json, user_msg_text = self._split_user_msg(user_msg)
 
         c = self.conn.cursor()
         c.execute(
-            "INSERT INTO conversations (id, topic_id, user_msg, ai_msg, is_func_calling, stamp) "
-            "VALUES (?, ?, ?, ?, ?, datetime('now', 'localtime'))",
-            (conv_id, topic_id, user_msg_json, ai_msg, 1 if is_func else 0),
+            "INSERT INTO conversations "
+            "(id, topic_id, user_msg, ai_msg, is_func_calling, status, stamp) "
+            "VALUES (?, ?, ?, '', 0, ?, datetime('now', 'localtime'))",
+            (conv_id, topic_id, user_msg_json, status),
+        )
+        self.conn.commit()
+        c.close()
+
+        # P2 事件溯源：turn/start + user/message（审计事实源）
+        self._log_event(topic_id, "turn/start", {}, conversation_id=conv_id)
+        self._log_event(topic_id, "user/message",
+                        {"content": user_msg_text, "raw": user_msg_json},
+                        conversation_id=conv_id)
+        return conv_id
+
+    def save_msg(self, topic_id: str, user_msg, ai_msg: str, is_func: bool,
+                 update_active_cb=None) -> str:
+        """一次性写入完整对话（``create_turn`` + 定稿的便捷封装，兼容旧调用方）。
+
+        Args:
+            topic_id: 主题 ID。
+            user_msg: 用户消息（str 或 {"text","images"}）。
+            ai_msg: 助手回复。
+            is_func: 是否使用了工具调用。
+            update_active_cb: 更新主题活跃时间的回调（异常隔离）。
+
+        Returns:
+            conversation_id
+        """
+        conv_id = self.create_turn(topic_id, user_msg, status="done")
+        c = self.conn.cursor()
+        c.execute(
+            "UPDATE conversations SET ai_msg = ?, is_func_calling = ? WHERE id = ?",
+            (ai_msg, 1 if is_func else 0, conv_id),
         )
         self.conn.commit()
         c.close()
@@ -77,15 +103,347 @@ class ConversationStore(StoreComponent):
                 update_active_cb(topic_id)
             except Exception:
                 logger.exception("update_active_cb failed (isolated)")
-
-        # P2 事件溯源：记录 turn/start + user/message（审计事实源）
-        self._log_event(topic_id, "turn/start", {}, conversation_id=conv_id)
-        self._log_event(topic_id, "user/message",
-                        {"content": user_msg_text, "raw": user_msg_json},
-                        conversation_id=conv_id)
-
-
         return conv_id
+
+    def append_round(self, conversation_id: str, round_num: int, role: str,
+                     content: str = "", tool_calls=None, tool_call_id=None,
+                     reasoning_content: str = "") -> bool:
+        """实时追加单轮明细（append-only，幂等）。
+
+        ``reasoning_content`` 独立成列：此前它被拼进 content 的 ``[思考] `` 前缀，
+        无法还原为结构化 rounds（DeepSeek thinking 模式要求 RC 原样回传）。
+
+        Args:
+            conversation_id: 所属对话。
+            round_num: 轮次序号（对话内递增，用于幂等去重）。
+            role: assistant / tool / user。
+            content: 文本内容。
+            tool_calls: 工具调用列表（assistant 轮）。
+            tool_call_id: 工具结果对应的调用 id（tool 轮）。
+            reasoning_content: 思考内容（assistant 轮）。
+
+        Returns:
+            True=已写入；False=已存在同 round_num（幂等跳过）或参数非法。
+        """
+        if not conversation_id:
+            return False
+        tc_json = json.dumps(tool_calls, ensure_ascii=False) if tool_calls else None
+        c = self.conn.cursor()
+        try:
+            # 幂等键 = (round_num, role, tool_call_id)：round_num 单独不足以定位一行 ——
+            # 既有 API 允许同一 round_num 存在多行（如 assistant + 其 tool 结果）。
+            c.execute(
+                "SELECT 1 FROM agent_rounds WHERE conversation_id = ? AND round_num = ? "
+                "AND role = ? AND COALESCE(tool_call_id, '') = ? LIMIT 1",
+                (conversation_id, int(round_num), role or "", tool_call_id or ""),
+            )
+            if c.fetchone():
+                return False
+            c.execute(
+                "INSERT INTO agent_rounds "
+                "(id, conversation_id, round_num, role, content, tool_calls, "
+                " tool_call_id, reasoning_content, stamp) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, datetime('now', 'localtime'))",
+                (self._new_id(), conversation_id, int(round_num), role, content or "",
+                 tc_json, tool_call_id, reasoning_content or ""),
+            )
+            self.conn.commit()
+            return True
+        finally:
+            c.close()
+
+    def _write_rounds(self, conversation_id: str, rounds: list) -> int:
+        """幂等批量写入 rounds（单事务；已存在的 round_num 跳过）。返回新增条数。
+
+        用 executemany 而非逐条 append_round：真实会话单轮可达 5815 个轮次，
+        逐条 commit 会让回合收尾耗时不可接受。
+        """
+        if not rounds:
+            return 0
+        c = self.conn.cursor()
+        try:
+            c.execute(
+                "SELECT round_num, role, COALESCE(tool_call_id, '') FROM agent_rounds "
+                "WHERE conversation_id = ?",
+                (conversation_id,),
+            )
+            existing = {(int(x[0]), x[1] or "", x[2] or "") for x in c.fetchall()}
+            rows = []
+            for i, r in enumerate(rounds):
+                if not isinstance(r, dict):
+                    continue
+                # 幂等键与 append_round 一致（round_num 单独不足以定位一行）
+                if (i, r.get("role", "") or "", r.get("tool_call_id") or "") in existing:
+                    continue
+                tc = r.get("tool_calls")
+                rows.append((
+                    self._new_id(), conversation_id, i, r.get("role", ""),
+                    r.get("content", "") or "",
+                    json.dumps(tc, ensure_ascii=False) if tc else None,
+                    r.get("tool_call_id"),
+                    r.get("reasoning_content", "") or "",
+                ))
+            if not rows:
+                return 0
+            c.executemany(
+                "INSERT INTO agent_rounds "
+                "(id, conversation_id, round_num, role, content, tool_calls, "
+                " tool_call_id, reasoning_content, stamp) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, datetime('now', 'localtime'))",
+                rows,
+            )
+            self.conn.commit()
+            return len(rows)
+        finally:
+            c.close()
+
+    def finalize_turn(self, conversation_id: str, ai_msg: str,
+                      is_func_calling: bool = False,
+                      rounds: list | None = None,
+                      status: str = "done") -> bool:
+        """回合结束：补齐 ai_msg / 状态，并兜底写入尚未落盘的轮次。
+
+        ``rounds`` 若已在回合中经 ``append_round`` 实时落盘，此处按 round_num
+        幂等跳过（重试/恢复场景下同一轮可能被重复提交）。
+
+        Args:
+            conversation_id: 对话 ID。
+            ai_msg: 助手最终回复。
+            is_func_calling: 是否使用了工具调用。
+            rounds: 完整轮次列表（兜底补齐用，可为 None）。
+            status: 终态（done / error / interrupted）。
+
+        Returns:
+            是否更新成功。
+        """
+        if not conversation_id:
+            return False
+        try:
+            self._write_rounds(conversation_id, rounds or [])
+            c = self.conn.cursor()
+            c.execute(
+                "UPDATE conversations SET ai_msg = ?, is_func_calling = ?, status = ? "
+                "WHERE id = ?",
+                (ai_msg or "", 1 if is_func_calling else 0, status, conversation_id),
+            )
+            self.conn.commit()
+            c.close()
+        except Exception:
+            logger.exception("finalize_turn failed")
+            return False
+
+        # P2 事件溯源：assistant/message（含 tool_calls 概览）+ turn/end
+        try:
+            topic_id = self._topic_of_conv(conversation_id)
+            if topic_id:
+                tool_calls_summary = None
+                if rounds:
+                    tcs = [r.get("tool_calls") for r in rounds
+                           if isinstance(r, dict) and r.get("tool_calls")]
+                    if tcs:
+                        tool_calls_summary = [
+                            {"name": tc.get("function", {}).get("name", ""),
+                             "arguments": tc.get("function", {}).get("arguments", "")}
+                            for tc_list in tcs
+                            for tc in (tc_list if isinstance(tc_list, list) else [tc_list])
+                        ][:20]
+                self._log_event(topic_id, "assistant/message",
+                                {"content": ai_msg or "", "tool_calls": tool_calls_summary},
+                                conversation_id=conversation_id)
+                self._log_event(topic_id, "turn/end",
+                                {"reason": status}, conversation_id=conversation_id)
+        except Exception:
+            logger.exception("append assistant event failed (isolated)")
+        return True
+
+    # ── 图片存取（images 表为二进制唯一事实源）────────────────────
+
+    def _store_images(self, conv_id: str, items: list) -> list[str]:
+        """把图片二进制写入 ``images`` 表，返回轻量引用列表。
+
+        接受三种入参，逐项失败隔离（单项异常只保留原值并告警，不拖垮对话保存）：
+        - data URL（``data:image/png;base64,...``）→ 解码入库（Web/API 主路径）
+        - 文件路径 → 读文件入库（旧调用方兼容）
+        - ``img:<id>`` 引用 / http(s) 外链 → 原样保留（幂等，重复保存不重复入库）
+
+        Args:
+            conv_id: 所属对话 ID。
+            items: 图片入参列表。
+
+        Returns:
+            引用列表（解析失败项原样回填，保证不静默丢数据）。
+        """
+        refs: list[str] = []
+        for item in items:
+            if not isinstance(item, str) or not item:
+                continue
+            if parse_image_ref(item) is not None or item.startswith(("http://", "https://")):
+                # 引用：把「回合开始即入库」的图片补上本会话归属（幂等）
+                self._adopt_image(item, conv_id)
+                refs.append(item)
+                continue
+            try:
+                if item.startswith("data:"):
+                    mime, blob = parse_data_url(item)
+                    if not blob:
+                        refs.append(item)  # 解析失败：保留原值，不丢数据
+                        continue
+                else:
+                    if not os.path.isfile(item):
+                        refs.append(item)  # 未知形态（外链/占位符）：保留原值
+                        continue
+                    with open(item, "rb") as f:
+                        blob = f.read()
+                    mime = MIME_BY_EXT.get(os.path.splitext(item)[1].lower(), "image/png")
+                refs.append(make_image_ref(self._insert_image(conv_id, blob, mime)))
+            except Exception:
+                logger.exception("store image failed (isolated)")
+                refs.append(item)
+        return refs
+
+    def _insert_image(self, conv_id: str, blob: bytes, mime: str) -> int:
+        """写入一张图片，返回 ``images.id``。"""
+        c = self.conn.cursor()
+        try:
+            c.execute(
+                "INSERT INTO images (conversation_id, image_blob, mime_type) VALUES (?, ?, ?)",
+                (conv_id, sqlite3.Binary(blob), mime or "image/png"),
+            )
+            self.conn.commit()
+            return int(c.lastrowid or 0)
+        finally:
+            c.close()
+
+    def add_pending_image(self, blob: bytes, mime: str = "image/png") -> int:
+        """回合**开始**即入库（``conversation_id=''`` 暂未归属），返回 ``images.id``。
+
+        这是「输入不丢失」的关键：回合进行中该提问尚未写库（``save_msg`` 在回合
+        结束时才调用），若图片也只活在内存里，用户切走再切回就无从恢复 ——
+        实测表现为「切回后看不到刚发的图」。先入库拿到 id，快照即可只携带
+        ``img:<id>`` 短引用（而非会被 ``_shrink`` 截断成损坏值的超长 data URL）。
+
+        归属由回合结束时的 ``save_msg`` 补上（见 ``_adopt_image``）。
+        """
+        return self._insert_image("", blob, mime)
+
+    def _adopt_image(self, ref, conv_id: str) -> None:
+        """把「尚未归属」的图片补上本会话归属（幂等）。
+
+        只更新 ``conversation_id=''`` 的行：已归属的图片保持不变，否则重复保存
+        同一引用会把它从原会话抢走（历史轮引用会因此指向错误会话）。
+        """
+        img_id = parse_image_ref(ref)
+        if not img_id:
+            return
+        try:
+            c = self.conn.cursor()
+            c.execute(
+                "UPDATE images SET conversation_id = ? "
+                "WHERE id = ? AND conversation_id = '' AND deleted_at IS NULL",
+                (conv_id, img_id),
+            )
+            self.conn.commit()
+            c.close()
+        except Exception:
+            logger.exception("adopt image failed (isolated)")
+
+    def cleanup_orphan_images(self, keep_ids=None) -> int:
+        """标记删除「回合未完成即中断」遗留的未归属图片，返回标记条数。
+
+        append-only 语义：只写 ``deleted_at``，不物理删除（行仍在库中，可审计）。
+
+        ``keep_ids`` 必须传入**被在途快照引用的图片 id** —— 那些图片同样是
+        ``conversation_id=''``（回合没走完就没归属），却是恢复中的回合要显示的
+        内容；无条件标记删除会让「切回可见」当场失效（比占几 MB 磁盘严重得多）。
+
+        Args:
+            keep_ids: 需要保留的图片 id 集合（通常取自在途快照）。
+
+        Returns:
+            实际标记条数。
+        """
+        keep = sorted({int(i) for i in (keep_ids or []) if i})
+        c = self.conn.cursor()
+        try:
+            now = "datetime('now', 'localtime')"
+            base = f"UPDATE images SET deleted_at = {now} WHERE conversation_id = '' AND deleted_at IS NULL"
+            if keep:
+                # 上限 500：在途回合数量有限，避免触及 SQLite 变量数上限
+                keep = keep[:500]
+                ph = safe_placeholders(len(keep))
+                c.execute(f"{base} AND id NOT IN ({ph})", keep)
+            else:
+                c.execute(base)
+            n = int(c.rowcount or 0)
+            self.conn.commit()
+            return n
+        finally:
+            c.close()
+
+    def get_images(self, conversation_ids: list[str]) -> dict[str, list[dict]]:
+        """批量读取多轮对话的图片（导出/回读用）。
+
+        Args:
+            conversation_ids: 对话 ID 列表。
+
+        Returns:
+            ``{conversation_id: [{"id","mime_type","blob"}, ...]}``，按 id 升序。
+            未命中或无图的对话不出现在结果里。
+        """
+        ids = [str(c) for c in (conversation_ids or []) if c]
+        if not ids:
+            return {}
+        grouped: dict[str, list[dict]] = {}
+        c = self.conn.cursor()
+        try:
+            # 分批查询，避免 SQLite 变量数上限（默认 999）
+            for i in range(0, len(ids), 500):
+                chunk = ids[i:i + 500]
+                ph = safe_placeholders(len(chunk))
+                c.execute(
+                    f"SELECT id, conversation_id, image_blob, mime_type FROM images "
+                    f"WHERE conversation_id IN ({ph}) AND deleted_at IS NULL ORDER BY id ASC",
+                    chunk,
+                )
+                for row in c.fetchall():
+                    grouped.setdefault(row["conversation_id"], []).append({
+                        "id": row["id"],
+                        "mime_type": row["mime_type"] or "image/png",
+                        "blob": bytes(row["image_blob"] or b""),
+                    })
+        finally:
+            c.close()
+        return grouped
+
+    def get_image(self, image_id: int) -> dict | None:
+        """读取单张图片（HTTP 回读接口用）。
+
+        Args:
+            image_id: ``images.id``。
+
+        Returns:
+            ``{"id","conversation_id","mime_type","blob"}``；不存在返回 ``None``。
+        """
+        if not image_id:
+            return None
+        c = self.conn.cursor()
+        try:
+            c.execute(
+                "SELECT id, conversation_id, image_blob, mime_type FROM images "
+                "WHERE id = ? AND deleted_at IS NULL",
+                (int(image_id),),
+            )
+            row = c.fetchone()
+        finally:
+            c.close()
+        if not row:
+            return None
+        return {
+            "id": row["id"],
+            "conversation_id": row["conversation_id"],
+            "mime_type": row["mime_type"] or "image/png",
+            "blob": bytes(row["image_blob"] or b""),
+        }
 
     def _topic_of_conv(self, conversation_id: str) -> str:
         """查询会话所属 topic（事件日志关联用）。"""
@@ -122,99 +480,97 @@ class ConversationStore(StoreComponent):
             is_func_calling: whether tool calling was used.
             rounds: list of round dicts with role/content/tool_calls.
         """
-        rounds_json = json.dumps(rounds, ensure_ascii=False) if rounds else None
-        c = self.conn.cursor()
-        c.execute(
-            "UPDATE conversations SET ai_msg = ?, is_func_calling = ?, rounds_json = ? WHERE id = ?",
-            (ai_msg, 1 if is_func_calling else 0, rounds_json, conversation_id),
-        )
-
-        # Write individual rounds to agent_rounds table for SQL-based analysis
-        if rounds:
-            for i, r in enumerate(rounds):
-                role = r.get("role", "")
-                content = r.get("content", "")
-                tool_calls = r.get("tool_calls")
-                tool_call_id = r.get("tool_call_id")
-                reasoning = r.get("reasoning_content", "")
-                tc_json = json.dumps(tool_calls, ensure_ascii=False) if tool_calls else None
-                full_content = content
-                if reasoning:
-                    full_content = f"[思考] {reasoning}\n\n{content}" if content else f"[思考] {reasoning}"
-                c.execute(
-                    "INSERT INTO agent_rounds "
-                    "(id, conversation_id, round_num, role, content, tool_calls, tool_call_id, stamp) "
-                    "VALUES (?, ?, ?, ?, ?, ?, ?, datetime('now', 'localtime'))",
-                    (self._new_id(), conversation_id, i, role, full_content, tc_json, tool_call_id),
-                )
-
-        self.conn.commit()
-        c.close()
-
-        # P2 事件溯源：assistant/message（含 tool_calls 概览）+ turn/end
-        try:
-            topic_id = self._topic_of_conv(conversation_id)
-            if topic_id:
-                tool_calls_summary = None
-                if rounds:
-                    tcs = [r.get("tool_calls") for r in rounds if r.get("tool_calls")]
-                    if tcs:
-                        tool_calls_summary = [
-                            {"name": tc.get("function", {}).get("name", ""),
-                             "arguments": tc.get("function", {}).get("arguments", "")}
-                            for tc_list in tcs for tc in (tc_list if isinstance(tc_list, list) else [tc_list])
-                        ][:20]
-                self._log_event(
-                    topic_id, "assistant/message",
-                    {"content": ai_msg, "tool_calls": tool_calls_summary},
-                    conversation_id=conversation_id,
-                )
-                self._log_event(topic_id, "turn/end",
-                                {"reason": "complete"}, conversation_id=conversation_id)
-        except Exception:
-            logger.exception("append assistant event failed (isolated)")
+        # rounds_json 已废弃：它与 agent_rounds 重复存储（实测占库 38.4%，
+        # 单轮最大 8.79 MB），且写入前需把全部轮次 json.dumps 一次。
+        # 统一走 finalize_turn：幂等补齐轮次 + 补 ai_msg/状态 + 事件溯源。
+        self.finalize_turn(conversation_id, ai_msg,
+                           is_func_calling=is_func_calling, rounds=rounds)
 
     def save_agent_round(
         self, conversation_id: int, round_num: int, role: str, content: str,
         tool_calls: list[dict] | None = None, tool_call_id: str | None = None,
     ):
-        """Save agent round.
+        """写入单轮明细（薄封装，幂等）。
 
         Args:
-            conversation_id: Description.
-            round_num: Description.
-            role: Description.
-            content: Description.
-            tool_calls: Description.
-            tool_call_id: Description.
+            conversation_id: 所属对话。
+            round_num: 轮次序号。
+            role: 角色。
+            content: 文本内容。
+            tool_calls: 工具调用列表。
+            tool_call_id: 工具结果对应的调用 id。
         """
-        tc_json = json.dumps(tool_calls, ensure_ascii=False) if tool_calls else None
+        self.append_round(conversation_id, round_num, role, content,
+                          tool_calls=tool_calls, tool_call_id=tool_call_id)
+
+    def get_rounds(self, conversation_id: str) -> list[dict]:
+        """从 ``agent_rounds`` 派生结构化轮次（唯一事实源）。
+
+        替代已废弃的 ``conversations.rounds_json``：同一份内容此前存两处
+        （实测重复 30 MB），现在只留本表，按需派生。
+
+        ``reasoning_content`` 来自独立列（此前被拼进 content 的 ``[思考] `` 前缀，
+        导致无法还原结构 —— DeepSeek thinking 模式要求 RC 原样回传）。
+
+        Args:
+            conversation_id: 对话 ID。
+
+        Returns:
+            轮次列表（按 round_num 升序），元素形如
+            ``{"role","content","tool_calls","tool_call_id","reasoning_content"}``；
+            与旧 ``rounds_json`` 结构兼容（可直接喂给 load_history）。
+        """
+        if not conversation_id:
+            return []
         c = self.conn.cursor()
         c.execute(
-            "INSERT INTO agent_rounds (conversation_id, round_num, role, content, tool_calls, tool_call_id, stamp) "
-            "VALUES (?, ?, ?, ?, ?, ?, datetime('now', 'localtime'))",
-            (conversation_id, round_num, role, content, tc_json, tool_call_id),
+            "SELECT round_num, role, content, tool_calls, tool_call_id, reasoning_content "
+            "FROM agent_rounds WHERE conversation_id = ? AND deleted_at IS NULL "
+            "ORDER BY round_num ASC, rowid ASC",
+            (conversation_id,),
         )
-        self.conn.commit()
+        rows = c.fetchall()
         c.close()
+        out: list[dict] = []
+        for r in rows:
+            entry: dict = {"role": r["role"], "content": r["content"] or ""}
+            if r["tool_calls"]:
+                try:
+                    entry["tool_calls"] = json.loads(r["tool_calls"])
+                except (json.JSONDecodeError, TypeError):
+                    pass
+            if r["tool_call_id"]:
+                entry["tool_call_id"] = r["tool_call_id"]
+            rc = r["reasoning_content"]
+            if rc:
+                entry["reasoning_content"] = rc
+            out.append(entry)
+        return out
 
     def get_conversations(self, topic_id: str, limit: int = 5, include_rounds: bool = True) -> list[dict]:
-        """Get the conversations.
+        """读取主题下的对话轮次（按时间升序）。
+
+        已标记删除的轮次不出现在结果里（append-only：行仍在库中，仅带 deleted_at）。
 
         Args:
-            topic_id: Description.
-            limit: Description.
-            include_rounds: Description.
+            topic_id: 主题 ID。
+            limit: 上限（<=0 表示不限；>0 取最后 limit 条）。
+            include_rounds: 是否附带 ``rounds_json_parsed``。
+
+        Returns:
+            对话 dict 列表。
         """
         c = self.conn.cursor()
         if include_rounds:
             c.execute(
-                "SELECT * FROM conversations WHERE topic_id = ? ORDER BY stamp ASC", (topic_id,)
+                "SELECT * FROM conversations WHERE topic_id = ? AND deleted_at IS NULL "
+                "ORDER BY stamp ASC", (topic_id,)
             )
         else:
             c.execute(
                 "SELECT id, topic_id, user_msg, ai_msg, is_func_calling, is_summarized, stamp "
-                "FROM conversations WHERE topic_id = ? ORDER BY stamp ASC", (topic_id,)
+                "FROM conversations WHERE topic_id = ? AND deleted_at IS NULL ORDER BY stamp ASC",
+                (topic_id,)
             )
         rows = c.fetchall()
         c.close()
@@ -226,13 +582,9 @@ class ConversationStore(StoreComponent):
         for r in rows:
             d = dict(r)
             if include_rounds:
-                if d.get("rounds_json"):
-                    try:
-                        d["rounds_json_parsed"] = json.loads(d["rounds_json"])
-                    except (json.JSONDecodeError, TypeError):
-                        d["rounds_json_parsed"] = None
-                else:
-                    d["rounds_json_parsed"] = None
+                # 从 agent_rounds 派生（唯一事实源）。rounds_json 列已废弃 ——
+                # 它与本表重复存储（实测 30 MB / 占库 38%，单轮最大 8.79 MB）。
+                d["rounds_json_parsed"] = self.get_rounds(d["id"]) or None
             result.append(d)
         return result
 
@@ -253,14 +605,17 @@ class ConversationStore(StoreComponent):
         return [dict(r) for r in reversed(rows)]
 
     def get_agent_rounds(self, conversation_id: str) -> list[dict]:
-        """Get the agent rounds.
+        """获取对话的 agent rounds（按插入顺序）。
 
-        Args:
-            conversation_id: Description.
+        排序必须用 ``rowid``（插入序）而非 ``id``：``id`` 是 UUID，按它排序
+        得到的是**随机顺序**。旧实现之所以看起来正常，是因为其 INSERT 未写
+        ``id``（留 NULL）—— 一旦补上 UUID 就会错乱（实测 test_save_agent_round
+        断言 assistant 在前，实际取到 tool）。
         """
         c = self.conn.cursor()
         c.execute(
-            "SELECT * FROM agent_rounds WHERE conversation_id = ? ORDER BY id ASC",
+            "SELECT * FROM agent_rounds WHERE conversation_id = ? AND deleted_at IS NULL "
+            "ORDER BY rowid ASC",
             (conversation_id,),
         )
         rows = c.fetchall()
@@ -492,7 +847,8 @@ class ConversationStore(StoreComponent):
             for old_id, new_id in id_map.items():
                 c.execute(
                     "SELECT round_num, role, content, tool_calls, tool_call_id, stamp "
-                    "FROM agent_rounds WHERE conversation_id = ? ORDER BY round_num",
+                    "FROM agent_rounds WHERE conversation_id = ? "
+                    "ORDER BY round_num, rowid",
                     (old_id,),
                 )
                 for rr in c.fetchall():

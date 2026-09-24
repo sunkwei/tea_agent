@@ -256,11 +256,28 @@ def mark_buffer_done(topic_id: str) -> None:
 
 
 def read_buffer_since(topic_id: str, since: int) -> dict:
+    """读取序号 ``>= since`` 的缓冲区事件（增量续读）。
+
+    契约（与前端 ``_bufferSince = next_index`` 的用法严格对齐）：
+      - ``since``  = **尚未看过的最小序号**（首次读取传 -1）；
+      - 过滤用 ``>=``，因为 ``next_index`` 返回的是「下一条的序号」，
+        前端把它原样当 ``since`` 传回。若用 ``>``，边界那条事件会被跳过 ——
+        实测每次轮询丢 1 条（流式场景即丢字符）。
+
+    Args:
+        topic_id: 主题 ID。
+        since: 起始序号（含）。首次传 -1。
+
+    Returns:
+        events: 序号 >= since 的事件列表；
+        next_index: 下次应传的 since（= 本次最后一条 + 1；无事件时为 0）；
+        done: 流是否已结束。
+    """
     with background_buffers_lock:
         buf = background_buffers.get(topic_id)
         if buf is None:
             return {"events": [], "done": True, "next_index": 0}
-        events_since = [e for e in buf["events"] if e["index"] > since]
+        events_since = [e for e in buf["events"] if e["index"] >= since]
         next_index = (buf["events"][-1]["index"] + 1) if buf["events"] else 0
         return {"events": events_since, "done": buf["done"],
                 "next_index": next_index}

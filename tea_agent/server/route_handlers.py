@@ -15,7 +15,6 @@ import tempfile
 import threading
 import time
 import urllib.parse
-import uuid
 from datetime import datetime
 from pathlib import Path
 
@@ -46,6 +45,83 @@ from ._compat import (
 )
 
 from tea_agent.model_manager import ProviderError
+
+
+def _persist_turn_images(storage, images: list, label: str = "Image") -> list:
+    """把回合图片**立即入库**，返回 ``img:<id>`` 引用列表（输入不丢失）。
+
+    为什么必须在回合**开始**入库，而不是等回合结束的 ``save_msg``：
+
+    1. **切回可见**：回合进行中用户切走主题再切回时，该提问尚未写库，
+       图片若只活在内存里就无从恢复（实测表现为「切回后看不到刚发的图」）。
+    2. **快照可承载**：data URL 动辄数万字符，会被快照的 ``_shrink`` 截断成
+       ``...A…[truncated]`` —— 前端 ``<img src>`` 拿到损坏值。短引用无此问题。
+
+    归属由回合结束的 ``save_msg`` 补上（见 ``Storage._adopt_image``）。
+
+    Args:
+        storage: Storage 实例；为空时原样返回（fail-open，不阻断对话）。
+        images: data URL 列表（``_images_to_data_urls`` 的产物）。
+        label: 日志前缀。
+
+    Returns:
+        引用列表；非 data URL 项（外链等）原样保留。
+    """
+    from tea_agent.image_ref import make_image_ref, parse_data_url
+
+    if not images or storage is None:
+        return list(images or [])
+    refs: list[str] = []
+    for item in images:
+        if not isinstance(item, str) or not item.startswith("data:"):
+            refs.append(item)
+            continue
+        try:
+            mime, blob = parse_data_url(item)
+            if not blob:
+                refs.append(item)  # 解析失败：保留原值，不丢输入
+                continue
+            refs.append(make_image_ref(storage.add_pending_image(blob, mime)))
+        except Exception as e:
+            logger.warning(f"{label} persist failed: {e}")
+            refs.append(item)      # 入库失败：退回原值，绝不静默丢图
+    return refs
+
+
+def _images_to_data_urls(images_b64: list, label: str = "Image") -> list:
+    """把请求里的图片归一化为 data URL 列表（**不落盘**）。
+
+    图片二进制由 ``Storage.save_msg`` 直接写入 ``images`` 表；此前先写
+    ``uploads/`` 再存库，会在文件系统留下无清理策略的副本，且工作目录变更
+    即导致历史图片永久丢失。
+
+    接受的入参：``data:`` URL（原样透传）或裸 base64（补 ``image/png`` 前缀）。
+    解码失败的项跳过并告警（与旧行为一致，不阻断整轮对话）。
+
+    Args:
+        images_b64: 请求体 ``images`` 字段。
+        label: 日志前缀（区分主对话/插话）。
+
+    Returns:
+        data URL 字符串列表。
+    """
+    import base64 as b64mod
+
+    out: list[str] = []
+    for img in images_b64 or []:
+        if not isinstance(img, str) or not img:
+            continue
+        if img.startswith("data:"):
+            out.append(img)
+            continue
+        try:
+            b64mod.b64decode(img, validate=False)
+        except Exception as e:
+            logger.warning(f"{label} base64 decode failed: {e}")
+            continue
+        out.append(f"data:image/png;base64,{img}")
+    return out
+
 
 # ================================================================
 #  System / Health
@@ -555,36 +631,8 @@ async def handle_web_chat(request):
             yield f"data: {json.dumps({'type': 'queued', 'item_id': item_id, 'topic_id': topic_id, 'position': position})}\n\n"
         return StreamingResponse(_queued_sse(), media_type="text/event-stream")
 
-    image_paths = []
-    if images_b64:
-        import base64 as b64mod
-        upload_dir = Path("uploads")
-        upload_dir.mkdir(exist_ok=True)
-        for idx, img_b64 in enumerate(images_b64):
-            try:
-                if img_b64.startswith("data:"):
-                    header, data = img_b64.split(",", 1)
-                    ext_map = {
-                        "image/png": ".png",
-                        "image/jpeg": ".jpg",
-                        "image/gif": ".gif",
-                        "image/webp": ".webp",
-                        "image/bmp": ".bmp",
-                    }
-                    mime = header.split(";")[0].replace("data:", "")
-                    ext = ext_map.get(mime, ".png")
-                else:
-                    data = img_b64
-                    ext = ".png"
-                img_bytes = b64mod.b64decode(data)
-                fname = f"upload_{uuid.uuid4().hex[:8]}_{idx}{ext}"
-                fpath = upload_dir / fname
-                fpath.write_bytes(img_bytes)
-                image_paths.append(str(fpath))
-            except Exception as e:
-                logger.warning(f"Image base64 decode failed: {e}")
-
-    msg_payload = {"text": message, "images": image_paths} if image_paths else message
+    # 图片归一化为 data URL（不落盘）；随后在回合开始时入库为 img:<id> 引用
+    image_paths = _images_to_data_urls(images_b64, label="Image")
 
     server = get_server()
     session, storage = server.create_session(config_path)
@@ -599,6 +647,33 @@ async def handle_web_chat(request):
 
         # 在途快照：登记本回合，使 server 意外重启后可恢复已产出内容
         _snapshot.begin_turn(topic_id)
+        # 图片在回合**开始**即入库，全程改用 img:<id> 短引用：
+        #   1) data URL 数万字符会被快照 _shrink 截断成损坏值（切回后图片打不开）；
+        #   2) 图片只活在内存时，回合进行中切走再切回无从恢复（输入丢失）。
+        _img_refs = _persist_turn_images(storage, image_paths, label="Image")
+        _turn_payload = ({"text": message, "images": _img_refs}
+                         if _img_refs else message)
+        # 回合**开始**即建 conversation 行（status=pending）：
+        #   1) 回合中的工具/增量事件据此归属 —— 此前 conversation_id 恒为 NULL
+        #      （实测 404 条 tool/call 全部无归属），轮次级审计无法进行；
+        #   2) 切回主题时该轮已在库可查，不必等回合结束才写；
+        #   3) 图片在 create_turn 内获得归属（_store_images → _adopt_image）。
+        # 失败时降级为旧行为（回合结束的 save_msg 兜底建行），不阻断对话。
+        try:
+            _conv_id = storage.create_turn(topic_id, _turn_payload)
+            _ctx = getattr(session, "context", None)
+            if _ctx is not None:
+                _ctx.conversation_id = _conv_id
+        except Exception:
+            logger.exception("create_turn failed (turn continues, will save at end)")
+        # 把用户提问记为快照事件（序号 0）：回合进行中切走再切回时，
+        # 该提问尚未定稿（finalize_turn 在回合结束时才调用），若不记入事件流，
+        # 前端既读不到 DB 也读不到缓冲区 —— 用户连自己刚问过什么都看不到。
+        _snapshot.record_event(
+            topic_id,
+            {"type": "user_message", "text": message, "images": _img_refs},
+            0, force=True,
+        )
 
         try:
             with _active_sessions_lock:
@@ -606,7 +681,7 @@ async def handle_web_chat(request):
 
             thread = threading.Thread(
                 target=_chat_stream_sse_wrapper,
-                args=(session, storage, msg_payload, queue, topic_id, loop),
+                args=(session, storage, _turn_payload, queue, topic_id, loop),
                 daemon=True,
             )
             thread.start()
@@ -699,34 +774,8 @@ async def handle_web_chat_steering(request):
                 status_code=400,
             )
 
-    image_paths = []
-    if images_b64:
-        import base64 as b64mod
-        upload_dir = Path("uploads")
-        upload_dir.mkdir(exist_ok=True)
-        for idx, img_b64 in enumerate(images_b64):
-            try:
-                if img_b64.startswith("data:"):
-                    header, data = img_b64.split(",", 1)
-                    ext_map = {
-                        "image/png": ".png",
-                        "image/jpeg": ".jpg",
-                        "image/gif": ".gif",
-                        "image/webp": ".webp",
-                        "image/bmp": ".bmp",
-                    }
-                    mime = header.split(";")[0].replace("data:", "")
-                    ext = ext_map.get(mime, ".png")
-                else:
-                    data = img_b64
-                    ext = ".png"
-                img_bytes = b64mod.b64decode(data)
-                fname = f"steer_{uuid.uuid4().hex[:8]}_{idx}{ext}"
-                fpath = upload_dir / fname
-                fpath.write_bytes(img_bytes)
-                image_paths.append(str(fpath))
-            except Exception as e:
-                logger.warning(f"Steering image base64 decode failed: {e}")
+    # 插话图片同样不落盘：归一化为 data URL，由 save_msg 写入 images 表
+    image_paths = _images_to_data_urls(images_b64, label="Steering image")
 
     item_id = _queue_add(topic_id, message, image_paths)
     position = len(_queue_list(topic_id))
@@ -1082,11 +1131,12 @@ async def handle_web_topic_stream_buffer(request):
     """GET /api/topic/{topic_id}/stream-buffer — 获取后台缓冲区中的流式事件
 
     Query params:
-        since: int — 上次获取的最后一个事件索引（从0开始），默认 -1
+        since: int — **尚未看过的最小事件序号**（含），首次传 -1。
+            前端把上次响应的 next_index 原样传回，二者语义严格对齐。
     Returns:
-        events: list[dict] — 新的事件列表
+        events: list[dict] — 序号 >= since 的事件列表
         done: bool — 流是否已结束
-        next_index: int — 下一个事件的索引（供下次请求使用）
+        next_index: int — 下次应传的 since（= 本次最后一条 + 1）
     """
     topic_id = request.path_params.get("topic_id", "")
     if not topic_id:
@@ -1142,6 +1192,30 @@ async def handle_web_topic_conversations(request):
     except Exception as e:
         logger.exception("get_topic_conversations failed")
         return JSONResponse({"error": str(e)}, status_code=500)
+
+
+async def handle_web_image(request):
+    """GET /api/image/{image_id} — 回读会话图片（二进制存于 images 表）。
+
+    前端历史渲染把 ``img:<id>`` 引用指向本路由，无需文件系统副本。
+    """
+    raw = request.path_params.get("image_id", "")
+    try:
+        image_id = int(raw)
+    except (TypeError, ValueError):
+        return JSONResponse({"error": "invalid image id"}, status_code=400)
+    try:
+        img = get_server().get_image(image_id)
+    except Exception as e:
+        logger.exception("get_image failed")
+        return JSONResponse({"error": str(e)}, status_code=500)
+    if not img or not img.get("blob"):
+        return JSONResponse({"error": "image not found"}, status_code=404)
+    return Response(
+        content=img["blob"],
+        media_type=img.get("mime_type") or "image/png",
+        headers={"Cache-Control": "public, max-age=31536000, immutable"},
+    )
 
 
 async def handle_web_topic_trajectory(request):

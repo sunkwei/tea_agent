@@ -30,6 +30,47 @@ def _summarize_json(value: Any, limit: int = 800) -> str:
     half = max(limit // 2, 1)
     return f"{text[:half]}...[截断 {len(text)}B→{limit}B]...{text[-half:]}"
 
+
+def _collect_round(ctx, entry: dict) -> None:
+    """追加一轮到 collector，并**实时落盘**（append-only）。
+
+    为什么不等回合结束批量写：实测单轮可达 5815 个轮次，回合末一次性写入
+    意味着崩溃/强杀即丢整轮明细。实时追加后，已发生的工具调用在库里立即可见
+    （幂等：同一 (round_num, role, tool_call_id) 重复提交被跳过）。
+
+    刻意做成**模块级函数而非方法**：``collect_*`` 允许被鸭子类型替身以
+    ``ToolComponent.collect_xxx(stub, ...)`` 方式调用（stub 只有 ``ctx``）。
+    若改成 ``self._collect(entry)``，替身会因缺少该方法抛 AttributeError
+    （实测踩中：test_reasoning_empty_rc 的两个用例变红）。
+
+    Args:
+        ctx: 会话上下文（需有 ``_rounds_collector``；可选 ``conversation_id``/``storage``）。
+        entry: 轮次 dict（role/content/tool_calls/tool_call_id/reasoning_content）。
+    """
+    try:
+        ctx._rounds_collector.append(entry)
+    except Exception:
+        logger.debug("collector append failed", exc_info=True)
+        return
+    try:
+        conv_id = getattr(ctx, "conversation_id", "") or ""
+        storage = getattr(ctx, "storage", None)
+        if not (conv_id and storage):
+            return
+        idx = len(ctx._rounds_collector) - 1
+        if idx < 0:
+            return
+        storage.append_round(
+            conv_id, idx, entry.get("role", ""),
+            entry.get("content", "") or "",
+            tool_calls=entry.get("tool_calls"),
+            tool_call_id=entry.get("tool_call_id"),
+            reasoning_content=entry.get("reasoning_content", "") or "",
+        )
+    except Exception:
+        logger.debug("persist round failed (isolated)", exc_info=True)
+
+
 class ToolComponent(SessionComponent):
     """工具执行组件 — 负责工具调用执行、结果管理、输出截断与追踪。"""
 
@@ -266,7 +307,13 @@ class ToolComponent(SessionComponent):
             events = getattr(storage, "events", None)
             if events is None:
                 return
-            events.append_event(topic_id, event_type, payload)
+            # conversation_id 由回合入口 create_turn 写入 ctx（回合**开始**即有 id），
+            # 使工具事件能归属到具体轮次。此前不传 → 实测 tool/call 的
+            # conversation_id **100% 为 NULL**（404/404），轮次级审计失效。
+            events.append_event(
+                topic_id, event_type, payload,
+                conversation_id=getattr(ctx, "conversation_id", "") or "",
+            )
         except Exception:
             logger.debug("append tool event failed (isolated)", exc_info=True)
 
@@ -290,13 +337,11 @@ class ToolComponent(SessionComponent):
         )
 
     def collect_tool_call_round(self, call_id: str, result_str: str):
-        self.ctx._rounds_collector.append(
-            {
-                "role": "tool",
-                "content": result_str,
-                "tool_call_id": call_id,
-            }
-        )
+        _collect_round(self.ctx, {
+            "role": "tool",
+            "content": result_str,
+            "tool_call_id": call_id,
+        })
 
     def collect_assistant_tool_calls_round(
         self, content: str, tool_calls: list, reasoning_content: str = ""
@@ -322,7 +367,7 @@ class ToolComponent(SessionComponent):
             # 与 tool_loop_runner 存储一致：RC 字段含空串也必须保留入库，
             # 否则 DB 回放/历史加载后 tool_calls 消息缺 key → 下轮请求 400。
             entry["reasoning_content"] = reasoning_content
-        self.ctx._rounds_collector.append(entry)
+        _collect_round(self.ctx, entry)
 
     def collect_assistant_text_round(self, content: str, reasoning_content: str = ""):
         entry = {
@@ -331,31 +376,25 @@ class ToolComponent(SessionComponent):
         }
         if self.ctx.supports_reasoning:
             entry["reasoning_content"] = reasoning_content
-        self.ctx._rounds_collector.append(entry)
+        _collect_round(self.ctx, entry)
 
     def collect_api_error_round(self, content: str):
-        self.ctx._rounds_collector.append(
-            {
-                "role": "assistant",
-                "content": content,
-            }
-        )
+        _collect_round(self.ctx, {
+            "role": "assistant",
+            "content": content,
+        })
 
     def collect_max_iterations_round(self, content: str):
-        self.ctx._rounds_collector.append(
-            {
-                "role": "assistant",
-                "content": content,
-            }
-        )
+        _collect_round(self.ctx, {
+            "role": "assistant",
+            "content": content,
+        })
 
     def collect_interruption_round(self, content: str):
-        self.ctx._rounds_collector.append(
-            {
-                "role": "assistant",
-                "content": content,
-            }
-        )
+        _collect_round(self.ctx, {
+            "role": "assistant",
+            "content": content,
+        })
 
     def parse_tool_calls_from_stream(self, tool_calls_data: list[dict]) -> list:
         from tea_agent.session.json_sanitizer import normalize_tool_args

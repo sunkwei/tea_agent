@@ -21,6 +21,7 @@
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import os
 
 import pytest
@@ -141,10 +142,9 @@ class TestBufferReaderSeedsBeforeQueue:
             task = asyncio.create_task(_background_buffer_reader(topic_id, queue))
             await asyncio.sleep(timeout)
             task.cancel()
-            try:
+            # 预期：本测试主动取消该任务，此处只是等它真正结束
+            with contextlib.suppress(asyncio.CancelledError):
                 await task
-            except asyncio.CancelledError:
-                pass
 
         asyncio.run(_main())
 

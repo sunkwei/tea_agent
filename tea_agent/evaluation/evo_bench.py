@@ -782,8 +782,11 @@ class _PyCheckSession:
                         q.put(line[len(_PY_SENTINEL):])
                     elif line.strip():
                         q.put(("!noise", line))
-        except (OSError, ValueError):
-            pass
+        except (OSError, ValueError) as e:
+            # 读子进程 stdout 失败：本线程负责把输出投递给队列，静默退出会让
+            # 上层一直等下去（最终只表现为「检查超时」，没有任何线索）。
+            # 留痕，同时仍走 finally 投递结束信号，保证等待方一定被唤醒。
+            logger.debug("evo_bench._pump: 读取子进程输出失败: %s", e)
         finally:
             q.put(None)  # 进程结束信号
 
@@ -1056,6 +1059,40 @@ DEFAULT_TASKS: list = [
 ]
 
 
+def _load_hard_tasks() -> list:
+    """按**文件路径**加载难度任务集（绕开 sys.modules 缓存）。
+
+    为什么必须绕开普通 import：本模块的**检查执行器**早已为此改用子进程
+    （见 ``_check_python`` 的说明：父进程 import 过 audit_log 就会永远报绿）。
+    但**任务定义本身**此前仍走 ``from ... import HARD_TASKS``，同样被
+    sys.modules 缓存 —— 于是长期存活的进程（server / 已 import 过该模块的
+    CLI）在**编辑 evo_tasks_hard.py（例如调整棘轮基线）后重跑基准，仍会读到
+    旧定义**，得到基于陈旧基线的判定。
+
+    对自我进化基准而言这类失效尤其危险：改了基线却看到"依然是红的"，
+    会引导出「我的改动无效」这种错误结论（实测本轮即撞上：基线已由 789
+    改为 791，长驻进程仍报 789 并判 FAIL）。
+
+    用「读源码 → compile → exec」而非 ``importlib`` 的加载器：后者仍会经
+    ``__pycache__``，而 pyc 的有效性判据是 ``(源文件 mtime, 源文件大小)``。
+    实测边界：同一秒内两次编辑、且新旧内容**等长**时（例如把 789 改回 791
+    之后再改回去），mtime 粒度不足以区分 → 复用旧字节码，缓存问题原样复现。
+
+    ``exec`` 自身源码与「导入它」信任等级相同（同一仓库、同一进程权限），
+    不引入新的执行面；换来的是「读到的必然是此刻磁盘上的内容」这一确定性。
+
+    Returns:
+        任务列表；文件缺失/不可用时返回空列表。
+    """
+    path = Path(__file__).with_name("evo_tasks_hard.py")
+    if not path.is_file():
+        return []
+    ns: dict = {}
+    src = path.read_text(encoding="utf-8")
+    exec(compile(src, str(path), "exec"), ns)  # noqa: S102 - 加载本仓库内置数据模块
+    return list(ns.get("HARD_TASKS") or [])
+
+
 def load_tasks(root: str = ".", kind: str | None = None) -> list:
     """内置任务 + 外部 JSON 任务（benchmarks/*.json）合并，按 id 去重。
 
@@ -1068,16 +1105,16 @@ def load_tasks(root: str = ".", kind: str | None = None) -> list:
         if tid and tid not in seen:
             seen.add(tid)
             tasks.append(t)
-    try:  # 难度任务集（违规/棘轮/不变量）；模块不可用时降级为仅内置任务
-        from tea_agent.evaluation.evo_tasks_hard import HARD_TASKS
-
-        for t in HARD_TASKS:
+    try:  # 难度任务集（违规/棘轮/不变量）；不可用时降级为仅内置任务
+        # 捕获集合刻意**精确**而非裸 Exception：本文件是纯数据模块，
+        # 失败面就是「读不到 / 语法坏 / 取不到符号」这几类，写清楚更有信息量。
+        for t in _load_hard_tasks():
             tid = t.get("id")
             if tid and tid not in seen:
                 seen.add(tid)
                 tasks.append(t)
-    except ImportError:
-        logger.debug("evo_bench: 难度任务集不可用，跳过")
+    except (ImportError, OSError, SyntaxError, ValueError, AttributeError) as e:
+        logger.debug("evo_bench: 难度任务集不可用，跳过: %s", e)
     for d in TASK_DIRS:
         try:
             if not d.is_dir():

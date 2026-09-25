@@ -53,6 +53,8 @@ class SummaryStore(StoreComponent):
             ''', (topic_id, summary))
         self.conn.commit()
         c.close()
+        # 审计：保留历史版本（与 semantic/tool_chain 同一套 append-only 版本表）
+        self._record_version(topic_id, "topic_summary", summary)
 
     # ── 三级历史 Level 2 ──
 
@@ -116,6 +118,8 @@ class SummaryStore(StoreComponent):
         )
         self.conn.commit()
         c.close()
+        # 审计：保留历史版本（L3 此前只有"当前值"，无法回答「T 时刻相信什么」）
+        self._record_version(topic_id, "semantic_summary", summary)
 
     def get_tool_chain_summary(self, topic_id: str) -> str:
         """Get the tool chain summary.
@@ -143,6 +147,100 @@ class SummaryStore(StoreComponent):
         )
         self.conn.commit()
         c.close()
+        self._record_version(topic_id, "tool_chain_summary", summary)
+
+    # ── L3 历史版本（append-only，审计用）────────────────────────
+
+    def _record_version(self, topic_id: str, kind: str, content: str,
+                        conversation_id: str = "") -> int:
+        """把 L3 摘要的一次变更追加进 ``history_versions``（append-only）。
+
+        审计意义：L3 此前只有"当前值"（UPDATE/UPSERT 覆盖），无法回答审计
+        最核心的问题「T 时刻 Agent 相信的是什么」。本方法保留每次**实际发生
+        变化**的版本。
+
+        只在内容真正变化时记录：同值重写不产生新版本，否则版本号会被无意义
+        的重复写撑爆，历史曲线失去可读性。
+
+        fail-open：审计旁路失败绝不影响摘要主流程（与 append_round 同约定）。
+
+        Args:
+            topic_id: 主题 ID。
+            kind: 摘要种类（semantic_summary / tool_chain_summary / topic_summary）。
+            content: 新的摘要内容。
+            conversation_id: 触发本次摘要的回合（可空）。
+
+        Returns:
+            新版本号；未记录（内容未变 / 空内容 / 失败）时返回 0。
+        """
+        if not topic_id or content is None:
+            return 0
+        content = str(content)
+        if not content.strip():
+            return 0
+        try:
+            c = self.conn.cursor()
+            try:
+                prev = c.execute(
+                    "SELECT content FROM history_versions "
+                    "WHERE topic_id = ? AND kind = ? ORDER BY version DESC LIMIT 1",
+                    (topic_id, kind),
+                ).fetchone()
+                if prev is not None and (prev["content"] or "") == content:
+                    return 0  # 内容未变 → 不产生新版本
+                row = c.execute(
+                    "SELECT COALESCE(MAX(version), 0) + 1 AS nxt FROM history_versions "
+                    "WHERE topic_id = ? AND kind = ?",
+                    (topic_id, kind),
+                ).fetchone()
+                nxt = int(row["nxt"]) if row else 1
+                c.execute(
+                    "INSERT INTO history_versions "
+                    "(topic_id, kind, version, content, chars, conversation_id) "
+                    "VALUES (?, ?, ?, ?, ?, ?)",
+                    (topic_id, kind, nxt, content, len(content),
+                     conversation_id or None),
+                )
+                self.conn.commit()
+                return nxt
+            finally:
+                c.close()
+        except Exception:
+            logger.debug("_record_version failed (isolated)", exc_info=True)
+            return 0
+
+    def get_l3_versions(self, topic_id: str, kind: str = "",
+                        limit: int = 50) -> list[dict]:
+        """读取 L3 摘要的历史版本（最新在前）。
+
+        Args:
+            topic_id: 主题 ID。
+            kind: 摘要种类过滤（空=全部）。
+            limit: 上限（<=0 表示不限）。
+
+        Returns:
+            版本 dict 列表（含 version/kind/content/chars/created_at）。
+        """
+        if not topic_id:
+            return []
+        try:
+            c = self.conn.cursor()
+            try:
+                sql = ("SELECT kind, version, content, chars, conversation_id, created_at "
+                       "FROM history_versions WHERE topic_id = ?")
+                params: tuple = (topic_id,)
+                if kind:
+                    sql += " AND kind = ?"
+                    params = params + (kind,)
+                sql += " ORDER BY version DESC" + (" LIMIT ?" if limit > 0 else "")
+                if limit > 0:
+                    params = params + (limit,)
+                return [dict(r) for r in c.execute(sql, params).fetchall()]
+            finally:
+                c.close()
+        except Exception:
+            logger.debug("get_l3_versions failed (isolated)", exc_info=True)
+            return []
 
     def push_to_level2(self, topic_id: str, user_msg: str, ai_msg: str,
                         files: list = None, rounds: list = None,

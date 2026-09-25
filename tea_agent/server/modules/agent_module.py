@@ -488,6 +488,19 @@ class AgentModule(HotReloadModule):
             agent.load_topic_history(topic_id)
         elif not agent.current_topic_id:
             agent.current_topic_id = agent.db.create_topic("API 会话")
+        _active_topic = topic_id or agent.current_topic_id
+        # 回合**开始**即建行（对齐流式路径 route_handlers/_run_stream）：
+        # 此前非流式只在回合末由 _post_chat_pipeline → save_msg 一次性建行，
+        # 于是回合中产生的 tool/call、assistant/chunk 事件 conversation_id
+        # 恒为 NULL（轮次级审计失效），且进程崩溃即整轮丢失。
+        # 失败时降级为旧行为（回合末建行），不阻断对话。
+        try:
+            _conv_id = agent.db.create_turn(_active_topic, user_msg)
+            _ctx = getattr(agent.sess, "context", None)
+            if _ctx is not None:
+                _ctx.conversation_id = _conv_id
+        except Exception:
+            logger.exception("create_turn failed (turn continues, will save at end)")
         collected = []
         def cb(text: str):
             if text and not text.startswith("["):

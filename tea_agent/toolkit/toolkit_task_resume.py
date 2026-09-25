@@ -330,7 +330,7 @@ def toolkit_task_resume(action: str = "check", plan_id: str = None) -> dict:
             }
 
         elif action == "resume_todo":
-            # 恢复 TODO 执行
+            # 恢复待办执行
             from tea_agent.toolkit.toolkit_todo import toolkit_todo
             return toolkit_todo(action="show")
 

@@ -17,7 +17,12 @@
 
 from __future__ import annotations
 
+import logging
 from typing import Any
+
+# 仅用标准库 logging：本模块刻意不依赖任何 tea_agent 模块（叶子模块，见上方
+# 设计约束），加它不会引入循环导入。
+logger = logging.getLogger("session.decode_rate")
 
 # 采样窗口下限（秒）：短于此窗口的除法噪声过大（首个增量与流结束几乎同时），
 # 宁可不显示也不显示抖动的天文数字。
@@ -182,7 +187,7 @@ def record_decode_stats(
         ctx._decode_estimated = stats["estimated"]
         ctx._decode_tps_text = stats["decode_tps_text"]
     except Exception:
-        pass
+        logger.debug("record_decode_stats: 解码速度字段写入失败（遥测缺失，不影响生成）", exc_info=True)
     return stats
 
 
@@ -221,7 +226,7 @@ def reset_decode_stats(ctx: Any) -> None:
         ctx._decode_estimated = False
         ctx._decode_tps_text = ""
     except Exception:
-        pass
+        logger.debug("reset_decode_stats: 解码速度字段写入失败（遥测缺失，不影响生成）", exc_info=True)
 
 
 def decode_usage_fields(ctx: Any) -> dict[str, Any]:

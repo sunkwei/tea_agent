@@ -2,6 +2,95 @@
 
 
 ## [Unreleased]
+
+## [0.17.0] - 2026-09-25
+
+### Features
+- feat(audit): 补齐 L0–L3 四级历史的**严格审计闭环**（此前只有写入侧、没有读取出口）
+  - **缺口**：`get_level2` / `get_semantic_summary` / `get_tool_chain_summary` 仅被
+    `_load_topic_history` 内部消费，**L0 富化系统提示词更是从不落盘** —— 发给模型的
+    system 并非裸 `system_prompt`，而是 `_build_l0_enriched_system()` 运行时合成的结果
+    （OS 信息 / AGENTS.md / context_fragments / 小模型约束）。配置与 AGENTS.md 早已变化，
+    故「复原某次会话当时看到了什么」在审计/复盘时根本无从下手。
+  - **L0 落盘**：新增 `store/_l0_snapshots.py`，写入时机 = 回合**首次**构建 API 消息
+    （工具循环内每轮都会重建，靠 `conversations.l0_recorded` 做一次性闸门保证幂等，
+    避免把同一份大文本重复写 N 遍）；内容寻址用纯函数 `l0_content_hash`。
+  - **统一读取出口**：新增 `toolkit_history_extract.py`（按会话提取 L0–L3），输出里
+    **显式标注作用域**：L0/L1 为回合级，L2/L3 为主题级且是**滚动覆盖值而非历史版本**
+    （`historical=false`）。这是最易误用处 —— 拿 L2/L3 去复原「某一回合当时的 L2/L3」
+    做不到，工具如实标注，而不是返回一个貌似可用的错值。
+  - L3 摘要新增版本历史（`store/_summaries.py`）+ `schema_migration` 增量列。
+  - tests: 新增 `test_l0_snapshot_audit.py` / `test_l3_version_history.py` /
+    `test_history_extract_tool.py`。
+
+### Bug Fixes
+- fix(eval): 修复 EvolutionBench **裁决器读到陈旧输入**的静默失效
+  - **症状**：棘轮基线由 789 改为 791 后重跑，仍报「增至 791（基线 789）」。
+  - **根因**：`load_tasks()` 用普通 `from ... import HARD_TASKS` 取难度任务集 → 被
+    `sys.modules` 缓存。**长驻进程**（server / 已 import 过该模块的 CLI）在编辑任务集后
+    重跑基准，读到的仍是旧定义 —— 裁决器**不报错，只给出一个看起来合理的错误结论**。
+    这对自进化基准尤其危险：错误决策会被当成正常判定。
+  - **该缺陷类已被踩过一次**：`_check_python` 的执行器早为此改用子进程（注释写明
+    「父进程 import 过 audit_log 就永远报绿」），但**任务定义这条路径漏了**。
+  - **修法两阶段**（第一版仍不完整）：`spec_from_file_location` 按路径加载**仍走
+    `__pycache__`**，而 pyc 有效性判据是 `(mtime, size)` —— 同一秒内两次**等长**编辑
+    （如 789→791 再改回）会复用旧字节码，缓存问题原样复现。最终改为「读源码 →
+    `compile` → `exec`」：完全绕开缓存机制，且不污染 `sys.modules`。
+  - tests: 新增 `test_evo_bench_fresh_task_load.py` 5 项（同进程改文件再读必须看到新内容 /
+    `sys.modules` 中的陈旧模块不得被采信）；元验证 = 换回旧实现即刻变红。
+  - 记账：顺带删除一条**因该缺陷写错的数据点**（陈旧基线下记录的 0.881 / 37-of-42），
+    并从全新进程重记 —— 先质疑测量，再动被测量的对象。
+
+- fix(quality): 再清 7 处「静默会掩盖真实故障」的 `except: pass`，并把棘轮漂移归零
+  - 甄别口径与 09-19 那轮一致：只改**静默会掩盖真实故障**的站点，不动 AGENTS.md 明文
+    要求的 fail-open；手段统一 `logger.debug(..., exc_info=True)`（行为完全不变，
+    只补可诊断性）。
+  - 7 处：`server/turn_snapshot.py` ×3（「重启不丢内容」静默失效 → 用户只看到内容丢了）、
+    `session/decode_rate.py` ×2（遥测写失败 → 无法区分「未测量」与「写失败」）、
+    `basesession.py` ×1（可选导入失效 → **路径转义保护无声消失**，表现为偶发解析异常
+    且无从定位）、`evaluation/evo_bench.py` ×1（子进程 stdout 泵静默退出 → 等待方永远
+    阻塞，只表现为「检查超时」，零线索）。
+  - 效果：`except_pass` **99 → 92**，棘轮**向下收紧**到 92（锁住收益，而非放宽）。
+  - `todos` 5 → 0：余下 5 处全是把该功能当**名词**用的描述性注释（并非债务标记），
+    按该指标自述口径改用中文名；并新增「描述该功能必须用中文名」的明文约定 ——
+    否则棘轮会对正常注释误报（本注释自身写下该字面标记也会自指命中）。
+  - `print` 161 → 165：逐处 AST 核对确认增量**全是 CLI 面向用户的标准输出**
+    （配置向导 +13 / 启动横幅 +1；`toolkit_question` 改走交互通道 −10，净 +4）。
+    改成 logging 会让向导提示对用户**不可见**（logging 默认无 handler）→ 属功能倒退，
+    故按棘轮约定显式过账，而非为压指标改坏 UX。
+  - 明确**保留不改** 2 处（`os_info_injector` / `_git_snapshot` 的临时文件 `unlink`）：
+    失败最多留个临时文件，掩盖不了任何故障；为压指标而改属反向操作，已在注释写明理由。
+  - `broad_except` 789 → 791：审计补口的 fail-open 边界，已从初见的 17 处收敛到 2 处
+    （工具内单点 `_safe_call`），净 +10。
+
+### Cleanup
+- refactor(structure): 拆分 3 个 >800 行文件 —— 达成 AGENTS.md 结构性目标
+  （`big_files` 23 → **20**；EvolutionBench **41/42 → 42/42**）
+  - `server/route_handlers.py`（3017 行，全仓最大）→ 750 行 + 7 个**同级**模块
+    （`route_handlers_{basic,exports,topics,webconfig,dag,providers,models}.py`）。
+    模块路径与 `route_handlers.X` 的公开面**完全不变**（原文件 re-export 全部 150 个符号，
+    含 `logger` / `get_server` / `_active_sessions` 等历来可经该模块访问的名字）。
+  - `server/server.py` 834 → 718（抽出 `_build_routes` → `server/_routes.py`）；
+    `multi_agent/workflow_viz.py` 828 → 694（抽出 HTML 模板 → `multi_agent/_viz_template.py`）。
+  - **手法**：按行区间**逐字搬运**，不改写任何函数体（112/112 顶层定义零缺失、零多余；
+    跨模块引用仅 5 处，已用同包导入接线，且无循环导入）；**不注入**
+    `from __future__ import annotations`（原文件没有 —— 注入会把注解变惰性求值，
+    可能改变运行时可内省行为）。
+  - **踩过的坑（记录备查）**：首版把 `route_handlers.py` 拆成**包**，立刻 15 个测试变红 ——
+    包使 `rh.__file__` 指向 `__init__.py`，破坏 11 个读源码的静态契约检查、3 个定位
+    `static/app.js` 的断言、以及 `monkeypatch rh.get_server` 的语义（handler 在子模块里查
+    自身模块的 `get_server`，补丁打不到 → 表现为 404）。**包的模块语义 ≠ 原文件语义**，
+    故改为「保留真实文件 + 同级模块」。同一根因在 `_build_routes` 里再次出现：
+    `static_dir = Path(__file__).parent / "static"` —— 同目录抽取结果不变，抽到子包即坏。
+  - 顺带修正一处**钉住实现细节**的测试（`test_image_route_registered` 只读 `server.py`
+    源码找路由字符串）：改为扫描整个路由层，对后续任何模块拆分免疫 —— 路由确实注册着
+    （应用内仍有 `/api/image/{image_id:str}`），原断言只是钉死了「这行字符串恰好写在
+    哪个文件里」。
+  - `store/_conversations.py` 拆出 `_l0_snapshots.py`（新增 L0 功能后 712 → 942 行，
+    越过 800 阈值），与本包既有组件化结构一致。
+  - lint：改动集 ruff 合计 23 → 19（−4），15 个新文件全部 0 错误。
+  - tests: 全量 **2379 项**（119 个测试文件）通过；相关专项 277 项通过 ——
+    证明逐字搬运对行为零影响。
 ### Features
 - feat(web): 跳转栏选「历史 tag」+ 输入 `#分叉` 前缀创建分支主题
   - **入口**：输入框上方的「📜 跳转」区点选某条历史消息（该 chip 高亮并显示 `⑂`），

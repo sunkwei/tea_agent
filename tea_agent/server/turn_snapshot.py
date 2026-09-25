@@ -20,12 +20,15 @@ background_buffers / message_queue）全部只存在内存里（见 modules/stat
 from __future__ import annotations
 
 import json
+import logging
 import os
 import re
 import sqlite3
 import threading
 import time
 from typing import Any
+
+logger = logging.getLogger("server.turn_snapshot")
 
 # ── 默认参数 ───────────────────────────────────────────────────
 DEFAULT_DB_NAME = "server_state.db"
@@ -147,7 +150,7 @@ def begin_turn(topic_id: str, conv_id: str = "", path: str | None = None) -> Non
                 conn.close()
             _drop_turn_caches(topic_id)
     except (sqlite3.Error, OSError, ValueError):
-        pass
+        logger.debug("begin_turn: 快照落盘失败（fail-open，不影响对话）", exc_info=True)
 
 
 def ensure_turn(topic_id: str, conv_id: str = "", path: str | None = None) -> None:
@@ -180,7 +183,7 @@ def ensure_turn(topic_id: str, conv_id: str = "", path: str | None = None) -> No
                 conn.close()
             _drop_turn_caches(topic_id)
     except (sqlite3.Error, OSError, ValueError):
-        pass
+        logger.debug("ensure_turn: 快照落盘失败（fail-open，不影响对话）", exc_info=True)
 
 
 def _drop_turn_caches(topic_id: str) -> None:
@@ -416,7 +419,7 @@ def finish_turn(topic_id: str, status: str = _STATUS_DONE,
                 conn.close()
             _drop_turn_caches(topic_id)
     except (sqlite3.Error, OSError, ValueError):
-        pass
+        logger.debug("finish_turn: 快照落盘失败（fail-open，不影响对话）", exc_info=True)
 
 
 # ── 读取 / 恢复 ────────────────────────────────────────────────

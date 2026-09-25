@@ -484,3 +484,234 @@ class TestEventAttribution:
         assert not hits, (
             "onlinesession.py 出现 self.ctx（行 %s）—— 应为 self.context" % hits
         )
+
+
+# ════════════════════════════════════════════════════════════
+# 损坏 tool_calls 的降级路径（实现 L0 快照时由探针暴露的 2 处真实缺陷）
+# ════════════════════════════════════════════════════════════
+
+
+class TestCorruptToolCallsDegradation:
+    """损坏的 tool_calls 必须降级为「该轮仍可读」，而非让整轮查询崩掉。
+
+    设计意图（读 get_rounds 的注释即可看到）：损坏的 tool_calls 降级为空值
+    让该轮仍可读，同时**留痕**以便数据损坏可见 —— 因为静默 pass 会让损坏
+    永远不可见。
+
+    实测发现这两处「留着留着就崩了」的缺陷：
+
+    1. ``get_rounds`` 的 SELECT 漏了 ``id``，但降级分支用 ``r["id"]`` 留痕
+       → 「降级 + 留痕」路径自身抛 ``IndexError``。净效果是**留痕代码把
+       降级变成了崩溃**：数据一损坏，整轮 get_rounds 直接失败，恰好与设计
+       意图相反。
+    2. ``get_agent_rounds`` 的 ``json.loads`` 没有 try → 一行坏 JSON 让整个
+       查询抛 ``JSONDecodeError``，把「单行损坏」放大成「整轮读不出来」。
+    """
+
+    @staticmethod
+    def _seed_corrupt(storage) -> str:
+        """造一轮，并把第 0 轮的 tool_calls 改成非法 JSON。"""
+        tid = storage.create_topic("t")
+        cid = storage.create_turn(tid, "q")
+        storage.append_round(
+            cid, 0, "assistant", "正文",
+            tool_calls=[{"id": "c1", "type": "function",
+                         "function": {"name": "toolkit_exec", "arguments": "{}"}}],
+        )
+        storage.append_round(cid, 1, "tool", "结果", tool_call_id="c1")
+        c = storage.conn.cursor()
+        c.execute(
+            "UPDATE agent_rounds SET tool_calls = ? "
+            "WHERE conversation_id = ? AND round_num = 0",
+            ("{坏JSON", cid),
+        )
+        storage.conn.commit()
+        c.close()
+        return cid
+
+    def test_get_rounds_survives_corrupt_tool_calls(self, storage):
+        """核心契约：一行坏 tool_calls 不得让整轮读不出来。"""
+        cid = self._seed_corrupt(storage)
+
+        rounds = storage.get_rounds(cid)
+
+        assert len(rounds) == 2, "一行坏 tool_calls 让整轮查询失败了"
+        assert rounds[0]["content"] == "正文", "该轮正文应仍可读"
+        assert "tool_calls" not in rounds[0], "损坏的 tool_calls 未降级为空"
+
+    def test_get_agent_rounds_survives_corrupt_tool_calls(self, storage):
+        cid = self._seed_corrupt(storage)
+
+        rounds = storage.get_agent_rounds(cid)
+
+        assert len(rounds) == 2, "一行坏 tool_calls 让整个查询失败了"
+        bad = [r for r in rounds if r.get("round_num") == 0][0]
+        assert bad["tool_calls"] is None, "损坏值未降级为 None"
+
+    def test_degradation_is_traced_not_silent(self, storage, caplog):
+        """留痕契约：降级必须写日志（静默降级会让损坏永远不可见）。"""
+        import logging
+
+        cid = self._seed_corrupt(storage)
+        with caplog.at_level(logging.DEBUG, logger="Storage.Conversations"):
+            storage.get_rounds(cid)
+
+        assert any("tool_calls" in str(r.message) for r in caplog.records), (
+            "损坏 tool_calls 的降级未留痕（静默失效）"
+        )
+
+    def test_valid_tool_calls_still_parsed(self, storage):
+        """反向契约：正常数据不得被降级逻辑误伤。"""
+        tid = storage.create_topic("t")
+        cid = storage.create_turn(tid, "q")
+        storage.append_round(
+            cid, 0, "assistant", "正文",
+            tool_calls=[{"id": "c1", "type": "function",
+                         "function": {"name": "toolkit_file", "arguments": "{}"}}],
+        )
+
+        rounds = storage.get_rounds(cid)
+
+        assert rounds[0]["tool_calls"][0]["function"]["name"] == "toolkit_file"
+
+
+# ════════════════════════════════════════════════════════════
+# 非流式路径：回合开始即建行（补齐 P3 缺口）
+# ════════════════════════════════════════════════════════════
+
+
+class TestNonStreamingCreatesTurnEarly:
+    """非流式 chat_completion 此前**只在回合末**由 _post_chat_pipeline →
+    save_msg 一次性建行，与 Web/API 流式路径不一致，后果：
+
+    1. 回合中的 tool/call、assistant/chunk 事件 conversation_id 恒为 NULL
+       —— 轮次级审计对非流式请求完全失效；
+    2. 进程崩溃/请求中断即整轮丢失（流式路径已靠实时落盘规避）。
+
+    这里同时钉住「接线存在」（AST）与「不产生重复行」（功能）。
+    """
+
+    def test_chat_completion_creates_turn_before_chat_stream(self):
+        """建行必须早于 chat_stream —— 否则事件仍无归属。"""
+        from tea_agent.server.modules import agent_module as am
+
+        body = _fn_source(am.__file__, "chat_completion")
+        assert "create_turn(" in body, "非流式路径未在回合开始建行"
+        assert body.index("create_turn(") < body.index("chat_stream("), (
+            "建行晚于 chat_stream → 回合中事件仍无 conversation_id"
+        )
+
+    def test_chat_completion_syncs_conversation_id_to_context(self):
+        """建行后必须同步到 ctx，工具组件才拿得到（与流式路径同款）。"""
+        from tea_agent.server.modules import agent_module as am
+
+        body = _fn_source(am.__file__, "chat_completion")
+        assert "conversation_id" in body, "未把 conv_id 同步到 context"
+
+    def test_post_pipeline_reuses_precreated_turn(self, storage):
+        """核心契约：回合入口已建行时，_post_chat_pipeline 必须**复用**该行。
+
+        若不复用，save_msg 会再 create_turn 一行 → 同一回合在库里出现两行
+        （一行 pending 空回复 + 一行完整回复），轮次级审计与 L1 历史加载
+        都会读到重复/半截轮次。这是本修复最容易引入的新缺陷。
+        """
+        from types import SimpleNamespace
+
+        from tea_agent.agent import Agent
+
+        tid = storage.create_topic("t")
+        cid = storage.create_turn(tid, "用户问题")
+
+        agent = Agent.__new__(Agent)  # 不做完整初始化，只备齐该方法所需
+        agent._db = storage
+        agent._sess = SimpleNamespace(
+            context=SimpleNamespace(conversation_id=cid),
+            _rounds_collector=[],
+            _last_usage={"total_tokens": 0, "prompt_tokens": 0, "completion_tokens": 0},
+            _last_cheap_usage={},
+        )
+        agent._cfg = SimpleNamespace(
+            history_l2_max=8, l2_thinking_max_chars=6000, l2_max_chars=120000,
+        )
+        agent._start_background_tasks = lambda *a, **k: None
+
+        Agent._post_chat_pipeline(agent, "AI 最终回复", False, "用户问题", tid)
+
+        convs = storage.get_conversations(tid, limit=0, include_rounds=False)
+        assert len(convs) == 1, (
+            f"同一回合产生了 {len(convs)} 行（应复用提前建的那一行，不得重复建行）"
+        )
+        row = convs[0]
+        assert row["id"] == cid, "未复用提前建行的 conversation_id"
+        assert row["ai_msg"] == "AI 最终回复", "未把 ai_msg 写到提前建的行上"
+
+        # status 必须直接查库：get_conversations 的轻量投影（include_rounds=False）
+        # 刻意只返回 id/topic_id/user_msg/ai_msg/is_func_calling/is_summarized/stamp，
+        # 不含 status。契约断言不应依赖某个投影恰好带哪些列。
+        c = storage.conn.cursor()
+        try:
+            full = c.execute(
+                "SELECT status FROM conversations WHERE id = ?", (cid,)
+            ).fetchone()
+        finally:
+            c.close()
+        assert full["status"] == "done", f"回合未定稿为 done（实际 {full['status']!r}）"
+
+    def test_post_pipeline_falls_back_when_no_conv_id(self, storage):
+        """反向契约：未提前建行（如 Agent.chat 直接调用）仍须能落盘。
+
+        这是向后兼容保证 —— 不能因为新增提前建行而让旧路径丢数据。
+        """
+        from types import SimpleNamespace
+
+        from tea_agent.agent import Agent
+
+        tid = storage.create_topic("t")
+
+        agent = Agent.__new__(Agent)
+        agent._db = storage
+        agent._sess = SimpleNamespace(
+            context=SimpleNamespace(conversation_id=""),  # 未提前建行
+            _rounds_collector=[],
+            _last_usage={"total_tokens": 0, "prompt_tokens": 0, "completion_tokens": 0},
+            _last_cheap_usage={},
+        )
+        agent._cfg = SimpleNamespace(
+            history_l2_max=8, l2_thinking_max_chars=6000, l2_max_chars=120000,
+        )
+        agent._start_background_tasks = lambda *a, **k: None
+
+        Agent._post_chat_pipeline(agent, "回复", False, "问题", tid)
+
+        convs = storage.get_conversations(tid, limit=0, include_rounds=False)
+        assert len(convs) == 1, "回退路径未落盘（save_msg 未生效）"
+        assert convs[0]["ai_msg"] == "回复"
+
+    def test_post_pipeline_does_not_duplicate_rounds(self, storage):
+        """复用路径下：实时落盘的轮次不得被 _write_rounds 再写一遍。"""
+        from types import SimpleNamespace
+
+        from tea_agent.agent import Agent
+
+        tid = storage.create_topic("t")
+        cid = storage.create_turn(tid, "问题")
+        # 模拟回合中已实时落盘的轮次
+        storage.append_round(cid, 0, "assistant", "工具轮")
+
+        agent = Agent.__new__(Agent)
+        agent._db = storage
+        agent._sess = SimpleNamespace(
+            context=SimpleNamespace(conversation_id=cid),
+            _rounds_collector=[{"role": "assistant", "content": "工具轮"}],
+            _last_usage={"total_tokens": 0, "prompt_tokens": 0, "completion_tokens": 0},
+            _last_cheap_usage={},
+        )
+        agent._cfg = SimpleNamespace(
+            history_l2_max=8, l2_thinking_max_chars=6000, l2_max_chars=120000,
+        )
+        agent._start_background_tasks = lambda *a, **k: None
+
+        Agent._post_chat_pipeline(agent, "回复", True, "问题", tid)
+
+        rounds = storage.get_rounds(cid)
+        assert len(rounds) == 1, f"轮次被重复写入（{len(rounds)} 行，应为 1）"

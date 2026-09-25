@@ -486,11 +486,29 @@ class TestFrontendParsing:
         assert "/api/image/" in src, "前端未把 img:<id> 映射到回读路由"
 
     def test_image_route_registered(self):
-        import tea_agent.server.server as srv
+        """契约：图片回读路由必须在路由层注册。
 
-        with open(srv.__file__, encoding="utf-8") as fh:
-            src = fh.read()
-        assert "/api/image/{image_id:str}" in src
+        断言的是**路由被注册**这一契约，而非「该字符串恰好写在 server.py 里」。
+        原先只读 server.py —— 那是实现细节：路由表已抽到 server/_routes.py
+        （拆 _build_routes 以降低单文件体积），白盒扫描随即误报失败，而真实
+        路由并未丢失（应用内仍有 /api/image/{image_id:str}）。
+        改为扫描 server 包内的路由定义源码，对后续任何模块拆分都免疫。
+        """
+        import pathlib
+
+        import tea_agent.server as srv_pkg
+
+        pkg_dir = pathlib.Path(srv_pkg.__file__).parent
+        needle = "/api/image/{image_id:str}"
+        hits = []
+        for p in pkg_dir.rglob("*.py"):
+            if "__pycache__" in p.parts:
+                continue
+            if needle in p.read_text(encoding="utf-8"):
+                hits.append(p.name)
+        assert hits, (
+            f"路由层（{pkg_dir.name}/）未注册 {needle} —— 图片回读路由丢失"
+        )
 
 
 # ══════════════════════════════════════════════════════════

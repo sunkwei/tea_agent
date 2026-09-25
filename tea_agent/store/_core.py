@@ -410,6 +410,27 @@ class Storage:
         """从 agent_rounds 派生结构化轮次（唯一事实源）。"""
         return self._conversations.get_rounds(conversation_id)
 
+    # ── L0 快照（严格审计：复原「该回合当时看到的 system 消息」）──
+    def record_l0_snapshot(self, conversation_id: str, content: str) -> str:
+        """记录回合的 L0 富化系统提示词快照（内容寻址 + 一次性幂等）。"""
+        return self._conversations.record_l0_snapshot(conversation_id, content)
+
+    def get_l0_snapshot(self, conversation_id: str) -> dict | None:
+        """读取回合的 L0 快照（未记录时返回 None）。"""
+        return self._conversations.get_l0_snapshot(conversation_id)
+
+    def list_l0_snapshots(self, topic_id: str = "", limit: int = 50) -> list:
+        """列出 L0 快照（可按 topic 过滤），供审计比对版本差异。"""
+        return self._conversations.list_l0_snapshots(topic_id, limit)
+
+    def conversation_exists(self, conversation_id: str) -> bool:
+        """回合是否存在（审计时区分「问错 ID」与「早于功能上线」）。"""
+        return self._conversations.conversation_exists(conversation_id)
+
+    def get_l3_versions(self, topic_id: str, kind: str = "", limit: int = 50) -> list:
+        """读取 L3 摘要的历史版本（append-only；回答「T 时刻相信什么」）。"""
+        return self._summaries.get_l3_versions(topic_id, kind, limit)
+
     def soft_delete_topic(self, topic_id: str) -> bool:
         """标记删除主题及其数据（append-only：不物理删除）。"""
         return self._topics.soft_delete_topic(topic_id)

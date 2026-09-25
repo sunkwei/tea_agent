@@ -112,6 +112,74 @@ def init_tables(db):
         with contextlib.suppress(Exception):
             c.execute(f"ALTER TABLE agent_rounds ADD COLUMN {safe_ident(col)} {safe_ddl(col_def)}")
 
+    # ── L0 富化系统提示词快照（严格审计补口）──
+    # 背景：发给模型的 system 消息并非裸 system_prompt，而是
+    # build_api_messages → _build_l0_enriched_system() **运行时合成**的结果
+    # （OS 信息 / AGENTS.md / context_fragments / 小模型约束等）。该合成结果
+    # 此前从不落盘 → 历史任一回合都**无法复原「它当时看到的 L0」**，因为
+    # 配置与 AGENTS.md 早已变化。这是 L0-L3 提取里唯一完全缺失的一层。
+    #
+    # 设计取舍：
+    # 1) **内容寻址**（hash 作主键）而非每回合存一份全文 —— 同一 topic 内
+    #    L0 逐字节稳定（这正是前缀缓存能命中的前提），去重后实际只有
+    #    少数几个版本，避免把每回合的同一份大文本重复存 N 遍。
+    # 2) conversations.l0_hash 只是**指纹指针**（TEXT，可空），不占空间；
+    #    旧回合为 NULL 表示"该回合未记录"，与新回合的"记录为空"可区分。
+    # 3) 刻意只在**回合首次构建**时写（见 history_builder 接线）：工具循环内
+    #    多轮请求复用同一版本，避免每轮重算 hash 与冗余写入。
+    c.execute('''
+        CREATE TABLE IF NOT EXISTS l0_snapshots (
+            hash TEXT PRIMARY KEY,
+            content TEXT NOT NULL,
+            chars INTEGER NOT NULL DEFAULT 0,
+            first_topic_id TEXT DEFAULT NULL,
+            first_conversation_id TEXT DEFAULT NULL,
+            created_at TIMESTAMP DEFAULT (datetime('now', 'localtime'))
+        )
+    ''')
+
+    # conversations.l0_hash：指向 l0_snapshots.hash 的指纹（可空=未记录）
+    # l0_recorded：区分「本回合未尝试记录」与「尝试过但无 L0 可记」
+    for col, col_def in [
+        ("l0_hash", "TEXT DEFAULT NULL"),
+        ("l0_recorded", "INTEGER DEFAULT 0"),
+    ]:
+        with contextlib.suppress(Exception):
+            c.execute(f"ALTER TABLE conversations ADD COLUMN {safe_ident(col)} {safe_ddl(col_def)}")
+
+    # ── L3 摘要版本历史（append-only）──
+    # 背景：L3（semantic_summary / tool_chain_summary / topic_summary）此前只有
+    # **当前值**（UPDATE/ON CONFLICT UPSERT 覆盖），无法回答审计最核心的问题
+    # 「T 时刻 Agent 相信的是什么」。本表记录每次变更的历史版本。
+    #
+    # 为什么只版本化 L3、**不**版本化 L2（实测数据支撑的取舍）：
+    #   - L2 平均 184 KB/主题、单主题最大 1.03 MB，且 push_to_level2 每回合
+    #     都写 → 逐版本存储会让库按「回合数 × L2 大小」膨胀（百回合即百 MB 级）；
+    #   - L2 内容**完全可从 L1（agent_rounds）重新派生**，而 agent_rounds 本身
+    #     已是 append-only 且持久 —— 再存一份 L2 版本属重复存储，正是本项目
+    #     已经踩过并修掉的坑（conversations.rounds_json 与 agent_rounds 重复，
+    #     实测占库 38.4%）。
+    #   - L3 恰好相反：总量 4.7 KB / 平均 392 B，且只在摘要阈值触发时写入，
+    #     版本化成本可忽略，而它承载的正是「长期结论/偏好」这类审计对象。
+    c.execute('''
+        CREATE TABLE IF NOT EXISTS history_versions (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            topic_id TEXT NOT NULL,
+            kind TEXT NOT NULL,
+            version INTEGER NOT NULL,
+            content TEXT NOT NULL,
+            chars INTEGER NOT NULL DEFAULT 0,
+            conversation_id TEXT DEFAULT NULL,
+            created_at TIMESTAMP DEFAULT (datetime('now', 'localtime'))
+        )
+    ''')
+    for ddl in [
+        "CREATE INDEX IF NOT EXISTS idx_history_versions_topic "
+        "ON history_versions(topic_id, kind, version)",
+    ]:
+        with contextlib.suppress(Exception):
+            c.execute(ddl)
+
     # 软删除标记：topics / images 同样改为标记删除
     for tbl, col, col_def in [
         ("topics", "deleted_at", "TEXT DEFAULT NULL"),
@@ -416,11 +484,17 @@ def migrate(db):
 
     # 索引：deleted_at 过滤与按会话查轮次都是热点（agent_rounds 已万行级）。
     # 依赖 deleted_at 列，故必须在加列之后建。
+    # idx_l0_snapshots_conv 支撑「按会话反查其 L0 快照」；l0_snapshots 本身
+    # 以 hash 为主键（内容寻址），该索引只服务 first_conversation_id 回查。
     for ddl in [
         "CREATE INDEX IF NOT EXISTS idx_agent_rounds_conv "
         "ON agent_rounds(conversation_id, deleted_at)",
         "CREATE INDEX IF NOT EXISTS idx_conversations_topic "
         "ON conversations(topic_id, deleted_at)",
+        "CREATE INDEX IF NOT EXISTS idx_l0_snapshots_conv "
+        "ON l0_snapshots(first_conversation_id)",
+        "CREATE INDEX IF NOT EXISTS idx_l0_snapshots_topic "
+        "ON l0_snapshots(first_topic_id)",
     ]:
         with contextlib.suppress(Exception):
             c.execute(ddl)

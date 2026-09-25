@@ -5,11 +5,19 @@ import logging
 
 from ._component import StoreComponent
 from ._images import ImageStoreMixin
+from ._l0_snapshots import L0SnapshotStoreMixin, l0_content_hash
 from ._sql_safety import safe_placeholders, safe_where_clause
+
+# 兼容既有导入路径：l0_content_hash 的实现已迁至 _l0_snapshots，此处原样
+# 再导出（测试与外部调用方仍从 _conversations 导入该符号）。
+__all__ = ["ConversationStore", "l0_content_hash"]
 
 logger = logging.getLogger("Storage.Conversations")
 
-class ConversationStore(ImageStoreMixin, StoreComponent):
+
+
+
+class ConversationStore(L0SnapshotStoreMixin, ImageStoreMixin, StoreComponent):
     """对话管理：保存消息、更新轮次、查询对话历史、Agent 轮次记录。
 
     图片存取（``images`` 表）由 ``ImageStoreMixin`` 提供 —— 与对话强耦合
@@ -334,7 +342,12 @@ class ConversationStore(ImageStoreMixin, StoreComponent):
             return []
         c = self.conn.cursor()
         c.execute(
-            "SELECT round_num, role, content, tool_calls, tool_call_id, reasoning_content "
+            # ⚠️ id 必须出现在 SELECT 里：下方损坏 tool_calls 的降级分支要
+            # 用 r["id"] 留痕定位是哪一行。此前 SELECT 漏了 id，导致「降级+
+            # 留痕」路径自身抛 IndexError —— 即留痕代码把降级变成了崩溃：
+            # 数据一损坏，整轮 get_rounds 直接失败（而非按设计降级为空）。
+            "SELECT id, round_num, role, content, tool_calls, tool_call_id, "
+            " reasoning_content "
             "FROM agent_rounds WHERE conversation_id = ? AND deleted_at IS NULL "
             "ORDER BY round_num ASC, rowid ASC",
             (conversation_id,),
@@ -439,7 +452,19 @@ class ConversationStore(ImageStoreMixin, StoreComponent):
         for r in rows:
             d = dict(r)
             if d.get("tool_calls"):
-                d["tool_calls"] = json.loads(d["tool_calls"])
+                try:
+                    d["tool_calls"] = json.loads(d["tool_calls"])
+                except (json.JSONDecodeError, TypeError):
+                    # 与 get_rounds 同一约定：损坏的 tool_calls 降级为空字符串
+                    # 值（该轮仍可读），但必须留痕 —— 此前这里**没有** try，
+                    # 一份坏 JSON 会让整个查询抛 JSONDecodeError，把「单行损坏」
+                    # 放大成「整轮读不出来」。
+                    d["tool_calls"] = None
+                    logger.debug(
+                        "get_agent_rounds: round %s (conv=%s) 的 tool_calls 不是"
+                        "合法 JSON，已降级为空",
+                        d.get("round_num"), conversation_id, exc_info=True,
+                    )
             result.append(d)
         return result
 

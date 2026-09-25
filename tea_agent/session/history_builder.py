@@ -1343,7 +1343,7 @@ def _build_dynamic_context(context: Any) -> str:
                 for p in plans[:3]:
                     parts.append(f"  - [{p['plan_id']}] {p['goal']} (进度: {p['progress']})")
             # 仅当确有内容才注入。has_pending 的判据还包含 orphan_docs /
-            # unfulfilled_steps，而这里只渲染 TODO/Plan —— 若两者皆空，parts 里
+            # unfulfilled_steps，而这里只渲染待办项/Plan —— 若两者皆空，parts 里
             # 只剩一个标题，会每轮注入**无信息的空标题**（实测：24 个孤儿文档使
             # has_pending 恒为 True）→ 纯 token 浪费，且误导模型「有未完成任务」。
             if len(parts) > 1:
@@ -1386,7 +1386,7 @@ def _dynamic_state_token() -> tuple:
     except OSError:
         plan_fp = (0, 0)
 
-    # TODO 聚合指纹（按当前主题，读取口径与 toolkit_task_resume 一致）：
+    # 待办聚合指纹（按当前主题，读取口径与 toolkit_task_resume 一致）：
     # COUNT 变化=create/delete，SUM(done) 变化=勾选，SUM(LENGTH(desc)) 变化=改文案。
     try:
         from tea_agent.session_ref import get_agent
@@ -1499,6 +1499,53 @@ def _calibrated_estimate(context: Any, estimate: int) -> int:
     return estimate
 
 
+def _maybe_record_l0_snapshot(context: Any, enriched: str) -> None:
+    """把本回合的 L0 富化系统提示词快照落盘（严格审计补口）。
+
+    为什么必须**不可能抛错**：``build_api_messages`` 的部分调用点位于
+    tool_loop_runner 的「API 失败 → 重试」``try`` 内（第 974/991 行的
+    上下文溢出 / 多模态自愈重试）。若本函数抛出异常，会被那里的
+    ``except Exception`` 误判为 API 错误，触发**无谓重试与错误归因**。
+    因此从属性查找到 DB 写入全部包在本函数自己的 ``try`` 内，异常一律
+    吞掉 —— 审计是旁路能力，绝不改写主控制流。
+
+    幂等策略（两层）：
+    1. **进程内**：``context._l0_recorded_conv`` 记住本回合已记录的
+       conversation_id。工具循环内每轮都会重新构建 API 消息（实测单回合
+       可达数百次），靠它避免每次都打一次 DB。
+    2. **DB 内**：``conversations.l0_recorded`` 闸门保证「一个回合只留
+       第一份」——即便进程重启，也不会用回合中期的 L0 覆盖回合起始那份。
+
+    只在 ``conversation_id`` 与 ``storage`` 同时具备时写入：LiteSession /
+    子 Agent / 单测的轻量 ctx 没有它们，此时静默跳过（不算失败）。
+
+    Args:
+        context: SessionContext（需可选具备 storage / conversation_id）。
+        enriched: 本次构建出的 L0 富化系统提示词全文。
+    """
+    try:
+        if not enriched:
+            return
+        conv_id = getattr(context, "conversation_id", "") or ""
+        if not conv_id:
+            return
+        if getattr(context, "_l0_recorded_conv", "") == conv_id:
+            return  # 本回合已记录（进程内快路径）
+        storage = getattr(context, "storage", None)
+        if storage is None:
+            return
+        record = getattr(storage, "record_l0_snapshot", None)
+        if not callable(record):
+            return  # 鸭子类型替身/精简 storage：静默跳过
+        record(conv_id, enriched)
+        # 只有真正尝试过才置位：storage 缺失时不置位，给后续调用留机会
+        context._l0_recorded_conv = conv_id
+    except Exception:
+        # fail-open：审计旁路失败绝不能影响对话主流程（更不能被上游
+        # 误判成 API 错误而触发重试）
+        logger.debug("record L0 snapshot failed (isolated)", exc_info=True)
+
+
 def build_api_messages(context: Any, system_prompt: str) -> list[dict]:
     """构建 API 消息列表 — 三级历史拼接（v2 改进版）。
 
@@ -1523,6 +1570,12 @@ def build_api_messages(context: Any, system_prompt: str) -> list[dict]:
     # ═══════════════════════════════════════════════
     enriched = _build_l0_enriched_system(context, system_prompt)
     result.append({"role": "system", "content": enriched})
+
+    # L0 快照落盘（严格审计）：此处是 enriched 定型的**唯一位置**，且此后
+    # 再无任何代码修改 result[0]，因此这是记录「模型实际看到的 system 消息」
+    # 最准确的时点。必须在 result[0] 之后调用（要在那一刻取到最终值）。
+    # 幂等 fail-open；调用点可能位于上游重试 try 内，故本调用绝不抛错。
+    _maybe_record_l0_snapshot(context, enriched)
 
     # ═══════════════════════════════════════════════
     # Level 3 + Level 2: 摘要与相关历史
@@ -1808,7 +1861,7 @@ def build_api_messages(context: Any, system_prompt: str) -> list[dict]:
     # ── 动态上下文注入（缓存友好，对齐 DSH append-only 架构）──
     # 技能加载 / 未完成任务提醒 / 长期记忆等动态内容作为临时 user 消息注入。
     # ⚠️ 插入位置必须选**消息末尾**（紧随最后一条真实消息之后），而非 L1 起点：
-    # 这些内容随用户消息边界重算（TODO 状态/记忆/技能评估每回合变化），若插在
+    # 这些内容随用户消息边界重算（待办状态/记忆/技能评估每回合变化），若插在
     # L1 历史之前，任一变化都会使其后的**全部 L1 历史**前缀缓存失效（实测
     # 命中率从 99% 跌到 ~62%，见 scripts/diag_cache_prefix.py）。
     # 追加到末尾后：L0+L3+L2+L1 前缀跨回合逐字节稳定，只有末尾新增的

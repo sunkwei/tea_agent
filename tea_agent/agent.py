@@ -478,14 +478,27 @@ class Agent:
 
         try:
             # 步骤1: 保存对话到数据库
-            conv_id = self._db.save_msg(topic_id, user_msg, "", False)
+            # 回合入口若已**提前建行**（create_turn，如非流式 API 路径），此处
+            # 必须复用该 conversation_id 而非再 save_msg —— save_msg 内部会
+            # 再 create_turn 一行，同一回合在库里出现两行（一行 pending 空回复
+            # + 一行完整回复），轮次级审计与 L1 历史加载都会读到重复轮次。
             rounds = self._sess._rounds_collector
-            self._db.update_msg_rounds(
-                conversation_id=conv_id,
-                ai_msg=ai_msg,
-                is_func_calling=used_tools,
-                rounds=rounds if rounds else None,
-            )
+            _ctx = getattr(self._sess, "context", None)
+            conv_id = (getattr(_ctx, "conversation_id", "") or "") if _ctx else ""
+            if conv_id:
+                # 已有行：只定稿（补 ai_msg/状态 + 兜底补齐漏写轮次）
+                self._db.finalize_turn(
+                    conv_id, ai_msg, is_func_calling=used_tools,
+                    rounds=rounds if rounds else None, status="done",
+                )
+            else:
+                conv_id = self._db.save_msg(topic_id, user_msg, "", False)
+                self._db.update_msg_rounds(
+                    conversation_id=conv_id,
+                    ai_msg=ai_msg,
+                    is_func_calling=used_tools,
+                    rounds=rounds if rounds else None,
+                )
 
             # 步骤2: 更新Token使用统计
             self._update_token_usage(topic_id)

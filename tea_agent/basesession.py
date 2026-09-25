@@ -99,7 +99,12 @@ def relaxed_json_loads(raw: str):
 
         s = escape_path_backslashes(s)
     except ImportError:
-        pass
+        # 纯增强，失败跳过、**行为不变**；但必须留痕：该步骤若因改名/重构而
+        # 静默失效，路径转义保护会无声消失（表现为偶发解析异常且无从定位）。
+        logger.debug(
+            "basesession.relaxed_json_loads: escape_path_backslashes 不可用，已跳过",
+            exc_info=True,
+        )
 
     try:
         return json.loads(s)
@@ -382,7 +387,7 @@ class BaseChatSession(ABC):
         # 缓存友好：超长用户文本入库定型，避免 _progressive_trim 二次改写已发送前缀
         if isinstance(entry.get("content"), str):
             entry["content"] = self._cap_message_text(entry["content"])
-        # 新用户消息到来：失效动态上下文缓存（skill/TODO/记忆将按新状态重新计算）
+        # 新用户消息到来：失效动态上下文缓存（skill/待办/记忆将按新状态重新计算）
         # 同时置 L2 过滤 dirty —— 新消息将作为"当前请求"重算一次并定型 L2 选中集合
         # （对齐 DSH 派生确定性：只在新消息边界重算，工具循环内保持稳定）。
         try:

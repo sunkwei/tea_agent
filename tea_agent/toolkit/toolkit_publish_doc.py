@@ -1,9 +1,13 @@
-# version: 1.0.0
+# version: 1.1.0
 """发布文档为可下载链接。
 
 用户明确要求"创建xx文档"（接口文档、README、md 等）时，
 保存文档后调用本工具，将文件发布到 ~/.tea_agent/exports/ 目录，
 返回 /v1/download/{filename} 下载链接（Web 前端可直接点击下载）。
+
+图片（.png/.jpg/...）额外返回 ``preview_url``（/v1/preview/{filename}）——
+下载端点恒为 attachment，当 ``<img src>`` 用只会触发下载；预览端点用
+inline + 正确 MIME，可直接内联渲染。前端也会自动为图片下载链接补缩略图。
 """
 
 import os
@@ -12,6 +16,9 @@ import shutil
 
 _EXPORTS_DIR = os.path.join(os.path.expanduser("~"), ".tea_agent", "exports")
 _ILLEGAL = re.compile(r'[\\/:*?"<>|\x00-\x1f]')
+
+# 可内联预览的图片扩展名（与 server.route_handlers_exports._IMAGE_MIME 一致）
+_IMG_EXTS = frozenset({".png", ".jpg", ".jpeg", ".gif", ".webp", ".bmp", ".svg", ".avif", ".ico"})
 
 
 def _clean_filename(name: str) -> str:
@@ -61,14 +68,24 @@ def toolkit_publish_doc(source_path: str = "", title: str = "") -> dict:
 
         size = os.path.getsize(dst)
         url = "/v1/download/" + filename
-        return {
+        out = {
             "ok": True,
             "url": url,
             "filename": filename,
             "local_path": dst,
             "size": size,
-            "hint": f"在 final msg 中输出下载链接: [📄 下载文档]({url})",
         }
+        if os.path.splitext(filename)[1].lower() in _IMG_EXTS:
+            # 图片：附内联预览端点，便于在 final msg 中同时给出可点击缩略图
+            out["preview_url"] = "/v1/preview/" + filename
+            out["hint"] = (
+                f"图片生成物：final msg 输出下载链接 [🖼️ 下载图片]({url})，"
+                f"可直接用 Markdown 图片语法内联预览 ![]({out['preview_url']})，"
+                "或裸写下载链接由前端自动补缩略图。"
+            )
+        else:
+            out["hint"] = f"在 final msg 中输出下载链接: [📄 下载文档]({url})"
+        return out
     except Exception as e:
         return {"ok": False, "error": f"发布失败: {e}"}
 
@@ -83,6 +100,7 @@ def meta_toolkit_publish_doc() -> dict:
                 "当用户明确要求创建文档（接口文档、README、md 等）并已用 "
                 "toolkit_file 保存后，调用此工具发布，"
                 "然后在最终回复中输出 Markdown 下载链接 [📄 下载xxx](/v1/download/文件名)。"
+                "图片（.png/.jpg 等）会额外返回 preview_url，可在回复中内联预览。"
             ),
             "parameters": {
                 "type": "object",

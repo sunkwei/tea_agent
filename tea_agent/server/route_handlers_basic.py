@@ -174,12 +174,28 @@ async def handle_list_memory(request):
 
 
 async def handle_create_memory(request):
+    """创建记忆。
+
+    响应**必须**含 ``ok`` 字段：前端 app.js 以 ``if (d.ok)`` 判定成败（与
+    deleteMemory 一致）。原先只返回裸对象 ``{"id","content","category"}``，
+    ``d.ok`` 恒为 undefined → 记忆**已成功入库却报「添加失败」**（静默假失败；
+    又因未走成功分支，列表也不刷新，用户无从察觉其实已写入）。
+
+    失败路径一律非 2xx：``StorageModule.create_memory`` 在存储未就绪时返回
+    ``{"error": ...}``，旧代码仍以 **201** 送出 —— 任何按状态码判定的调用方
+    都会反过来「假成功」，与本 bug 恰成镜像。
+    """
     server = get_server()
     body = await request.json()
-    mem = server.create_memory(body.get("content",""),
-        category=body.get("category","general"),
-        priority=body.get("priority",2))
-    return JSONResponse(mem, status_code=201)
+    content = (body.get("content") or "").strip()
+    if not content:
+        return JSONResponse({"ok": False, "error": "content required"}, status_code=400)
+    mem = server.create_memory(content,
+        category=body.get("category", "general"),
+        priority=body.get("priority", 2))
+    if mem.get("error"):
+        return JSONResponse({"ok": False, "error": mem["error"]}, status_code=503)
+    return JSONResponse({"ok": True, **mem}, status_code=201)
 
 
 async def handle_delete_memory(request):

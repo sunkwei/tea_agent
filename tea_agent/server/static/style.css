@@ -1448,6 +1448,28 @@ body {
 }
 .img-overlay img { max-width: 90vw; max-height: 90vh; border-radius: 8px; }
 
+/* ── 生成物图片预览：下载链接下方自动附缩略图（点击放大） ── */
+.md-img-preview {
+  margin: 8px 0 12px;
+  display: inline-block;
+  max-width: 100%;
+}
+.md-img-preview img {
+  display: block;
+  max-width: min(420px, 100%);
+  max-height: 300px;
+  width: auto; height: auto;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  cursor: zoom-in;
+  background: #fff;
+}
+.md-img-preview figcaption {
+  margin-top: 4px;
+  font-size: 11px;
+  color: var(--text-dim);
+}
+
 /* ── Toast ── */
 #toast {
   position: fixed; bottom: 80px; left: 50%;

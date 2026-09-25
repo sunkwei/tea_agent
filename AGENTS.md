@@ -220,6 +220,14 @@ toolkit_reload()
 
 规则：链接必须是可点击的 Markdown 格式；若无 server 则给出本地路径。
 
+**图片生成物**（`.png/.jpg/.gif/.webp/.svg` 等）额外支持预览：
+
+- `toolkit_publish_doc` 对图片返回 `preview_url`（`/v1/preview/{filename}`）
+- 下载端点 `/v1/download` 恒为 `attachment` + `octet-stream`，**不能**当 `<img src>`
+  （只会触发下载）；预览端点用 `inline` + 正确 `image/*` MIME，可直接内联
+- final msg 可用 Markdown 图片语法内联：`![说明](/v1/preview/图片.png)`
+- 前端 `formatMarkdown` 也会自动为图片下载链接补缩略图（点击放大），故裸写下载链接亦可
+
 ## 代码风格
 
 ### Python 规范

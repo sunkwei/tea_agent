@@ -749,6 +749,65 @@ def _fetch_image_blobs(conn, ids):
     return out
 
 
+def _load_rounds_map(conn, convs):
+    """批量取轮次：遗留 ``rounds_json`` 优先，缺失则从 ``agent_rounds`` 派生。
+
+    ``conversations.rounds_json`` 已废弃（与 agent_rounds 重复存储），新会话只写
+    ``agent_rounds``（唯一事实源）。导出此前只读 rounds_json，导致该列停写之后的
+    对话在 ``filter=full`` 下**静默丢失全部工具调用与思考链**（实测：126 个对话中
+    22 个受影响，单个最多 369 轮）。
+
+    Args:
+        conn: sqlite3 连接（row_factory=Row）。
+        convs: conversations 行序列（需含 ``id`` 与 ``rounds_json`` 列）。
+
+    Returns:
+        ``{conversation_id: [round, ...]}``，结构与旧 rounds_json 一致，
+        可直接喂给 ``_build_full_interactions_md``。
+    """
+    out: dict = {}
+    need: list = []
+    for conv in convs or []:
+        rid = conv["id"]
+        # 直接索引而非 `in`：sqlite3.Row 不支持成员判断（恒 False 且不报错）。
+        raw = conv["rounds_json"]
+        if raw:
+            try:
+                out[rid] = json.loads(raw) if isinstance(raw, str) else raw
+                continue
+            except (json.JSONDecodeError, TypeError):
+                logger.debug("conv %s rounds_json 非法，改用 agent_rounds", rid, exc_info=True)
+        need.append(rid)
+    if not need:
+        return out
+    from tea_agent.store._sql_safety import safe_placeholders
+
+    cur = conn.cursor()
+    for i in range(0, len(need), 500):
+        chunk = need[i:i + 500]
+        ph = safe_placeholders(len(chunk))
+        cur.execute(
+            "SELECT conversation_id, round_num, role, content, tool_calls, "
+            "tool_call_id, reasoning_content FROM agent_rounds "
+            f"WHERE conversation_id IN ({ph}) AND deleted_at IS NULL "
+            "ORDER BY conversation_id, round_num ASC, rowid ASC",
+            chunk,
+        )
+        for row in cur.fetchall():
+            entry: dict = {"role": row["role"], "content": row["content"] or ""}
+            if row["tool_calls"]:
+                try:
+                    entry["tool_calls"] = json.loads(row["tool_calls"])
+                except (json.JSONDecodeError, TypeError):
+                    logger.debug("agent_rounds tool_calls 非法，该轮跳过工具调用", exc_info=True)
+            if row["tool_call_id"]:
+                entry["tool_call_id"] = row["tool_call_id"]
+            if row["reasoning_content"]:
+                entry["reasoning_content"] = row["reasoning_content"]
+            out.setdefault(row["conversation_id"], []).append(entry)
+    return out
+
+
 def _probe_image_size(blob):
     """探测图片像素尺寸。
 
@@ -1182,16 +1241,16 @@ def export_topic_pdf(topic_id: str, output_path: str = None,
         parsed = [(_parse_user_payload(conv["user_msg"])) for conv in all_conv]
         _all_ids = [i for _t, _ids in parsed for i in _ids]
         blob_map = _fetch_image_blobs(conn, _all_ids)
+        rounds_map = _load_rounds_map(conn, all_conv)
         conn.close()
 
         conversations = []
         for conv, (user_msg, image_ids) in zip(all_conv, parsed):
             reasoning_text = ""
             if filter_mode == "full":
-                rounds_json_raw = conv["rounds_json"]
-                if rounds_json_raw:
+                rounds_data = rounds_map.get(conv["id"])
+                if rounds_data:
                     with contextlib.suppress(Exception):
-                        rounds_data = json.loads(rounds_json_raw) if isinstance(rounds_json_raw, str) else rounds_json_raw
                         reasoning_text = _build_full_interactions_md(rounds_data)
 
             conversations.append({
@@ -1222,16 +1281,13 @@ def export_topic_pdf(topic_id: str, output_path: str = None,
         ai_msg = _sanitize(conv["ai_msg"])
         stamp = conv["stamp"]
 
+        # Full interaction timeline: thinking + tool calls + tool returns
+        reasoning_text = ""
         if filter_mode == "full":
-            # Full interaction timeline from rounds_json: thinking + tool calls + tool returns
-            rounds_json_raw = conv["rounds_json"]
-            reasoning_text = ""
-            if rounds_json_raw:
+            rounds_data = _load_rounds_map(conn, [conv]).get(conv["id"])
+            if rounds_data:
                 with contextlib.suppress(Exception):
-                    rounds_data = json.loads(rounds_json_raw) if isinstance(rounds_json_raw, str) else rounds_json_raw
                     reasoning_text = _build_full_interactions_md(rounds_data)
-        else:
-            reasoning_text = ""
 
         conn.close()
         output_path = output_path or os.path.join(_default_export_dir(), f"export_{topic_id[:8]}.pdf")
@@ -1318,11 +1374,11 @@ def export_topic_markdown(topic_id: str, output_path: str = None,
         raise ValueError(f"Topic {topic_id} not found")
     topic_title = _sanitize(row["title"] or "Untitled")
 
-    def _extract_reasoning(rounds_json_raw: str) -> str:
-        if filter_mode != "full" or not rounds_json_raw:
+    def _extract_reasoning(rounds_data) -> str:
+        """轮次已由 _load_rounds_map 归一化（list），此处只做渲染。"""
+        if filter_mode != "full" or not rounds_data:
             return ""
         try:
-            rounds_data = json.loads(rounds_json_raw) if isinstance(rounds_json_raw, str) else rounds_json_raw
             return _build_full_interactions_md(rounds_data)
         except Exception:
             return ""
@@ -1339,6 +1395,7 @@ def export_topic_markdown(topic_id: str, output_path: str = None,
 
         parsed = [_parse_user_payload(conv["user_msg"]) for conv in all_conv]
         blob_map = _fetch_image_blobs(conn, [i for _t, _ids in parsed for i in _ids])
+        rounds_map = _load_rounds_map(conn, all_conv)
         conn.close()
 
         conversations = []
@@ -1347,7 +1404,7 @@ def export_topic_markdown(topic_id: str, output_path: str = None,
                 "user_msg": _sanitize(user_text),
                 "ai_msg": _sanitize(conv["ai_msg"]),
                 "stamp": conv["stamp"],
-                "reasoning_text": _extract_reasoning(conv["rounds_json"]),
+                "reasoning_text": _extract_reasoning(rounds_map.get(conv["id"])),
                 "images": [blob_map[i] for i in image_ids if i in blob_map],
             })
 
@@ -1366,11 +1423,12 @@ def export_topic_markdown(topic_id: str, output_path: str = None,
         user_text, image_ids = _parse_user_payload(conv["user_msg"])
         blob_map = _fetch_image_blobs(conn, image_ids)
         images = [blob_map[i] for i in image_ids if i in blob_map]
+        rounds_map = _load_rounds_map(conn, [conv])
         conn.close()
 
         user_msg = _sanitize(user_text)
         ai_msg = _sanitize(conv["ai_msg"])
-        reasoning_text = _extract_reasoning(conv["rounds_json"])
+        reasoning_text = _extract_reasoning(rounds_map.get(conv["id"]))
 
         md_text = _build_markdown_doc(topic_title, conv["stamp"], user_msg,
                                       ai_msg, reasoning_text, images=images)

@@ -1127,6 +1127,27 @@ function formatMarkdown(text) {
     return openTag + icon + ' ' + text + closeTag;
   });
 
+  // 🖼️ Image preview — 图片生成物在下载链接下方补缩略图（点击放大）
+  //    下载端点恒为 attachment+octet-stream，当 <img src> 只会触发下载，
+  //    故预览改用 /v1/preview/（inline + 正确 image/* MIME）。
+  const IMG_EXT = /\.(png|jpe?g|gif|webp|bmp|svg|avif|ico)(?=["'?#]|$)/i;
+  html = html.replace(
+    /(<a\s[^>]*href="([^"]*\/(?:download|preview)\/([^"\/]+))"[^>]*>)([\s\S]*?)(<\/a>)/gi,
+    function(match, openTag, href, fname, text, closeTag) {
+      let decoded;
+      try { decoded = decodeURIComponent(fname); } catch (e) { decoded = fname; }
+      if (!IMG_EXT.test(decoded)) return match;
+      const src = href.indexOf('/v1/preview/') >= 0 ? href : href.replace('/v1/download/', '/v1/preview/');
+      const label = esc(decoded);
+      // 加载失败（文件缺失/非图片）时静默隐藏缩略图，不影响下载链接本身
+      return openTag + '🖼️ ' + text + closeTag
+        + '<figure class="md-img-preview">'
+        + '<img src="' + esc(src) + '" alt="' + label + '" loading="lazy"'
+        + ' onerror="this.parentNode.style.display=\'none\'"'
+        + ' onclick="window.openImageOverlay(this.src)">'
+        + '<figcaption>' + label + ' · 点击放大</figcaption></figure>';
+    });
+
   return html;
 }
 
@@ -3097,7 +3118,10 @@ window.doSearch = async function() {
     const r = await fetch('/v1/search?q=' + encodeURIComponent(q) + '&limit=20');
     if (!r.ok) throw new Error(String(r.status));
     const d = await r.json();
-    const results = d.data || {};
+    // 后端 /v1/search 返回 {"conversations":[...],"memories":[...]}（无 data 包裹）。
+    // 原先只认 d.data → 恒为 {} → **搜索永远显示「没有结果」**（静默假空，同一契约缺陷类）。
+    // 这里容忍两种形态，而不去改 /v1 响应结构（避免破坏外部 API 消费方）。
+    const results = d.data || d || {};
     let h = '';
     if (results.conversations && results.conversations.length) {
       h += '<div style="font-size:13px;font-weight:600;margin:8px 0 4px;color:var(--primary)">💬 对话</div>';

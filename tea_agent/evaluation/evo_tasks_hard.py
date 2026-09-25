@@ -5,9 +5,9 @@
 - R 棘轮（ratchet）：不得比实测基线更差 → 当前 PASS，检测未来退化
 - I 不变量（含运行时实证）：结构性事实 → 当前 PASS
 
-实测基线（tea_agent/，排除 tests/demo；201 文件）：
-    except_pass=97（上轮由 116 修复后收紧）  broad_except=749  print=161  todo=24  长函数(>150行)=26
-    导入环=0（判据修正后确认无环）  缺失 docstring=374  >800 行文件=20
+实测基线（tea_agent/，排除 tests/demo；217 文件）：
+    except_pass=92（上轮由 116 修复后收紧）  broad_except=792  print=165  todo=0  长函数(>150行)=28
+    导入环=0（判据修正后确认无环）  缺失 docstring=364  >800 行文件=20
     fstring_sql=0  shell_true=0  agent 反向导入=0  语法错误=0  缺 meta=0
 """
 
@@ -81,9 +81,9 @@ HARD_TASKS: list = [
     # 清理，失败最多留个临时文件，掩盖不了任何真实故障 —— 为压指标而改属反向操作。
     # 棘轮向下收紧到实测 92，锁住收益。
     {"id": "hard-broad-except-ratchet", "kind": "quality",
-     "title": "裸捕获 Exception 不超过基线（实测 791）",
+     "title": "裸捕获 Exception 不超过基线（实测 792）",
      "checks": [{"type": "python", "expr": (
-         "n = metrics()['broad_except']; assert n <= 791, '裸捕获增至 %d（基线 791）' % n"
+         "n = metrics()['broad_except']; assert n <= 792, '裸捕获增至 %d（基线 792）' % n"
      )}]},
     # 785 → 788（2026-09-19，+3）。三处都在 multi_agent/role_agent.py 的结构化解析
     # 策略链：原写 `except (json.JSONDecodeError, Exception): pass` —— 元组冗余
@@ -107,6 +107,12 @@ HARD_TASKS: list = [
     # 已尽力收敛：初见 17 处，重构为单点 _safe_call 后降至 2 处（工具内），
     # 净 +10 而非 +17。**刻意不再继续压** —— 剩下的每一处都是真实故障路径上的
     # 必需兜底，为降指标把它们包进间接层属于「为过指标而改代码」，方向相反。
+    # 791 → 792（2026-09-25，+1）。新增 toolkit_blender.py（Blender 无头驱动）的
+    # 工具层顶层边界：`except Exception as exc: return {"ok": False, "error": ...}`。
+    # 为什么**不**收紧类型：这条边界兑现的是工具契约「工具层永不抛异常」——
+    # 一旦窄化，Blender 探测/子进程/解析中任何未列举的异常都会逃逸到 Agent 循环，
+    # 把「工具调用失败」升级成「整轮崩溃」。同类边界在 toolkit/ 下已成惯例
+    # （57 个工具文件中 26 个有），本处并非特例，故按既有口径显式过账。
     # 161 → 165（2026-09-25，+4）。口径说明：本项在 3b58d08 前后确立为 161，
     # 此后实测涨到 165。逐处核对（对比 3b58d08 全量 AST diff）后确认增量全部是
     # **CLI 面向用户的标准输出**，不是「拿 print 当日志」：

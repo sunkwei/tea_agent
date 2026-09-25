@@ -85,10 +85,12 @@ from .route_handlers_exports import (
     handle_export_md,
     handle_export_pdf,
     handle_file_download,
+    handle_file_preview,
     handle_screenshot_full,
     handle_screenshot_interactive,
     handle_screenshot_region,
     handle_upload,
+    is_previewable_image,
 )
 from .route_handlers_models import (
     _ensure_selected_option,
@@ -656,6 +658,7 @@ __all__ = [
     "handle_export_md",
     "handle_export_pdf",
     "handle_file_download",
+    "handle_file_preview",
     "handle_file_read",
     "handle_file_tree",
     "handle_get_config",
@@ -736,6 +739,7 @@ __all__ = [
     "handle_web_topic_trajectory",
     "handle_web_update_config",
     "handle_web_upload_config",
+    "is_previewable_image",
     "json",
     "logger",
     "os",

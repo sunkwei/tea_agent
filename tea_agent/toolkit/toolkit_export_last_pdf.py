@@ -8,6 +8,7 @@ import os
 import re
 import sqlite3
 import tempfile
+import urllib.parse
 from pathlib import Path
 
 from tea_agent.image_ref import build_data_url, parse_image_ref
@@ -945,6 +946,64 @@ def _render_image_markdown(images, indent: str = "") -> str:
     return "\n".join(lines)
 
 
+# 生成物图片：以链接形式出现在 AI 回复中（区别于 images 表里用户上传的图）
+_IMAGE_MIME_BY_EXT = {
+    ".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg",
+    ".gif": "image/gif", ".webp": "image/webp", ".bmp": "image/bmp",
+    ".svg": "image/svg+xml", ".avif": "image/avif", ".ico": "image/x-icon",
+}
+_GEN_IMG_LINK_RE = re.compile(
+    r"/v1/(?:download|preview)/([^\s)\"'|<>]+?\.(?:png|jpe?g|gif|webp|bmp|svg|avif|ico))",
+    re.IGNORECASE,
+)
+
+
+def _exports_dir() -> Path:
+    """生成物发布目录（与 server /v1/preview、toolkit_publish_doc 同一约定）。"""
+    return Path.home() / ".tea_agent" / "exports"
+
+
+def _extract_generated_images(*texts) -> list:
+    """提取文本引用的生成物图片 → ``[(mime, blob), ...]``（按出现顺序去重）。
+
+    生成物图片**不在 images 表**（那是用户上传的图），只以
+    ``/v1/download|preview/xxx.png`` 链接形式出现在 AI 回复里。导出若不回读，
+    PDF/Markdown 中就只剩一行链接文字、看不到图。
+
+    读不到的文件静默跳过（fail-open）——单张图缺失不应让整份导出失败。
+    """
+    base = _exports_dir()
+    try:
+        base_resolved = base.resolve()
+    except OSError:
+        return []
+    seen, out = set(), []
+    for text in texts:
+        for m in _GEN_IMG_LINK_RE.finditer(text or ""):
+            raw = m.group(1)
+            try:
+                name = urllib.parse.unquote(raw)
+            except (ValueError, TypeError):
+                name = raw
+            if name in seen:
+                continue
+            seen.add(name)
+            # 仅接受纯文件名（防路径遍历），且解析后必须落在 exports 目录内
+            if not name or os.path.basename(name) != name:
+                continue
+            try:
+                target = (base / name).resolve()
+                if target != base_resolved and base_resolved not in target.parents:
+                    continue
+                if not target.is_file():
+                    continue
+                out.append((_IMAGE_MIME_BY_EXT.get(target.suffix.lower(), "image/png"),
+                            target.read_bytes()))
+            except OSError:
+                continue
+    return out
+
+
 def _make_pdf(topic_title, stamp, user_msg, ai_msg, reasoning_text, output_path,
               images=None):
     """Generate a clean, printer-friendly PDF from conversation data.
@@ -1016,6 +1075,8 @@ def _make_pdf(topic_title, stamp, user_msg, ai_msg, reasoning_text, output_path,
     pdf.add_page()
     _draw_section_header(pdf, "AI Response", body_font, symbol="●", color=(20, 160, 100))
     _render_markdown(pdf, ai_msg, body_font, code_font, text_color=(50, 50, 50))
+    # 生成物图片（/v1/download|preview/*.png）此前被当普通链接，图未进 PDF
+    _render_images(pdf, _extract_generated_images(ai_msg))
 
     pdf.output(output_path)
     return output_path
@@ -1178,6 +1239,8 @@ def _make_full_topic_pdf(topic_title, conversations, output_path):
         pdf.set_font(body_font, "", 10)
         pdf.set_text_color(50, 50, 50)
         _render_markdown(pdf, _sanitize(conv["ai_msg"]), body_font, code_font, text_color=(50, 50, 50))
+        # 生成物图片（/v1/download|preview/*.png）此前被当普通链接，图未进 PDF
+        _render_images(pdf, _extract_generated_images(conv["ai_msg"]))
 
         # Separator if not last
         if idx < len(conversations):
@@ -1318,6 +1381,9 @@ def _build_markdown_doc(topic_title: str, stamp: str, user_msg: str,
         parts.append(reasoning_text.rstrip() + "\n")
     parts.append("\n## 🤖 AI 回复\n")
     parts.append(ai_msg.rstrip() + "\n")
+    gen_md = _render_image_markdown(_extract_generated_images(ai_msg))
+    if gen_md:
+        parts.append("\n" + gen_md + "\n")
     return "\n".join(parts)
 
 
@@ -1339,6 +1405,9 @@ def _build_full_topic_markdown(topic_title: str, conversations: list[dict]) -> s
         if reasoning.strip():
             parts.append(f"\n**💭 推理过程:**\n\n{reasoning.rstrip()}\n")
         parts.append("\n**🤖 AI 回复:**\n\n" + conv["ai_msg"].rstrip() + "\n")
+        gen_md = _render_image_markdown(_extract_generated_images(conv["ai_msg"]))
+        if gen_md:
+            parts.append("\n" + gen_md + "\n")
         parts.append("\n---\n")
     return "\n".join(parts)
 

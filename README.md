@@ -17,7 +17,7 @@
 | | |
 |---|---|
 | 🧠 **自进化** | AI 写 AI —— 能改自己的代码、造新工具、优化提示词，任务越多越强 |
-| 🧰 **工具驱动** | 60 个内置工具（文件/代码/搜索/截图/浏览器/包管理/Git），运行时热插拔 |
+| 🧰 **工具驱动** | 66 个内置工具（文件/代码/搜索/截图/浏览器/3D 建模/包管理/Git），运行时热插拔 |
 | 🛡️ **工具自净化** | 按真实使用统计收缩工具暴露面（长期闲置自动屏蔽），三条不变式保底 + 逃生阀 |
 | ♻️ **服务韧性** | 无感重启（在途回合快照续跑、消息不丢）+ 生成中插话（steering） |
 | 🖥️ **多形态** | Web V2 / REST API / ACP / Telegram / 微信 界面，一套引擎 |
@@ -42,20 +42,21 @@ toolkit_experience_solidify → 成功→技能，失败→教训，自动结晶
 
 > ⚠️ **上下文感知**：自进化能力**只在 tea_agent 自身项目内激活**；在外部项目中自动禁用，专注完成你的任务，不做有害改动。
 
-### 2. 🧰 工具驱动 — 60 个内置工具
+### 2. 🧰 工具驱动 — 66 个内置工具
 
 | 类别 | 代表工具 |
 |------|---------|
 | 📁 文件 / 代码 | `toolkit_file`, `toolkit_edit`, `toolkit_diff`, `toolkit_code_review`, `toolkit_format_code` |
 | 🔍 搜索 / 智能 | `toolkit_search`, `toolkit_lsp`, `toolkit_explr`, `toolkit_query_chat_history` |
 | 🖥️ 屏幕 / 视觉 | `toolkit_screenshot`, `toolkit_input`, `toolkit_js_fetch`, `toolkit_browser_tab`, `toolkit_vision_analyze` |
+| 🧊 3D 建模 | `toolkit_blender`（Blender 无头控制：bpy 脚本执行/渲染/场景检视/导出 glb·fbx·obj） |
 | 🧠 记忆 / 知识 | `toolkit_memory`, `toolkit_kb`, `toolkit_proactive` |
 | 🤖 多 Agent | `toolkit_parallel_subtasks`, `toolkit_subagent`, `toolkit_subagent_msg`, `toolkit_remote_agent` |
 | 📋 规划 / 调度 | `toolkit_plan`, `toolkit_todo`, `toolkit_scheduler`, `toolkit_task_resume` |
 | 🔧 系统 / 工程 | `toolkit_exec`(含 git), `toolkit_pkg`, `toolkit_build`, `toolkit_config`, `toolkit_server_restart`, `toolkit_approve` |
 
 工具引擎（`tlk.py`）支持**动态加载/卸载/重载** — 对话中创建一个新工具，下一轮就能用。
-当前 **56 个工具模块 / 60 个注册工具**，其中 58 个对模型可见（2 个内部工具不暴露）。
+当前 **57 个工具模块 / 66 个注册工具**，其中 64 个对模型可见（2 个内部工具不暴露）。
 
 #### 工具暴露自缩减（v0.16.6+）
 
@@ -390,7 +391,7 @@ tea_agent/
 ├── agent.py           # Agent 统一入口
 ├── onlinesession.py   # 在线会话（工具循环 + 流式）
 ├── litesession.py     # 轻量会话
-├── tlk.py             # 工具加载/注册/执行引擎（60 工具）
+├── tlk.py             # 工具加载/注册/执行引擎（66 工具）
 ├── memory.py          # 长期记忆系统
 ├── config.py          # 配置管理
 ├── providers.py       # 26 家 LLM 供应商引导目录（模型属性来自 provider.yaml）
@@ -401,14 +402,14 @@ tea_agent/
 ├── server/            # REST API + Web V2（Starlette + SSE）
 ├── protocol/          # ACP 协议
 ├── channel/           # Telegram / 微信适配器
-├── toolkit/           # 56 个工具模块
+├── toolkit/           # 57 个工具模块
 ├── session/           # 历史压缩 / L1/L2/L3 / JSON 校验
 ├── store/             # 数据存储（14 个功能子模块 + migration：会话/记忆/向量/工具用量/中断…）
 ├── multi_agent/       # 多 Agent 系统
 ├── evaluation/        # EvolutionBench 确定性基准
 ├── lsp/               # 代码智能（Jedi + Ruff）
 ├── skills/            # 技能结晶
-├── tests/             # 2379 个测试用例（119 个测试文件）
+├── tests/             # 2468 个测试用例（125 个测试文件，截至 2026-09-28）
 └── demo/              # 演示应用（辩论赛 / 钢琴 / DAG）
 ```
 

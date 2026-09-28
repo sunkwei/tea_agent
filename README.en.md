@@ -17,7 +17,7 @@
 | | |
 |---|---|
 | 🧠 **Self-Evolving** | AI writing AI — modifies its own code, builds new tools, optimizes prompts. Stronger with every task |
-| 🧰 **Tool-Driven** | 64 built-in tools (files/code/search/screenshot/browser/package/Git), hot-pluggable at runtime |
+| 🧰 **Tool-Driven** | 66 built-in tools (files/code/search/screenshot/browser/3D modeling/package/Git), hot-pluggable at runtime |
 | 🛡️ **Tool Self-Pruning** | Shrinks the exposed tool set using real usage data (idle tools auto-shielded), three invariants + escape hatches |
 | ♻️ **Resilient Service** | Seamless self-restart (in-flight turn resumes from snapshot, no lost messages) + mid-generation steering |
 | 🖥️ **Multi-Interface** | Web V2 / REST API / ACP / Telegram / WeChat front-ends, one engine |
@@ -42,20 +42,21 @@ toolkit_experience_solidify → Success→skills, failure→lessons, auto-crysta
 
 > ⚠️ **Context-Aware**: self-evolution activates **only inside tea_agent's own project**; in external projects it's auto-disabled, focusing on your tasks without harmful changes.
 
-### 2. 🧰 Tool-Driven — 64 Built-in Tools
+### 2. 🧰 Tool-Driven — 66 Built-in Tools
 
 | Category | Representative Tools |
 |----------|---------------------|
 | 📁 Files / Code | `toolkit_file`, `toolkit_edit`, `toolkit_diff`, `toolkit_code_review`, `toolkit_format_code` |
 | 🔍 Search / Intelligence | `toolkit_search`, `toolkit_lsp`, `toolkit_explr`, `toolkit_query_chat_history` |
 | 🖥️ Screen / Vision | `toolkit_screenshot`, `toolkit_input`, `toolkit_js_fetch`, `toolkit_browser_tab`, `toolkit_vision_analyze` |
+| 🧊 3D Modeling | `toolkit_blender` (headless Blender control: bpy script execution/render/scene inspect/export glb·fbx·obj) |
 | 🧠 Memory / Knowledge | `toolkit_memory`, `toolkit_kb`, `toolkit_proactive` |
 | 🤖 Multi-Agent | `toolkit_parallel_subtasks`, `toolkit_subagent`, `toolkit_subagent_msg`, `toolkit_remote_agent` |
 | 📋 Planning / Scheduling | `toolkit_plan`, `toolkit_todo`, `toolkit_scheduler`, `toolkit_task_resume` |
 | 🔧 System / Engineering | `toolkit_exec` (incl. git), `toolkit_pkg`, `toolkit_build`, `toolkit_config`, `toolkit_server_restart`, `toolkit_approve` |
 
 The tool engine (`tlk.py`) supports **dynamic load/unload/reload** — create a new tool mid-conversation, use it in the next turn.
-Currently **55 tool modules / 64 registered tools**, of which 62 are exposed to the model (2 internal tools stay hidden).
+Currently **57 tool modules / 66 registered tools**, of which 64 are exposed to the model (2 internal tools stay hidden).
 
 #### Tool exposure self-pruning (v0.16.6+)
 
@@ -384,7 +385,7 @@ tea_agent/
 ├── agent.py           # Agent unified entry
 ├── onlinesession.py   # Online session (tool loop + streaming)
 ├── litesession.py     # Lightweight session
-├── tlk.py             # Tool load/register/execute engine (64 tools)
+├── tlk.py             # Tool load/register/execute engine (66 tools)
 ├── memory.py          # Long-term memory system
 ├── config.py          # Configuration management
 ├── providers.py       # 26 LLM provider bootstrap catalog (model attrs live in provider.yaml)
@@ -395,14 +396,14 @@ tea_agent/
 ├── server/            # REST API + Web V2 (Starlette + SSE)
 ├── protocol/          # ACP protocol
 ├── channel/           # Telegram / WeChat adapters
-├── toolkit/           # 55 tool modules
+├── toolkit/           # 57 tool modules
 ├── session/           # History compression / L1/L2/L3 / JSON validation
 ├── store/             # Data storage (13 feature sub-modules + migration: sessions/memory/vectors/tool usage/interruptions…)
 ├── multi_agent/       # Multi-agent system
 ├── evaluation/        # EvolutionBench deterministic benchmarks
 ├── lsp/               # Code intelligence (Jedi + Ruff)
 ├── skills/            # Skill crystallization
-├── tests/             # 1800+ test cases (95 test files)
+├── tests/             # 2468 test cases (125 test files, as of 2026-09-28)
 └── demo/              # Demos (debate / piano / DAG)
 ```
 

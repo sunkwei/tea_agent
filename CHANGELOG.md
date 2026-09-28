@@ -3,7 +3,30 @@
 
 ## [Unreleased]
 
+### Features
+- 新增 `toolkit_blender` —— Blender 3D 建模控制工具（无头 CLI 驱动，源自回澜阁建模实战沉淀）
+  - 5 个 action：`probe`（能力体检：版本/内置 Python/渲染引擎/GPU 计算设备/导出格式）、
+    `run`（执行 bpy 脚本，内联 `code` 或 `script_path`，可附带打开 .blend）、
+    `render`（渲染指定帧，可覆盖相机/分辨率/采样数）、`scene`（只读检视场景清单与统计）、
+    `export`（glb/gltf/obj/fbx/stl/ply/usd）
+  - blender 可执行文件自动定位：`blender_path` 参数 → `BLENDER_PATH`/`BLENDER` 环境变量 →
+    PATH → 平台默认安装目录（Windows 多版本按数字自然序取最高，避免 "10.0"<"5.2" 字符串排序坑）
+  - 脚本结构化输出约定：`print('TEA_BLENDER_RESULT ' + json)` 自动抽取解析进 `result` 字段；
+    参数经 `-- <json>` 透传（避免向脚本注入代码的转义/注入风险）
+  - 内嵌脚本兼容 Blender 3.3~5.x API 迁移（obj/stl/ply 导出 operator 改名、
+    `--factory-startup` 下 cycles 插件未启用、depsgraph 取法）
+  - 回归测试 38 个用例分两层：纯函数/入口校验层（不依赖 Blender，CI 友好）+
+    真实 Blender 端到端层（`skipif` 未安装自动跳过）；钉住命令组装顺序、marker 解析、
+    输入预检不启动子进程等行为契约
+- 新增 `scripts/gen_tools_doc.py` —— `docs/TOOLS.md` 工具清单生成脚本（补齐 AGENTS.md
+  一直指出缺失的生成脚本）；口径与「快速命令 · 口径核查」同源，`--check` 模式做一致性校验
+
 ### Documentation
+- 口径数字同步（截至 2026-09-28 实测）：README/README.en/AGENTS.md 更新为
+  57 工具模块 / 66 注册 / 64 LLM 可见，测试 2468 用例（125 文件）；
+  README 类别表新增「3D 建模」行（中英对等）
+- `docs/TOOLS.md` 用生成脚本重建（旧快照 56/54 早已过期，且含已删除的
+  `toolkit_ocr`/`toolkit_notify` 等幽灵工具）
 - docs(config): 全量同步配置模型 —— `provider.yaml` 才是唯一事实源，`config.yaml` 已**不是启动前提**
   - 此前 README 把 `~/.tea_agent/config.yaml` 写成唯一配置文件，示例里内嵌 `api_key`；
     实际上密钥/端点/模型能力全在 `~/.tea_agent/provider.yaml`，config 只以 `provider` + `model`

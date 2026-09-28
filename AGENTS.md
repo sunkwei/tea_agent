@@ -34,7 +34,7 @@ tea-agent-telegram                   # Telegram 适配器
 tea-agent-wechat                     # 微信适配器
 
 # ── 测试 ──
-pytest                               # 运行全部测试（105 个测试文件，截至 2026-09-23）
+pytest                               # 运行全部测试（125 个测试文件，截至 2026-09-28）
 pytest tea_agent/tests/test_xxx.py   # 运行单文件测试
 pytest -k "test_name" -xvs           # 按名匹配+详细输出
 pytest --collect-only -q             # 只收集用例（确认总数与新增文件已被发现）
@@ -51,6 +51,7 @@ python -m mypy tea_agent --ignore-missing-imports
 # ── 口径核查（文档同步用，勿凭记忆填数）──
 python -c "from tea_agent.tlk import Toolkit, llm_tool_names; t=Toolkit(); print(len(t.func_map), len(llm_tool_names(t.func_map)))"
 python -c "import pathlib; print(len(list(pathlib.Path('tea_agent/toolkit').glob('toolkit_*.py'))))"
+python scripts/gen_tools_doc.py --check   # 校验 docs/TOOLS.md 与工具注册态一致（不一致退出码 1）
 ```
 
 ## 项目结构
@@ -85,11 +86,11 @@ tea_agent/                          # 40 个顶层模块 + 14 个子包（截至
 ├── permission.py                   # 工具权限管理（已禁用，恒放行；真实闸门见 tool_approval）
 ├── tlk.py                          # ★ 工具加载/注册/执行引擎（call_tool 为唯一汇聚点）
 │
-├── toolkit/                        # ★ 工具注册中心：toolkit_*.py 共 55 个 → 注册 64 个工具（62 个对模型可见）
+├── toolkit/                        # ★ 工具注册中心：toolkit_*.py 共 57 个 → 注册 66 个工具（64 个对模型可见）
 │   ├── __init__.py                 # 空文件（无手工注册；工具由 tlk.py 扫描加载）
 │   ├── toolkit_exec.py / toolkit_file.py / toolkit_edit.py / toolkit_diff.py
 │   ├── _git_snapshot.py            # 下划线前缀 → 不注册为工具（快照基础设施）
-│   └── ... (55 个 toolkit_*.py)
+│   └── ... (57 个 toolkit_*.py)
 │
 ├── session/                        # 会话组装（历史压缩 / L1·L2·L3 / JSON 校验 / os 信息注入 / 解码速率）
 ├── store/                          # 存储层（13 个功能子模块 + migration）
@@ -104,7 +105,7 @@ tea_agent/                          # 40 个顶层模块 + 14 个子包（截至
 ├── sdk/                            # 对外 SDK
 ├── demo/                           # 演示应用（辩论赛 / 钢琴 / DAG）
 │
-└── tests/                          # 105 个测试文件（大模块必须有对应 test_ 文件）
+└── tests/                          # 125 个测试文件（大模块必须有对应 test_ 文件）
 ```
 
 > 注：`tea_agent_mini/` 是仓库根下的独立顶层子包（见「Mini 构建」），不在 `tea_agent/` 目录内。
@@ -242,7 +243,7 @@ toolkit_reload()
 
 ### 测试规范
 
-- 测试文件：`tea_agent/tests/test_*.py`（105 个，截至 2026-09-23）
+- 测试文件：`tea_agent/tests/test_*.py`（125 个，截至 2026-09-28）
 - 使用 `pytest`，fixture 集中在 `conftest.py`
 - 测试函数名：`test_<功能>_<场景>`
 - 重要模块须有 `test_` 文件覆盖；修复缺陷必须**带回归测试**，且回归测试要能真的失败（必要时做元验证：把实现还原成旧版，确认测试确实变红）
@@ -426,9 +427,9 @@ toolkit_release_version(
 
 - 数字口径命令见「快速命令」末尾；工具数务必区分模块数/注册数/可见数
 - 已删除的能力必须从所有文档中清除（例：`toolkit_ocr` 删除后，README/AGENTS/`docs/TOOLS.md` 均不得再引用）
-- `docs/TOOLS.md` 是工具清单快照（标题含「注册工具总数 / LLM 可见」）。**它当前已过期**
-  （文件里写 56/54，实测 60/58），且仓库内没有它的生成脚本 —— 工具增删后请重新生成或补一个
-  生成脚本，别直接引用其中的数字
+- `docs/TOOLS.md` 是工具清单快照（标题含「注册工具总数 / LLM 可见」）。工具增删后必须重跑
+  `python scripts/gen_tools_doc.py` 重新生成（口径与「快速命令 · 口径核查」同源），不要手编；
+  `--check` 模式仅校验一致性（CI 可用），别直接引用快照里的数字而不核对生成时间
 - `README.en.md` 与 `README.md` 结构必须保持一致（章节、表格、代码块数量）；改完做一次平衡校验
   （`<details>` 与 `</details>` 数量、代码围栏成对）
 - 变更需在 `CHANGELOG.md` 的 `[Unreleased]` 下按 `Features` / `Bug Fixes` / `Documentation` 等小节追加，只追加不修改已发布章节

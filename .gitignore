@@ -46,6 +46,9 @@ nuitka-crash-report.xml
 nuitka_entry.py
 private-key.asc
 uploads/
+
+# 渲染/建模生成物（toolkit_blender 默认输出 output/blender）
+output/
 test_concurrent_stream.py
 test_config_switch.py
 .env  

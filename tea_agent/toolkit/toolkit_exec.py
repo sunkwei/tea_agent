@@ -443,6 +443,20 @@ def _wait_with_monitor(process, monitor, timeout: int, kill_wait: float = 5.0) -
     return kill_reason
 
 
+def _pipe_reader(stream, lines):
+    """后台线程读管道：读到 EOF 后关闭流（single/batch 两路径共用）。"""
+    try:
+        for line in iter(stream.readline, ""):
+            lines.append(line)
+    except ValueError:
+        logger.exception('op_failed')
+    finally:
+        try:
+            stream.close()
+        except OSError:
+            logger.exception('op_failed')
+
+
 def _run_single_with_monitor(app: str, args: list, timeout: int) -> dict:
     """使用 _ProcessMonitor 智能超时执行单条命令。
 
@@ -484,22 +498,8 @@ def _run_single_with_monitor(app: str, args: list, timeout: int) -> dict:
     stdout_lines: list[str] = []
     stderr_lines: list[str] = []
 
-    def _reader(stream, lines):
-        try:
-            for line in iter(stream.readline, ""):
-                lines.append(line)
-        except ValueError:
-            logger.exception('op_failed')
-
-        finally:
-            try:
-                stream.close()
-            except OSError:
-                logger.exception('op_failed')
-
-
-    t_out = threading.Thread(target=_reader, args=(process.stdout, stdout_lines), daemon=True)
-    t_err = threading.Thread(target=_reader, args=(process.stderr, stderr_lines), daemon=True)
+    t_out = threading.Thread(target=_pipe_reader, args=(process.stdout, stdout_lines), daemon=True)
+    t_err = threading.Thread(target=_pipe_reader, args=(process.stderr, stderr_lines), daemon=True)
     t_out.start()
     t_err.start()
 
@@ -583,22 +583,8 @@ def _run_batch_with_monitor(idx, cmd, timeout):
 
         out_lines, err_lines = [], []
 
-        def _reader(stream, lines):
-            try:
-                for line in iter(stream.readline, ""):
-                    lines.append(line)
-            except ValueError:
-                logger.exception('op_failed')
-
-            finally:
-                try:
-                    stream.close()
-                except OSError:
-                    logger.exception('op_failed')
-
-
-        t_out = threading.Thread(target=_reader, args=(process.stdout, out_lines), daemon=True)
-        t_err = threading.Thread(target=_reader, args=(process.stderr, err_lines), daemon=True)
+        t_out = threading.Thread(target=_pipe_reader, args=(process.stdout, out_lines), daemon=True)
+        t_err = threading.Thread(target=_pipe_reader, args=(process.stderr, err_lines), daemon=True)
         t_out.start()
         t_err.start()
 

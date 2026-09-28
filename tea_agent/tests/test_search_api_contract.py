@@ -12,6 +12,8 @@ import asyncio
 import json
 import pathlib
 
+import pytest
+
 from tea_agent.server import route_handlers_basic as rhb
 
 APP_JS = pathlib.Path(__file__).resolve().parents[1] / "server" / "static" / "app.js"
@@ -26,17 +28,27 @@ class _Req:
     query_params = {"q": "关键词", "limit": "20"}
 
 
-def test_handler_returns_plain_entity_dict():
+@pytest.fixture
+def fake_server(monkeypatch):
+    """替换 get_server，用例结束自动还原。
+
+    此前裸赋值 rhb.get_server = lambda ... 会把假 server 泄漏到同进程的
+    其他测试（如 test_server_auth），导致真实 create_app 路径拿到
+    _FakeServer（缺属性）→ 中间件 500。
+    """
+    monkeypatch.setattr(rhb, "get_server", lambda: _FakeServer())
+    return _FakeServer()
+
+
+def test_handler_returns_plain_entity_dict(fake_server):
     """后端契约：直接返回 {conversations, memories}，不加 data 包裹。"""
-    rhb.get_server = lambda: _FakeServer()
     resp = asyncio.run(rhb.handle_search(_Req()))
     body = json.loads(resp.body.decode())
     assert "conversations" in body and "memories" in body, f"响应形态变了: {body}"
 
 
-def test_frontend_reads_match_backend_shape():
+def test_frontend_reads_match_backend_shape(fake_server):
     """前端读取的字段必须能从后端响应取到（钉行为，不钉写法）。"""
-    rhb.get_server = lambda: _FakeServer()
     backend = json.loads(asyncio.run(rhb.handle_search(_Req())).body.decode())
 
     src = APP_JS.read_text(encoding="utf-8")

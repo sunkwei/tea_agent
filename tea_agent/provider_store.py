@@ -44,7 +44,6 @@ import shutil
 import threading
 import time
 from pathlib import Path
-from typing import Any
 
 logger = logging.getLogger("tea_agent.provider_store")
 
@@ -884,7 +883,6 @@ class ProviderStore:
                 return {"ok": True, **res}
         endpoint = self._models_endpoint(api_url)
         import json
-        import urllib.error as _err
         import urllib.request as _req
 
         req = _req.Request(
@@ -1017,7 +1015,7 @@ def migrate_from_configs(config_dir: str | Path | None = None,
     """
     store = get_provider_store(target, agent_dir=config_dir)
     base = Path(config_dir) if config_dir else store._cfg_dir()
-    data = store.load()  # 触发 bootstrap（含内置 + custom + config 迁移）
+    store.load()  # 触发 bootstrap（含内置 + custom + config 迁移）
     profiles = sorted(list(base.glob("config*.yaml")) + list(base.glob("config*.yml")))
     # 重新扫描以统计（_bootstrap 已合并；此处确保 config 目录与 target 目录一致时幂等）
     url_key: dict[str, str] = {}
@@ -1033,8 +1031,6 @@ def migrate_from_configs(config_dir: str | Path | None = None,
                 url_key[url] = key
         except Exception:
             continue
-    providers = data.setdefault("providers", {})
-    total_models = sum(len(p.get("models") or {}) for p in providers.values())
     store.save()
     # 迁移后自动清理无 key 内置占位：provider.yaml 只保留真实配置过的供应商
     try:

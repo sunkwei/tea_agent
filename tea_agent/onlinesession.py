@@ -679,14 +679,6 @@ class OnlineToolSession(BaseChatSession):
         ):
             self._http_clients.append(vision_client._client)
 
-    def _build_tools(self) -> None:
-        """构建工具定义。"""
-        self.tools: list[dict] = []
-        self.tools = self.tools_comp.build_tools()
-
-        # 初始化 Memory 管理器
-        self.memory_comp.initialize()
-
     def _init_reflection_and_prompt_manager(
         self,
         storage,

@@ -25,6 +25,17 @@ tea_agent_mini — Tea Agent 精简版，面向嵌入式设备。
     from tea_agent_mini import Agent, Storage, LiteSession, LiteAgent
 """
 
+# ── 版本号（历史缺陷: 此前无 __version__，运行时版本检测直接 AttributeError）──
+# wheel 安装后读自身 dist-info；源码树运行（未打包）时回落主包 tea_agent 的版本。
+try:
+    from importlib.metadata import PackageNotFoundError, version as _pkg_version
+    try:
+        __version__ = _pkg_version("tea_agent_mini")
+    except PackageNotFoundError:
+        __version__ = _pkg_version("tea_agent")
+except Exception:
+    __version__ = "0.0.0"
+
 # ── 核心 Agent ──
 from tea_agent.agent import Agent
 from tea_agent.litesession import LiteSession

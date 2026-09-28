@@ -1,6 +1,6 @@
 # 工具清单
 
-注册工具总数: 61（LLM 可见: 59）
+注册工具总数: 60（LLM 可见: 58）
 
 生成时间: 2026-09-28 · 由 `python scripts/gen_tools_doc.py` 生成，勿手编
 
@@ -63,7 +63,6 @@
 | `toolkit_send_email` | ✓ | 通过 SMTP 发送电子邮件。支持纯文本/HTML、附件、多收件人。默认使用 Gmail SMTP (smtp.gmail.com:587 TLS)。密码优先从环境变量 EMAIL_PASSWORD 读取，其次从参数 p... |
 | `toolkit_server_restart` | ✓ | 重启 tea_agent server（无感重启）。适用于：修改了 server 代码/配置后需要生效，或服务异常需要恢复。默认 mode=defer：等当前回合正常回答完再换新进程，新消息排队不丢失，用户几乎无感。仅当... |
 | `toolkit_set_topic_title` | ✓ | 手动设置当前主题的标题。设置后标题显示为「※自定义标题」，该主题将不再自动生成摘要。 |
-| `toolkit_subagent` | ✓ | 多Agent生成系统 v2.2。支持同步/异步生成子Agent、并发执行、状态查询、结果收集、上下文注入、嵌套深度限制、Agent间通信。 |
 | `toolkit_subagent_msg` | ✓ | 子Agent消息通信。支持Agent间发送/接收/检查消息。 |
 | `toolkit_task_resume` | ✓ | 检查当前主题未完成的 TODO 和 Plan，扫描 docs/ 产物并进行交叉对照（孤儿文档/未落实步骤/待落盘步骤），返回恢复提示。对话开始时自动调用。 |
 | `toolkit_todo` | ✓ | TODO checklist: create before modifying code, check off step by step. Persisted to DB per-topic — survives res... |

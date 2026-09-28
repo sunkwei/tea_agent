@@ -16,6 +16,7 @@ v2.1 新增（Phase 1）:
 import contextlib
 import json
 import logging
+import os
 import threading
 import time
 import uuid
@@ -31,7 +32,47 @@ _subagent_registry: dict[str, dict] = {}
 # 触发（_save_to_db 无 DB 会提前返回），所以本地无存储的测试永远发现不了，
 # 生产上表现为子 Agent 一启动就永久卡住、锁被占住后 list/save 全部阻塞。
 _registry_lock = threading.RLock()
-_executor = ThreadPoolExecutor(max_workers=5, thread_name_prefix="subagent")
+
+
+def _env_workers(default: int = 5) -> int:
+    """解析 TEA_SUBAGENT_WORKERS（纯函数）：缺省/非法回退 default，钳制 [1,64]。"""
+    raw = os.environ.get("TEA_SUBAGENT_WORKERS", "").strip()
+    if not raw:
+        return default
+    try:
+        value = int(raw)
+    except ValueError:
+        logger.warning("TEA_SUBAGENT_WORKERS=%r 非整数，回退 %s", raw, default)
+        return default
+    return max(1, min(64, value))
+
+
+# ── 全局线程池：容量可扩（只扩不缩）──────────────────
+# 历史缺陷: max_concurrent 参数此前只存在于签名/schema，从未生效（池硬编码 5）。
+# 现在初始容量由 TEA_SUBAGENT_WORKERS 决定（缺省 5，钳制 [1,64]）；
+# spawn 传入更大的 max_concurrent 时按需扩容。
+_executor_workers = _env_workers()
+_executor = ThreadPoolExecutor(max_workers=_executor_workers, thread_name_prefix="subagent")
+_executor_lock = threading.Lock()
+
+
+def _get_executor(min_workers: int = 0) -> ThreadPoolExecutor:
+    """获取全局线程池；min_workers 超过当前容量时扩容（只扩不缩）。
+
+    扩容 = 新建线程池并替换模块引用，旧池 shutdown(wait=False)：
+    旧池中在跑/排队任务继续执行完毕后线程自然退出，无任务丢失，容量单调递增。
+    """
+    global _executor, _executor_workers
+    want = max(1, min(64, min_workers))
+    with _executor_lock:
+        if want > _executor_workers:
+            old = _executor
+            _executor = ThreadPoolExecutor(max_workers=want, thread_name_prefix="subagent")
+            logger.info("subagent executor 扩容: %s -> %s", _executor_workers, want)
+            _executor_workers = want
+            if old is not None:
+                old.shutdown(wait=False)
+        return _executor
 
 # 自动唤醒通知: {parent_session_id: [sub_agent_id, ...]}
 _pending_notifications: dict[str, list[str]] = {}
@@ -348,7 +389,8 @@ def toolkit_subagent(
         max_iterations: Max tool iterations, default 20
         enable_thinking: Enable reasoning, default False
         timeout: Timeout in seconds, default 120
-        max_concurrent: Max concurrent sub-agents, default 5
+        max_concurrent: Max concurrent sub-agents, default 5. Pool scales UP (never down) to
+                   this size when spawning; initial size from TEA_SUBAGENT_WORKERS (default 5, clamp [1,64]).
         agent_id: Sub-agent ID (for status/cancel)
         allowed_tools: [DEPRECATED] List of allowed tool names (None=all allowed)
         denied_tools: [DEPRECATED] List of denied tool names (none denied)
@@ -359,8 +401,6 @@ def toolkit_subagent(
     Returns:
         Operation result dict
     """
-    global _executor
-
     # 确保 msg 工具已注册
     with contextlib.suppress(Exception):
         _ensure_toolkit_loaded()
@@ -412,8 +452,8 @@ def toolkit_subagent(
             _subagent_registry[agent_id] = entry
             _save_to_db()
 
-        # 提交到线程池
-        future = _executor.submit(
+        # 提交到线程池（max_concurrent 只扩容不缩容，见 _get_executor）
+        future = _get_executor(max_concurrent).submit(
             _execute_subagent, agent_id, goal, context,
             max_iterations, enable_thinking, timeout,
             allowed_tools, denied_tools, parent_session_id,
@@ -635,7 +675,7 @@ def meta_toolkit_subagent() -> dict:
                     },
                     "max_concurrent": {
                         "type": "integer",
-                        "description": "Max concurrent agents",
+                        "description": "Max concurrent agents (pool scales up, never down; initial size via TEA_SUBAGENT_WORKERS, default 5, clamp [1,64])",
                         "default": 5
                     },
                     "agent_id": {

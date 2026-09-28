@@ -1,4 +1,4 @@
-# Tea Agent v0.17.1
+# Tea Agent v0.17.2
 
 > ⚠️ **AI 写 AI 的实验项目，自行承担责任。**
 
@@ -8,7 +8,7 @@
 
 [![Python](https://img.shields.io/badge/Python-%3E%3D3.10-blue)](https://python.org)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/version-0.17.1-blue)](https://pypi.org/project/tea-agent)
+[![Version](https://img.shields.io/badge/version-0.17.2-blue)](https://pypi.org/project/tea-agent)
 
 ---
 
@@ -17,7 +17,7 @@
 | | |
 |---|---|
 | 🧠 **自进化** | AI 写 AI —— 能改自己的代码、造新工具、优化提示词，任务越多越强 |
-| 🧰 **工具驱动** | 61 个内置工具（文件/代码/搜索/截图/浏览器/3D 建模/包管理/Git），运行时热插拔 |
+| 🧰 **工具驱动** | 60 个内置工具（文件/代码/搜索/截图/浏览器/3D 建模/包管理/Git），运行时热插拔 |
 | 🛡️ **工具自净化** | 按真实使用统计收缩工具暴露面（长期闲置自动屏蔽），三条不变式保底 + 逃生阀 |
 | ♻️ **服务韧性** | 无感重启（在途回合快照续跑、消息不丢）+ 生成中插话（steering） |
 | 🖥️ **多形态** | Web V2 / REST API / ACP / Telegram / 微信 界面，一套引擎 |
@@ -42,7 +42,7 @@ toolkit_experience_solidify → 成功→技能，失败→教训，自动结晶
 
 > ⚠️ **上下文感知**：自进化能力**只在 tea_agent 自身项目内激活**；在外部项目中自动禁用，专注完成你的任务，不做有害改动。
 
-### 2. 🧰 工具驱动 — 61 个内置工具
+### 2. 🧰 工具驱动 — 60 个内置工具
 
 | 类别 | 代表工具 |
 |------|---------|
@@ -57,7 +57,7 @@ toolkit_experience_solidify → 成功→技能，失败→教训，自动结晶
 | 🔧 系统 / 工程 | `toolkit_exec`(含 git), `toolkit_pkg`, `toolkit_build`, `toolkit_config`, `toolkit_server_restart`, `toolkit_approve` |
 
 工具引擎（`tlk.py`）支持**动态加载/卸载/重载** — 对话中创建一个新工具，下一轮就能用。
-当前 **57 个工具模块 / 61 个注册工具**，其中 59 个对模型可见（2 个内部工具不暴露）。
+当前 **57 个工具模块 / 60 个注册工具**，其中 58 个对模型可见（2 个内部工具不暴露）。
 
 > 口径以实测为准：`python -c "from tea_agent.tlk import Toolkit, llm_tool_names; t=Toolkit(); print(len(t.func_map), len(llm_tool_names(t.func_map)))"`，改工具后同步 `docs/TOOLS.md`（`python scripts/gen_tools_doc.py`）。
 
@@ -394,7 +394,7 @@ tea_agent/
 ├── agent.py           # Agent 统一入口
 ├── onlinesession.py   # 在线会话（工具循环 + 流式）
 ├── litesession.py     # 轻量会话
-├── tlk.py             # 工具加载/注册/执行引擎（61 工具）
+├── tlk.py             # 工具加载/注册/执行引擎（60 工具）
 ├── memory.py          # 长期记忆系统
 ├── config.py          # 配置管理
 ├── providers.py       # 26 家 LLM 供应商引导目录（模型属性来自 provider.yaml）

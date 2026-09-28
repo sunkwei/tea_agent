@@ -1214,7 +1214,7 @@ class AgentModule(HotReloadModule):
                 continue
             try:
                 expected_type = type_map.get(key, str)
-                value = bool(value) if expected_type == bool else expected_type(value)
+                value = bool(value) if expected_type is bool else expected_type(value)
                 setattr(cfg, key, value)
                 updated.append(key)
             except (ValueError, TypeError) as e:

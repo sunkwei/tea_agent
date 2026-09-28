@@ -178,10 +178,6 @@ class TestChat:
         assert sdk.chat("hi", stream=True) == "Hello!"
         assert server.last_body["stream"] is True
 
-    def test_chat_sends_json_content_type(self, sdk):
-        """POST 必须带 Content-Type，否则多数服务端按纯文本拒收。"""
-        assert sdk.chat("x") == "Hello!"
-
     def test_stream_false_is_not_sent_as_true(self, sdk, server):
         """非流式必须确实是非流式（默认值不得被翻转）。"""
         sdk.chat("hi")

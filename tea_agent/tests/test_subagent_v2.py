@@ -24,7 +24,6 @@ def clean_registry():
     from tea_agent.toolkit.toolkit_subagent import (
         _notification_lock,
         _pending_notifications,
-        _persist_loaded,
         _registry_lock,
         _subagent_registry,
     )

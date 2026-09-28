@@ -31,13 +31,18 @@ def toolkit_release_version(version: str, changes: list, changelog_section: str 
     }
 
     # 1. 更新 pyproject.toml 版本号
+    # 历史缺陷: 旧正则 r'version\s*=...' 无行首锚定，会误改 ruff 的
+    # `target-version = "py310"`（"version = ..." 是其子串）→ pyproject 解析失败。
+    # 修复: MULTILINE + ^ 锚定，且只替换第一个命中（[project] 的 version 行）。
     pyproject_path = Path("pyproject.toml")
     if pyproject_path.exists():
         content = pyproject_path.read_text(encoding='utf-8')
         new_content = re.sub(
-            r'version\s*=\s*["\'][^"\']+["\']',
+            r'^version\s*=\s*["\'][^"\']+["\']',
             f'version = "{version}"',
-            content
+            content,
+            count=1,
+            flags=re.MULTILINE,
         )
         pyproject_path.write_text(new_content, encoding='utf-8')
         results["steps"].append("✓ 更新 pyproject.toml 版本号")

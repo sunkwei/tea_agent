@@ -1,6 +1,13 @@
 # Changelog
 
 
+
+## [0.17.2] - 2026-09-28
+### Bug Fixes
+- toolkit_subagent: max_concurrent 参数真实生效（此前 accept-and-ignore，池硬编码 5）——扩容只增不减，spawn 按需扩到 N
+- 新增 TEA_SUBAGENT_WORKERS 环境变量：池初始容量（缺省 5，钳制 [1,64]，非法值回退并告警）
+- 新增回归测试 test_subagent_workers.py（9 项，含元验证：旧实现上全部变红）
+- README/AGENTS 工具口径同步为 60 注册 / 58 可见；重生成 docs/TOOLS.md
 ## [Unreleased]
 
 

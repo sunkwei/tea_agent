@@ -901,6 +901,10 @@ def execute_tool_loop(session, context: dict) -> dict:
     ctx_overflow_recovery_used = False
     # follow-up 已投递轮数（见 MAX_FOLLOWUP_ROUNDS）
     followup_rounds = 0
+    # 参数非法自纠：畸形 tool_call 轮不直接终止回合，注入失败原因反馈让模型
+    # 用合法 JSON 重发（计入迭代预算）；连续畸形超过上限才终止并标记 error
+    invalid_args_retries = 0
+    _MAX_INVALID_ARGS_RETRIES = 2
 
     while iterations < session.max_iterations + session._extra_iterations:
         if session.interrupted:
@@ -1270,16 +1274,43 @@ def execute_tool_loop(session, context: dict) -> dict:
 
         elif tool_calls_data:
             # 模型本轮返回了工具调用，但参数全部非法且无法修复 → 该轮被丢弃。
-            # 此时 content 通常为空，旧实现会落到下面的裸 else 静默 break，
-            # 用户只看到"没有回复就结束了"。这里显式给出原因并标记 error，
-            # 让调用方（server / ACP / 适配器）能向用户呈现可诊断的信息。
+            # 旧实现直接 return 终止回合，模型零自纠机会：一次畸形输出（真实案例：
+            # 流式截断的 batch 长参数）即浪费整轮对话。改为「注入错误反馈 + 有限
+            # 自纠重试」：反馈失败原因与参数片段，模型可用合法 JSON 重发；重试
+            # 计入迭代预算并设独立上限，超限才终止并标记 error（调用方仍可诊断）。
             dropped = len(tool_calls_data)
             names = "、".join(
                 str(tc.get("name") or tc.get("function", {}).get("name") or "?") for tc in tool_calls_data
             )
+            invalid_args_retries += 1
+            if invalid_args_retries <= _MAX_INVALID_ARGS_RETRIES:
+                bad_samples = " | ".join(
+                    str(tc.get("arguments") or tc.get("function", {}).get("arguments") or "")[:160]
+                    for tc in tool_calls_data[:2]
+                )
+                feedback = (
+                    f"[系统提示] 上一轮你发出的 {dropped} 个工具调用（{names}）参数不是合法 JSON，"
+                    f"已全部丢弃且未执行。常见原因：参数内嵌多行代码/正则时单引号、反斜杠"
+                    f"转义错误，或流式输出截断。请用合法 JSON 重发；若需执行长代码，"
+                    f"请改为写入临时脚本文件再执行，避免在 JSON 参数中携带多行源码。"
+                    f"失败参数片段（前160字符）: {bad_samples}"
+                )
+                logger.warning(
+                    f"全部 tool_call 参数不可修复，已丢弃 {dropped} 个: {names}，注入反馈自纠重试 "
+                    f"({invalid_args_retries}/{_MAX_INVALID_ARGS_RETRIES})"
+                )
+                callback(
+                    f"⚠️ {dropped} 个工具调用参数非法，已反馈模型自纠重试"
+                    f"（{invalid_args_retries}/{_MAX_INVALID_ARGS_RETRIES}）"
+                )
+                # 重试计入迭代预算：上限守卫仍兜底，畸形轮不会造成无限循环
+                iterations += 1
+                session.context.messages.append({"role": "user", "content": feedback})
+                continue
             warn = (
                 f"\n\n⚠️ 本轮 {dropped} 个工具调用（{names}）的参数不是合法 JSON，"
-                f"自动修复失败已丢弃，本轮未执行任何工具。"
+                f"自动修复失败已丢弃（自纠重试 {_MAX_INVALID_ARGS_RETRIES} 次未果），"
+                f"本轮未执行任何工具。"
                 f"请重新发起该操作，或改用更简单的单行命令参数。"
             )
             logger.warning(f"全部 tool_call 参数不可修复，已丢弃 {dropped} 个: {names}")

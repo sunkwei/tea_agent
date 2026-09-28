@@ -1,4 +1,4 @@
-# Tea Agent v0.17.0
+# Tea Agent v0.17.1
 
 > ⚠️ **AI 写 AI 的实验项目，自行承担责任。**
 
@@ -8,7 +8,7 @@
 
 [![Python](https://img.shields.io/badge/Python-%3E%3D3.10-blue)](https://python.org)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/version-0.17.0-blue)](https://pypi.org/project/tea-agent)
+[![Version](https://img.shields.io/badge/version-0.17.1-blue)](https://pypi.org/project/tea-agent)
 
 ---
 
@@ -17,11 +17,11 @@
 | | |
 |---|---|
 | 🧠 **自进化** | AI 写 AI —— 能改自己的代码、造新工具、优化提示词，任务越多越强 |
-| 🧰 **工具驱动** | 66 个内置工具（文件/代码/搜索/截图/浏览器/3D 建模/包管理/Git），运行时热插拔 |
+| 🧰 **工具驱动** | 61 个内置工具（文件/代码/搜索/截图/浏览器/3D 建模/包管理/Git），运行时热插拔 |
 | 🛡️ **工具自净化** | 按真实使用统计收缩工具暴露面（长期闲置自动屏蔽），三条不变式保底 + 逃生阀 |
 | ♻️ **服务韧性** | 无感重启（在途回合快照续跑、消息不丢）+ 生成中插话（steering） |
 | 🖥️ **多形态** | Web V2 / REST API / ACP / Telegram / 微信 界面，一套引擎 |
-| 🧠 **真记忆** | 类人长期记忆：分层优先级、语义检索、自然衰减、去重合并，跨会话不忘 |
+| 🧠 **真记忆** | 类人长期记忆：分层优先级、关键词检索、自然衰减、去重合并，跨会话不忘 |
 | 🤖 **多 Agent** | 6 阶段全栈协作：角色化 Agent + 事件流 + 消息总线 + 并行执行 + DAG 编排 |
 | 📡 **远程协同** | `toolkit_remote_agent` 连接边缘设备（RK3588/BM1688），主机 ↔ 设备协同 |
 
@@ -42,7 +42,7 @@ toolkit_experience_solidify → 成功→技能，失败→教训，自动结晶
 
 > ⚠️ **上下文感知**：自进化能力**只在 tea_agent 自身项目内激活**；在外部项目中自动禁用，专注完成你的任务，不做有害改动。
 
-### 2. 🧰 工具驱动 — 66 个内置工具
+### 2. 🧰 工具驱动 — 61 个内置工具
 
 | 类别 | 代表工具 |
 |------|---------|
@@ -52,11 +52,14 @@ toolkit_experience_solidify → 成功→技能，失败→教训，自动结晶
 | 🧊 3D 建模 | `toolkit_blender`（Blender 无头控制：bpy 脚本执行/渲染/场景检视/导出 glb·fbx·obj） |
 | 🧠 记忆 / 知识 | `toolkit_memory`, `toolkit_kb`, `toolkit_proactive` |
 | 🤖 多 Agent | `toolkit_parallel_subtasks`, `toolkit_subagent`, `toolkit_subagent_msg`, `toolkit_remote_agent` |
+| 🔎 审计 / 复盘 | `toolkit_history_extract`（L0–L3 四级历史取证）、`toolkit_evo_bench`、`toolkit_eval_loop` |
 | 📋 规划 / 调度 | `toolkit_plan`, `toolkit_todo`, `toolkit_scheduler`, `toolkit_task_resume` |
 | 🔧 系统 / 工程 | `toolkit_exec`(含 git), `toolkit_pkg`, `toolkit_build`, `toolkit_config`, `toolkit_server_restart`, `toolkit_approve` |
 
 工具引擎（`tlk.py`）支持**动态加载/卸载/重载** — 对话中创建一个新工具，下一轮就能用。
-当前 **57 个工具模块 / 66 个注册工具**，其中 64 个对模型可见（2 个内部工具不暴露）。
+当前 **57 个工具模块 / 61 个注册工具**，其中 59 个对模型可见（2 个内部工具不暴露）。
+
+> 口径以实测为准：`python -c "from tea_agent.tlk import Toolkit, llm_tool_names; t=Toolkit(); print(len(t.func_map), len(llm_tool_names(t.func_map)))"`，改工具后同步 `docs/TOOLS.md`（`python scripts/gen_tools_doc.py`）。
 
 #### 工具暴露自缩减（v0.16.6+）
 
@@ -181,7 +184,7 @@ tea-agent-api
 <details>
 <summary><b>🧠 长期记忆系统 — 工作原理</b></summary>
 
-**存储结构**：每条记忆含 `content / priority(0-3) / importance(1-5) / category / tags / embedding / expires_at / pinned`。
+**存储结构**：每条记忆含 `content / priority(0-3) / importance(1-5) / category / tags / expires_at / pinned`。
 
 **选择算法**（每次对话注入 ≤30 条）：
 ```
@@ -193,7 +196,7 @@ score = 关键词相关性 × 重要度 × 时效因子 × 优先级因子
 
 **提取分类**：`instruction→CRITICAL`、`preference/reminder→HIGH`、`fact→MEDIUM`、`general→LOW`，LLM 自动提取 + 4 级容错解析。
 
-**去重合并**：Jaccard ≥0.6 合并（保留长内容、低优先级、高重要度）；embedding 余弦 ≥0.92 批量去重。
+**去重合并**：content_hash 精确短路 + Jaccard ≥0.6 合并（保留长内容、低优先级、高重要度）。
 
 **CRITICAL FIFO**：上限 30 条，超出软删除最旧，防指令记忆膨胀。
 
@@ -310,7 +313,7 @@ python build_nuitka.py            # 或编译为单文件可执行文件（无�
 | 剔除内容 | 说明 |
 |---------|------|
 | ACP / Telegram | 协议与渠道层 |
-| NumPy 向量 | 替换为纯 Python `math+struct` |
+| NumPy | 已从核心依赖移除（仅 `[demo]` extra 需要） |
 | Playwright / PyAutoGUI / MSS | 可选自行安装 |
 | 11 个重型工具 | JS 渲染、截图、输入模拟、浏览器标签、剪贴板、LSP、代码探索、包管理等按需启用（OCR 工具已移除，图片理解改由 `toolkit_vision_analyze` 走视觉模型） |
 
@@ -376,7 +379,7 @@ vision_model:               # 视觉模型（可选）：会话含图片时自�
 ## 🧪 测试
 
 ```bash
-pytest                    # 全部单元测试（1800+ 用例）
+pytest                    # 全部单元测试（2468 用例 / 125 文件，截至 2026-09-28）
 python tests/test_server_api.py --port 8282   # Server API 黑盒测试（8 套件 30+ 测试点）
 ```
 
@@ -391,7 +394,7 @@ tea_agent/
 ├── agent.py           # Agent 统一入口
 ├── onlinesession.py   # 在线会话（工具循环 + 流式）
 ├── litesession.py     # 轻量会话
-├── tlk.py             # 工具加载/注册/执行引擎（66 工具）
+├── tlk.py             # 工具加载/注册/执行引擎（61 工具）
 ├── memory.py          # 长期记忆系统
 ├── config.py          # 配置管理
 ├── providers.py       # 26 家 LLM 供应商引导目录（模型属性来自 provider.yaml）
@@ -404,7 +407,7 @@ tea_agent/
 ├── channel/           # Telegram / 微信适配器
 ├── toolkit/           # 57 个工具模块
 ├── session/           # 历史压缩 / L1/L2/L3 / JSON 校验
-├── store/             # 数据存储（14 个功能子模块 + migration：会话/记忆/向量/工具用量/中断…）
+├── store/             # 数据存储（13 个功能子模块 + migration：会话/事件/图片/L0快照/摘要/记忆/工具用量/中断…）
 ├── multi_agent/       # 多 Agent 系统
 ├── evaluation/        # EvolutionBench 确定性基准
 ├── lsp/               # 代码智能（Jedi + Ruff）

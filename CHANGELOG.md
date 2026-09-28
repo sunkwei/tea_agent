@@ -3,6 +3,9 @@
 
 ## [Unreleased]
 
+
+## [0.17.1] - 2026-09-28
+
 ### Features
 - 新增 `toolkit_blender` —— Blender 3D 建模控制工具（无头 CLI 驱动，源自回澜阁建模实战沉淀）
   - 5 个 action：`probe`（能力体检：版本/内置 Python/渲染引擎/GPU 计算设备/导出格式）、

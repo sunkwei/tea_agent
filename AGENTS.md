@@ -86,7 +86,7 @@ tea_agent/                          # 40 个顶层模块 + 14 个子包（截至
 ├── permission.py                   # 工具权限管理（已禁用，恒放行；真实闸门见 tool_approval）
 ├── tlk.py                          # ★ 工具加载/注册/执行引擎（call_tool 为唯一汇聚点）
 │
-├── toolkit/                        # ★ 工具注册中心：toolkit_*.py 共 57 个 → 注册 66 个工具（64 个对模型可见）
+├── toolkit/                        # ★ 工具注册中心：toolkit_*.py 共 57 个 → 注册 61 个工具（59 个对模型可见）
 │   ├── __init__.py                 # 空文件（无手工注册；工具由 tlk.py 扫描加载）
 │   ├── toolkit_exec.py / toolkit_file.py / toolkit_edit.py / toolkit_diff.py
 │   ├── _git_snapshot.py            # 下划线前缀 → 不注册为工具（快照基础设施）

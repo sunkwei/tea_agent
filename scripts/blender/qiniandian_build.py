@@ -86,12 +86,18 @@ Z_FLOOR = TERRACE_H                   # 殿地面标高
 EAVE_DIA = 32.72                      # 最大檐径
 H_TOTAL = 38.2                        # 殿总高（自地面）
 
-# 柱网半径（自殿心）—— 依祈年殿实测柱网：檐柱 13.0 / 金柱 9.0 / 龙井柱 4.3 / 童柱 5.6
-R_EAVE, R_GOLD, R_DRAGON, R_CHILD = 13.00, 9.00, 4.30, 5.60
+# 柱网半径（自殿心）。传力路径：檐柱→抱头梁→金柱→跨空枋→龙井柱→井口枋→
+# 抹角梁（方转八角）→童柱→上檐斗拱→雷公柱。
+# 龙井柱 r=4.30 → 井口枋方框边中点 r=3.040 → 抹角梁切角后八角顶点
+# r=√(3.040²+(3.040−1.781)²)=3.290，即童柱所在八角
+R_EAVE, R_GOLD, R_DRAGON = 13.00, 9.00, 4.30
+OCT_APO, OCT_VERT = 3.040, 3.290       # 八角内切半径 / 顶点半径
+R_CHILD = OCT_VERT                     # 童柱（钻金柱）立于八角顶点
+R_CANT = 8.00                          # 上檐挑檐梁外端（承上檐外圈斗拱）
 
 # 柱高（自殿地面起，不含柱础）
 H_EAVE, H_GOLD, H_DRAGON = 9.40, 15.20, 19.20
-H_CHILD = 4.20                       # 童柱立于金柱枋/抹角梁之上
+H_CHILD = 4.20                         # 童柱（钻金柱）立于井口枋之上
 
 # 柱径（下径 / 上径，含收分）
 D_EAVE = (0.86, 0.80)
@@ -104,33 +110,40 @@ TILT = math.radians(0.9)             # 侧脚
 BASE_H = {"eave": 0.42, "gold": 0.50, "dragon": 0.62, "child": 0.22}
 BASE_R = {"eave": 0.66, "gold": 0.78, "dragon": 0.95, "child": 0.36}
 
-# ── 竖向标高体系（自地面 0.0 起算，含柱础）——保证铺作顶 = 屋面外沿标高，构件不互穿 ──
+# ── 竖向标高体系（自地面 0.0 起算，含柱础）──
 Z_EAVE_TOP = Z_FLOOR + BASE_H["eave"] + H_EAVE        # 15.02 檐柱顶
 Z_GOLD_TOP = Z_FLOOR + BASE_H["gold"] + H_GOLD        # 20.90 金柱顶
 Z_DRAG_TOP = Z_FLOOR + BASE_H["dragon"] + H_DRAGON    # 25.02 龙井柱顶
-Z_CHILD_BOT = Z_GOLD_TOP                              # 20.90 童柱脚（坐金柱枋上）
-Z_CHILD_TOP = Z_CHILD_BOT + H_CHILD                   # 25.10 童柱顶
+H_JKF = 0.55                                          # 井口枋高（龙井柱顶方形框架）
+Z_CHILD_BOT = Z_DRAG_TOP + H_JKF                      # 25.57 童柱脚（坐井口枋上）
+Z_CHILD_TOP = Z_CHILD_BOT + H_CHILD                   # 29.77 童柱顶
+Z_CANT = Z_DRAG_TOP + 0.30                            # 上檐挑檐梁标高
 
-DG_H = (1.40, 1.30, 2.40)                             # 下/中/上檐铺作层高
-Z_DG_LO = Z_EAVE_TOP + DG_H[0]                        # 16.42
-Z_DG_MID = Z_GOLD_TOP + DG_H[1]                       # 22.20
-Z_DG_UP = Z_CHILD_TOP + DG_H[2]                       # 27.50
+DG_H = (1.55, 1.35, 1.25)                             # 下/中/上檐铺作层高
+Z_DG_LO = Z_EAVE_TOP + DG_H[0]                        # 16.57 下檐正心桁
+Z_DG_MID = Z_GOLD_TOP + DG_H[1]                       # 22.25 中檐正心桁
+Z_DG_UP = Z_CHILD_TOP + DG_H[2]                       # 31.02 上檐内圈桁（童柱头）
+Z_DG_UP_OUT = Z_CANT + DG_H[2]                        # 26.57 上檐外圈桁（挑檐梁头）
 
 # 三重檐屋面轮廓端点 (檐口半径, 檐口标高, 内端半径, 内端标高)
-# 檐口标高 = 对应铺作顶（檩落在斗拱上）；内端落在下一圈柱顶
-ROOF_LO = (16.36, Z_DG_LO, R_GOLD + 0.60, Z_GOLD_TOP)     # 下檐：檐柱 → 金柱
-ROOF_MID = (12.40, Z_DG_MID, R_DRAGON + 0.90, Z_DRAG_TOP)  # 中檐：金柱 → 龙井柱
-ROOF_UP = (7.40, Z_DG_UP, 1.20, 34.60)                    # 上檐：童柱 → 雷公柱
+# 重檐逻辑：上一层檐口落在下一层柱圈斗拱之上，逐层向内收束至雷公柱
+ROOF_LO = (16.36, Z_DG_LO, R_GOLD + 0.60, Z_GOLD_TOP)      # 下檐：檐柱→金柱
+ROOF_MID = (12.40, Z_DG_MID, R_DRAGON + 0.60, Z_DRAG_TOP)  # 中檐：金柱→龙井柱
+ROOF_UP = (9.60, Z_DG_UP_OUT, 0.55, 35.00)                 # 上檐：挑檐梁→雷公柱
 ROOF_P = 1.55                            # 举折曲线指数（檐缓脊陡）
+ROOF_P_UP = 0.98                         # 上檐攒尖：近似直坡，且须过童柱头正心桁
 TILE_RIBS = (72, 60, 48)                 # 下/中/上檐瓦垄数（写意，实为数百垄）
 TILE_AMP = 0.075                         # 瓦垄起伏幅度
 
-FINIAL_BOT = 34.60                       # 宝顶底
+FINIAL_BOT = 35.00                       # 宝顶底（屋面攒尖顶）
 FINIAL_TOP = H_TOTAL                     # 38.2
+H_LEIGONG = FINIAL_BOT - Z_CHILD_TOP     # 雷公柱：自童柱顶通至宝顶底
 
-# 铺作攒数：每间 3 攒（1 柱头科 + 2 平身科）
-DG_BAYS = {"lo": 3, "mid": 3, "up": 3}
-DG_SCALE = {"lo": 0.86, "mid": 0.72, "up": 0.68}
+# 铺作攒数：每间 3 攒（1 柱头科 + 2 平身科）；up=童柱内圈, upo=挑檐梁外圈
+DG_BAYS = {"lo": 3, "mid": 3, "up": 3, "upo": 3}
+DG_UNIT_H = 2.16                         # 单攒自身高度系数（scale=1 时桁底标高，×scale=实高）
+DG_OUT = 2.30                            # 单攒出跳系数（scale=1 时挑檐桁半径增量）
+DG_SPREAD = 1.00                         # 出跳系数（相对高度）
 
 # 爆炸参数（层号递增 → 竖向等距分离；index*EXP_STEP，须大于最厚构件层自身高度）
 EXP_STEP = 7.00
@@ -626,10 +639,12 @@ def _pillar_local(bm, ring, h, d_bot, d_top, mat_idx):
 
 
 def _add_pillar(L, ring, idx, ang, r, h, dd, m, z0, name, spread_k):
+    """柱身几何建在**局部原点**（柱脚 z=0、轴心 r=0），故只设 location 定位，
+    不能再按绝对坐标做 origin 平移（那会把柱子搬到殿心并落地）。"""
     bm = bmesh.new()
     _pillar_local(bm, ring, h, dd[0], dd[1], 1)
-    x0, y0 = r * math.cos(ang), r * math.sin(ang)
-    ob = to_object_at(bm, name, [MAT["marble"], m], origin=(x0, y0, z0), smooth=True)
+    ob = to_object(bm, name, [MAT["marble"], m], smooth=True)
+    ob.location = (r * math.cos(ang), r * math.sin(ang), z0)
     ob.rotation_euler = (0, 0, ang)
     place(ob, L, spread_k)
     return ob
@@ -693,118 +708,218 @@ def _nearest_ang(a, cands):
     return min(cands, key=lambda c: abs((a - c + math.pi) % (2 * math.pi) - math.pi))
 
 
+def _pt(r, a, z):
+    return (r * math.cos(a), r * math.sin(a), z)
+
+
 def build_beams():
     """三十六根枋桷互相衔接（殿顶不用大梁长檩）：
 
-    12 抱头梁（檐柱头→金柱头，径向） + 12 抹角梁（金柱头→龙井柱身，水平）
-    + 12 金柱枋（金柱间环向联系）= 36
+    12 抱头梁（檐柱头→金柱头，**水平**拉结，承下檐屋面）
+    + 12 跨空枋（金柱头→龙井柱身，水平，把 24 m 大跨环向锁固）
+    + 12 金柱枋（相邻金柱间环向联系）= 36
     """
     global BEAM_MATS
     BEAM_MATS = [MAT["timber_paint"], MAT["paint_green"], MAT["paint_blue"]]
     L = new_layer(3, "梁枋_36枋桷")
-    drag_angs = [math.pi / 4 + math.pi / 2 * m for m in range(4)]
     z_e, z_g = Z_EAVE_TOP - 0.22, Z_GOLD_TOP - 0.22
     for k in range(12):
         a = 2 * math.pi * k / 12
         a2 = 2 * math.pi * (k + 1) / 12
-        pe = (R_EAVE * math.cos(a), R_EAVE * math.sin(a), z_e)
-        pg = (R_GOLD * math.cos(a), R_GOLD * math.sin(a), z_g)
-        pg2 = (R_GOLD * math.cos(a2), R_GOLD * math.sin(a2), z_g)
-        # 抱头梁：檐柱头 → 金柱头，两段带生起（跨中略高）
-        mid = ((pe[0] + pg[0]) / 2, (pe[1] + pg[1]) / 2, max(pe[2], pg[2]) + 0.42)
+        # 抱头梁：檐柱头 → 金柱头，**同标高水平**（跨中略起拱），两段
+        pe, pg, pg2 = _pt(R_EAVE, a, z_e), _pt(R_GOLD, a, z_e), _pt(R_GOLD, a2, z_e)
+        mid = ((pe[0] + pg[0]) / 2, (pe[1] + pg[1]) / 2, z_e + 0.30)
         _beam_obj(L, "抱头梁%02d_a" % (k + 1), pe, mid, 0.62, 0.80, 1, 0.86)
         _beam_obj(L, "抱头梁%02d_b" % (k + 1), mid, pg, 0.62, 0.80, 1, 0.72)
-        # 抹角梁：金柱头 → 最近龙井柱身，**同一标高水平拉结**（不再斜跨）
-        ad = _nearest_ang(a, drag_angs)
-        pd = (R_DRAGON * math.cos(ad), R_DRAGON * math.sin(ad), z_g)
-        _beam_obj(L, "抹角梁%02d" % (k + 1), pg, pd, 0.52, 0.68, 2, 0.31)
+        # 跨空枋：金柱头 → 龙井柱身（水平），环向锁固大跨
+        _beam_obj(L, "跨空枋%02d" % (k + 1), pg, _pt(R_DRAGON, a, z_g), 0.46, 0.62, 2, 0.30)
         # 金柱枋：相邻金柱间环向联系枋
         _beam_obj(L, "金柱枋%02d" % (k + 1), pg, pg2, 0.36, 0.56, 2, 0.62)
-    # 檐柱额枋（环向，12 段）+ 童柱枋（8 段，承上檐铺作）
-    L2 = new_layer(3, "梁枋_额枋童柱枋")
+    # 檐柱额枋（环向 12 段，连成刚性环）
+    L2 = new_layer(3, "梁枋_额枋")
     for k in range(12):
         a, a2 = 2 * math.pi * k / 12, 2 * math.pi * (k + 1) / 12
-        _beam_obj(L2, "檐柱额枋%02d" % (k + 1),
-                  (R_EAVE * math.cos(a), R_EAVE * math.sin(a), z_e - 0.72),
-                  (R_EAVE * math.cos(a2), R_EAVE * math.sin(a2), z_e - 0.72),
-                  0.34, 0.56, 2, 1.00)
-    zc = Z_CHILD_TOP - 0.16
-    for k in range(8):
-        a, a2 = math.pi / 8 + 2 * math.pi * k / 8, math.pi / 8 + 2 * math.pi * (k + 1) / 8
-        _beam_obj(L2, "童柱枋%02d" % (k + 1),
-                  (R_CHILD * math.cos(a), R_CHILD * math.sin(a), zc),
-                  (R_CHILD * math.cos(a2), R_CHILD * math.sin(a2), zc),
-                  0.26, 0.40, 2, 0.42)
-    # 上檐挑檐枋/檩：自童柱顶外挑至上檐檐口（补足 r=5.6→7.4 段的支承）
-    L3 = new_layer(3, "梁枋_上檐挑檐枋")
-    for k in range(8):
-        a = math.pi / 8 + 2 * math.pi * k / 8
-        _beam_obj(L3, "上檐挑檐枋%02d" % (k + 1),
-                  (R_CHILD * math.cos(a), R_CHILD * math.sin(a), Z_DG_UP - 0.30),
-                  (ROOF_UP[0] * math.cos(a), ROOF_UP[0] * math.sin(a), ROOF_UP[1] - 0.46),
-                  0.28, 0.42, 2, 0.30)
+        _beam_obj(L2, "檐柱额枋%02d" % (k + 1), _pt(R_EAVE, a, z_e - 0.72),
+                  _pt(R_EAVE, a2, z_e - 0.72), 0.34, 0.56, 2, 1.00)
     return L
 
 
+def build_frame():
+    """龙井柱顶「井口枋 + 抹角梁」方转八角框架 + 童柱枋 + 挑檐梁 + 雷公柱。
+
+    这是祈年殿上檐攒尖的核心承托：4 根井口枋在龙井柱顶围成方框，
+    4 根抹角梁切去四角转为八角，8 根童柱（钻金柱）立于八角顶点，
+    8 根挑檐梁自八角边中点悬挑至 r=8.0 承上檐外圈斗拱；中心立雷公柱直抵宝顶。
+    """
+    L = new_layer(3, "梁枋_井口枋抹角梁")
+    zf, zt = Z_DRAG_TOP, Z_DRAG_TOP + H_JKF          # 框架占 25.02 ~ 25.57
+    zc = (zf + zt) / 2.0
+    sq = [math.pi / 4 + math.pi / 2 * m for m in range(4)]       # 方框角 = 龙井柱位
+    oc = [math.pi / 8 + math.pi / 4 * k for k in range(8)]       # 八角顶点 = 童柱位
+    # 4 根井口枋（方框四边）
+    for m in range(4):
+        _beam_obj(L, "井口枋%d" % (m + 1), _pt(R_DRAGON, sq[m], zc),
+                  _pt(R_DRAGON, sq[(m + 1) % 4], zc), 0.62, H_JKF, 1, 0.0)
+    # 4 根抹角梁（切角，方→八角）
+    for m in range(4):
+        _beam_obj(L, "抹角梁%d" % (m + 1), _pt(OCT_VERT, oc[2 * m + 1], zc),
+                  _pt(OCT_VERT, oc[(2 * m + 2) % 8], zc), 0.56, H_JKF * 0.86, 2, 0.0)
+    # 8 根童柱枋（八角环，连童柱头）
+    L2 = new_layer(3, "梁枋_童柱枋挑檐梁")
+    ztf = Z_CHILD_TOP - 0.20
+    for k in range(8):
+        _beam_obj(L2, "童柱枋%02d" % (k + 1), _pt(OCT_VERT, oc[k], ztf),
+                  _pt(OCT_VERT, oc[(k + 1) % 8], ztf), 0.30, 0.44, 2, 0.0)
+    # 8 根挑檐梁：自八角边中点（r=3.04）贯通井口枋框架悬挑至 r=8.0
+    mid8 = [math.pi / 4 + math.pi / 4 * k for k in range(8)]
+    for k in range(8):
+        a = mid8[k]
+        _beam_obj(L2, "挑檐梁%02d" % (k + 1), _pt(OCT_APO, a, Z_CANT),
+                  _pt(R_CANT, a, Z_CANT), 0.34, 0.46, 1, 0.30)
+    # 雷公柱：中心通柱，自框架面直抵宝顶底（攒尖顶的「 King post 」）
+    L3 = new_layer(3, "雷公柱")
+    bm = bmesh.new()
+    _cyl_between(bm, (0, 0, zt), (0, 0, FINIAL_BOT), 0.42, 0.28, seg=20, mat=1)
+    ob = to_object_at(bm, "雷公柱", BEAM_MATS, origin=(0, 0, (zt + FINIAL_BOT) / 2))
+    place(ob, L3, 0.0)
+    return L
+
+
+def build_purlins():
+    """桁（檩）环：每圈铺作的正心桁与挑檐桁，沿圆周闭合，承椽望板。
+
+    标高严格等于该檐斗拱顶 = 屋面内沿，故屋面不悬空、檩不穿瓦。
+    """
+    L = new_layer(3, "桁檩环")
+    rings = (
+        ("下檐正心桁", R_EAVE, Z_DG_LO, DG_H[0]),
+        ("下檐挑檐桁", R_EAVE + DG_OUT * DG_H[0] / DG_UNIT_H, Z_DG_LO, DG_H[0]),
+        ("中檐正心桁", R_GOLD, Z_DG_MID, DG_H[1]),
+        ("中檐挑檐桁", R_GOLD + DG_OUT * DG_H[1] / DG_UNIT_H, Z_DG_MID, DG_H[1]),
+        ("上檐内圈桁", R_CHILD, Z_DG_UP, DG_H[2]),
+        ("上檐挑檐桁", R_CANT + DG_OUT * DG_H[2] / DG_UNIT_H, Z_DG_UP_OUT, DG_H[2]),
+    )
+    for nm, r, z, hdg in rings:
+        s = hdg / DG_UNIT_H
+        bm = bmesh.new()
+        nseg = 24
+        for k in range(nseg):
+            a0, a1 = 2 * math.pi * k / nseg, 2 * math.pi * (k + 1) / nseg
+            _cyl_between(bm, _pt(r, a0, z), _pt(r, a1, z),
+                         0.17 * s, 0.17 * s, seg=10, mat=0)
+        ob = to_object_at(bm, nm, BEAM_MATS, origin=(0, 0, z), smooth=True)
+        place(ob, L, min(1.0, r / R_EAVE))
+    return L
+
+
+def _dg_box(bm, cx, cy, d, t, dp, tp, z, ld, lt, h, rot_z, mat):
+    """斗拱构件：dp=沿径向(出跳)偏移, tp=沿切向偏移; ld/lt=径向/切向全长。
+
+    rot_z=径向角时 bm_box 的局部 x 轴即径向、y 轴即切向，故 size 直接写 (ld, lt, h)。
+    """
+    bm_box(bm, (cx + d.x * dp + t.x * tp, cy + d.y * dp + t.y * tp, z),
+           (ld, lt, h), (0, 0, rot_z), mat)
+
+
 def _dougong_unit(bm, x, y, z, rot_z, scale=1.0, mat=0, mat2=1):
-    """一攒斗拱（写意但构件齐全）：坐斗→瓜拱/万拱→升→昂→耍头→撩檐枋。"""
+    """一攒清式五踩重昂斗拱（构件齐全，非色块示意）。
+
+    自下而上：栌斗 → 头翘+正心瓜拱 → 头昂+外拽瓜拱+正心万拱 →
+    二昂+外拽万拱+厢拱 → 耍头(蚂蚱头)+撑头 → 挑檐枋 → 桁(檩)。
+    「升」承于各拱端；昂为斜置杠杆（下昂），里跳压于梁架之下。
+    """
     s = scale
-    bm_box(bm, (x, y, z + 0.09 * s), (0.44 * s, 0.44 * s, 0.18 * s), (0, 0, rot_z), mat)
-    for i, (w, d, h, zz) in enumerate(((0.20, 1.50, 0.16, 0.26),
-                                       (0.20, 2.10, 0.16, 0.44),
-                                       (1.30, 0.20, 0.16, 0.62),
-                                       (1.90, 0.20, 0.16, 0.80))):
-        bm_box(bm, (x, y, z + zz * s), (w * s, d * s, h * s), (0, 0, rot_z),
-               mat if i % 2 else mat2)
-        for sgn in (-1, 1):
-            rr = (d if i < 2 else w) / 2 * s * sgn
-            lx = x + (math.cos(rot_z) * 0 - math.sin(rot_z) * rr)
-            ly = y + (math.sin(rot_z) * 0 + math.cos(rot_z) * rr)
-            bm_box(bm, (lx, ly, z + (zz + 0.09) * s),
-                   (0.22 * s, 0.22 * s, 0.10 * s), (0, 0, rot_z), mat2)
-    # 昂（斜挑出）+ 耍头
-    d = Vector((math.cos(rot_z), math.sin(rot_z), 0))
-    bm_tube(bm, (x - d.x * 0.2 * s, y - d.y * 0.2 * s, z + 0.30 * s),
-            (x + d.x * 1.55 * s, y + d.y * 1.55 * s, z + 0.98 * s), 0.16 * s, 0.16 * s, mat)
-    bm_tube(bm, (x, y, z + 0.86 * s), (x + d.x * 1.85 * s, y + d.y * 1.85 * s, z + 1.00 * s),
-            0.18 * s, 0.18 * s, mat2)
-    # 撩檐枋 + 散斗（承檐桁）
-    bm_box(bm, (x + d.x * 1.05 * s, y + d.y * 1.05 * s, z + 1.12 * s),
-           (0.30 * s, 1.05 * s, 0.30 * s), (0, 0, rot_z), mat2)
-    bm_box(bm, (x + d.x * 1.35 * s, y + d.y * 1.35 * s, z + 1.30 * s),
-           (0.34 * s, 0.34 * s, 0.14 * s), (0, 0, rot_z), mat)
+    d = Vector((math.cos(rot_z), math.sin(rot_z), 0.0))    # 径向（出跳方向）
+    t = Vector((-math.sin(rot_z), math.cos(rot_z), 0.0))   # 切向
+    box = lambda dp, tp, zz, ld, lt, h, m: _dg_box(
+        bm, x, y, d, t, dp * s, tp * s, z + zz * s, ld * s, lt * s, h * s, rot_z, m)
+
+    # ── 栌斗（斗耳/斗平/斗欹三段收分）──
+    box(0, 0, 0.06, 0.66, 0.66, 0.12, mat)
+    box(0, 0, 0.20, 0.58, 0.58, 0.16, mat)
+    box(0, 0, 0.32, 0.48, 0.48, 0.10, mat2)
+
+    # ── 第一跳：头翘（径向）+ 正心瓜拱（切向）+ 三斗升 ──
+    z1 = 0.46
+    box(0, 0, z1, 1.36, 0.17, 0.22, mat2)              # 头翘
+    box(0, 0, z1, 0.17, 1.66, 0.22, mat2)              # 正心瓜拱
+    for sgn in (-1, 1):
+        box(0.68 * sgn, 0, z1 + 0.18, 0.24, 0.24, 0.14, mat)   # 翘头升
+        box(0, 0.83 * sgn, z1 + 0.18, 0.24, 0.24, 0.14, mat)   # 瓜拱端升
+
+    # ── 头昂（下昂：里高外低的斜置杠杆，昂嘴朝外下）+ 外拽瓜拱 + 正心万拱 ──
+    z2 = 0.92
+    bm_tube(bm, (x - d.x * 0.55 * s, y - d.y * 0.55 * s, z + 1.34 * s),
+            (x + d.x * 1.62 * s, y + d.y * 1.62 * s, z + 0.58 * s),
+            0.20 * s, 0.13 * s, mat)                   # 昂身（后尾高、昂嘴低）
+    box(1.78, 0, 0.50, 0.46, 0.30, 0.12, mat2)          # 昂嘴（斜切出头）
+    box(1.06, 0, z2, 0.17, 1.42, 0.20, mat2)           # 外拽瓜拱
+    box(0, 0, z2 + 0.06, 0.20, 2.24, 0.20, mat2)       # 正心万拱
+    for sgn in (-1, 1):
+        box(1.06, 0.71 * sgn, z2 + 0.17, 0.22, 0.22, 0.13, mat)
+        box(0, 1.12 * sgn, z2 + 0.23, 0.22, 0.22, 0.13, mat)
+
+    # ── 二昂 + 外拽万拱 + 厢拱 ──
+    z3 = 1.30
+    bm_tube(bm, (x - d.x * 0.35 * s, y - d.y * 0.35 * s, z + 1.76 * s),
+            (x + d.x * 2.10 * s, y + d.y * 2.10 * s, z + 0.96 * s),
+            0.19 * s, 0.12 * s, mat)
+    box(2.26, 0, 0.88, 0.44, 0.28, 0.12, mat2)          # 二昂嘴
+    box(1.56, 0, z3 + 0.02, 0.17, 1.88, 0.20, mat2)    # 外拽万拱
+    box(2.10, 0, z3 + 0.20, 0.17, 1.48, 0.18, mat2)    # 厢拱
+    for sgn in (-1, 1):
+        box(1.56, 0.94 * sgn, z3 + 0.19, 0.22, 0.22, 0.13, mat)
+        box(2.10, 0.74 * sgn, z3 + 0.36, 0.22, 0.22, 0.13, mat)
+
+    # ── 耍头（蚂蚱头）+ 撑头（菊花头）：昂后尾的水平出头 ──
+    box(2.34, 0, z3 + 0.44, 0.74, 0.20, 0.16, mat2)
+    box(2.44, 0, z3 + 0.60, 0.34, 0.34, 0.14, mat)
+    box(2.62, 0, z3 + 0.44, 0.30, 0.18, 0.16, mat2)    # 撑头出头
+
+    # ── 正心枋 + 挑檐枋（贯穿各攒锁成环；桁由 build_purlins 整圈生成，避免双檩）──
+    box(0, 0, z3 + 0.62, 0.24, 2.86, 0.30, mat)
+    box(2.02, 0, z3 + 0.62, 0.30, 1.30, 0.28, mat)
+    return DG_OUT * s, (z3 + 0.86) * s                  # (出跳距离, 桁底相对高)
 
 
-def build_dougong(tier_key, r_base, z_base, h_total, n_bays, scale, layer_idx, name):
-    """一圈铺作层：每间柱头科 1 攒 + 平身科 2 攒；rot_z = 径向角（昂挑出殿外）。"""
+def build_dougong(tier_key, r_base, z_base, n_bays, layer_idx, name, ang_off=0.0):
+    """一圈铺作层：每间 3 攒（1 柱头科 + 2 平身科），rot_z=径向角（昂挑向殿外）。
+
+    scale 由 DG_H 反算，保证「铺作顶 = 该檐正心桁标高 = 屋面内沿标高」，构件不互穿。
+    """
     L = new_layer(layer_idx, "铺作_%s" % name)
     bm = bmesh.new()
     n_total = n_bays * DG_BAYS[tier_key]
     step = 2 * math.pi / n_total
+    s = DG_H[{"lo": 0, "mid": 1, "up": 2, "upo": 2}[tier_key]] / DG_UNIT_H * DG_SPREAD
+    out_max = 0.0
     for k in range(n_total):
-        a = step * k + step / 2
-        _dougong_unit(bm, r_base * math.cos(a), r_base * math.sin(a), z_base,
-                      a, scale * DG_SCALE[tier_key], 0, 1)
-    # 井口枋 + 檐桁（沿圆周整圈，托住屋面外沿）
-    _ring_beam(bm, r_base + 0.50 * scale, z_base + h_total * 0.90,
-               0.30, 0.34, n=n_total, mat=1)
+        a = ang_off + step * k + step / 2
+        out, _ = _dougong_unit(bm, r_base * math.cos(a), r_base * math.sin(a),
+                               z_base, a, s, 0, 1)
+        out_max = max(out_max, out)
+    # 正心枋环 + 挑檐枋环（把整圈攒连成刚性环，即「溜金斗拱」层层拉接之意）
+    _ring_beam(bm, r_base, z_base + DG_H[{"lo": 0, "mid": 1, "up": 2, "upo": 2}[tier_key]] * 0.86,
+               0.26 * s, 0.30 * s, n=n_total, mat=1)
     ob = to_object(bm, name, [MAT["paint_blue"], MAT["paint_green"]])
-    place(ob, L, {"lo": 1.0, "mid": 0.62, "up": 0.32}[tier_key])
-    return L
+    place(ob, L, {"lo": 1.0, "mid": 0.62, "up": 0.30, "upo": 0.34}[tier_key])
+    return L, r_base + out_max
 
 
 def build_all_dougong():
-    build_dougong("lo", R_EAVE, Z_EAVE_TOP, DG_H[0], 12, 1.00, 4, "下檐铺作_檐柱12")
-    build_dougong("mid", R_GOLD, Z_GOLD_TOP, DG_H[1], 12, 1.00, 6, "中檐铺作_金柱12")
-    build_dougong("up", R_CHILD, Z_CHILD_TOP, DG_H[2], 8, 1.00, 8, "上檐铺作_童柱8")
+    build_dougong("lo", R_EAVE, Z_EAVE_TOP, 12, 4, "下檐铺作_檐柱12")
+    build_dougong("mid", R_GOLD, Z_GOLD_TOP, 12, 6, "中檐铺作_金柱12")
+    build_dougong("up", R_CHILD, Z_CHILD_TOP, 8, 8, "上檐铺作_童柱8")
+    build_dougong("upo", R_CANT, Z_CANT, 8, 8, "上檐外圈铺作_挑檐梁8",
+                  ang_off=math.pi / 8)
 
 
 # ─────────────────────────── 屋面 / 宝顶 ───────────────────────────
 
-def build_roof(tier, prof, seg, ribs, layer_idx, name):
+def build_roof(tier, prof, seg, ribs, layer_idx, name, p=ROOF_P):
     r_e, z_e, r_t, z_t = prof
     L = new_layer(layer_idx, "屋面_%s" % name)
-    pts = roof_profile(r_e, z_e, r_t, z_t, n=12)
+    pts = roof_profile(r_e, z_e, r_t, z_t, n=12, p=p)
     # 瓦面
     bm = bmesh.new()
     bm_revolve(bm, pts, seg=seg, ribs=ribs, amp=TILE_AMP, mat=0)
@@ -845,7 +960,7 @@ def build_roofs():
     seg = 128
     build_roof("lo", ROOF_LO, seg, TILE_RIBS[0], 5, "下檐屋面")
     build_roof("mid", ROOF_MID, 128, TILE_RIBS[1], 7, "中檐屋面")
-    build_roof("up", ROOF_UP, 96, TILE_RIBS[2], 9, "上檐屋面_攒尖")
+    build_roof("up", ROOF_UP, 96, TILE_RIBS[2], 9, "上檐屋面_攒尖", p=ROOF_P_UP)
     # 椽（枋桷之桷）：三重檐各自成层，爆炸时跟随所属屋面
     for tier, (r_e, z_e, r_t, z_t, n), li in (
             ("下檐椽", (ROOF_LO[0], ROOF_LO[1], ROOF_LO[2], ROOF_LO[3], 96), 5),
@@ -907,11 +1022,11 @@ def build_interior():
     ob = to_object(bm, "隔扇门_12间", [MAT["lattice"], MAT["gold_paint"], MAT["paint_red"]])
     place(ob, L, 1.0)
 
-    # 三层天花（三重檐相应设置三层天花；爆炸时随所属屋面层）
+    # 三层天花（三重檐相应设置三层天花；半径须落在对应柱圈**内侧**，不穿柱）
     for idx, (name, r, z, lk, li) in enumerate((
-            ("天花_上层", 4.20, Z_CHILD_TOP - 0.30, 0.30, 9),
-            ("天花_中层", 9.20, Z_GOLD_TOP - 0.50, 0.60, 7),
-            ("天花_下层", 13.20, Z_EAVE_TOP - 0.60, 1.0, 5))):
+            ("天花_上层", 3.15, Z_CHILD_TOP - 0.30, 0.30, 9),
+            ("天花_中层", 8.80, Z_GOLD_TOP - 0.50, 0.60, 7),
+            ("天花_下层", 12.80, Z_EAVE_TOP - 0.60, 1.0, 5))):
         L = new_layer(li, name)
         bm = bmesh.new()
         bm_cyl(bm, (0, 0, z), r, r, 0.14, seg=96, mat=0)
@@ -923,14 +1038,15 @@ def build_interior():
         ob = to_object(bm, name, [MAT["ceiling"], MAT["gold_paint"]])
         place(ob, L, lk)
 
-    # 九龙藻井（殿顶中央，与地面龙凤石相应）
+    # 九龙藻井（殿顶中央，与地面龙凤石相应；层层向心收束，雷公柱藏于其中）
     L = new_layer(9, "九龙藻井")
     bm = bmesh.new()
     za = Z_CHILD_TOP - 0.30
-    for i, (rr, hh) in enumerate(((4.0, 0.5), (3.2, 0.6), (2.4, 0.7), (1.6, 0.8), (0.9, 0.7))):
-        bm_cyl(bm, (0, 0, za + sum(h for _, h in
-                 ((4.0, 0.5), (3.2, 0.6), (2.4, 0.7), (1.6, 0.8))[:i])), rr, rr * 0.82, hh,
-               seg=48, mat=0)
+    COFFER = ((3.00, 0.50), (2.40, 0.55), (1.85, 0.60), (1.30, 0.62), (0.75, 0.55))
+    zz = za
+    for i, (rr, hh) in enumerate(COFFER):
+        bm_cyl(bm, (0, 0, zz), rr, rr * 0.82, hh, seg=48, mat=0)
+        zz += hh
         for k in range(9):
             a = 2 * math.pi * k / 9
             bm_box(bm, ((rr - 0.25) * math.cos(a), (rr - 0.25) * math.sin(a),
@@ -1049,9 +1165,11 @@ def build_all():
     build_terrace()          # 层 0：祈谷坛
     build_interior()         # 层 1：装修/神座
     build_columns()          # 层 2：28 大柱 + 8 童柱
-    build_beams()            # 层 3：36 枋桷
-    build_all_dougong()      # 层 4：三重铺作
-    build_roofs()            # 层 5：三重檐屋面 + 椽
+    build_beams()            # 层 3：36 枋桷（抱头梁/跨空枋/金柱枋）
+    build_frame()            # 层 3：井口枋方转八角 + 挑檐梁 + 雷公柱
+    build_purlins()          # 层 3：桁（檩）环
+    build_all_dougong()      # 层 4/6/8：三重铺作（上檐内外两圈）
+    build_roofs()            # 层 5/7/9：三重檐屋面 + 椽
     build_finial()           # 层 6：鎏金宝顶
     finish_layer_drivers()
     SCENE.update_tag()

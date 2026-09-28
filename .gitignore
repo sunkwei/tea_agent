@@ -22,6 +22,7 @@ test_tmp/
 .*
 !.tea_agent/skills/
 *.example
+!provider.yaml.example
 *.txt
 *.png
 tmp/

@@ -675,37 +675,45 @@ Web UI 聊天（`POST /api/chat`）返回 SSE 事件流，每行 `data: <json>\n
 
 ### 7.1 配置文件位置
 
-默认路径：`~/.tea_agent/*.yaml`
+配置分两层：
 
-启动时可以指定：`--config ~/.tea_agent/my-config.yaml`
+- `~/.tea_agent/provider.yaml` —— **唯一事实源**：供应商端点 / API Key / 模型能力目录。
+  可用环境变量 `TEA_PROVIDER_FILE` 指向其它路径。
+- `~/.tea_agent/config.yaml` —— **可选**：角色引用（`provider` + `model`）+ 运行参数覆盖。
+  缺失时自动兜底 provider.yaml 第一个提供商的第一个模型。
+
+启动时可以指定配置档：`--config ~/.tea_agent/my-config.yaml`
 
 ### 7.2 配置文件结构
 
 ```yaml
+# ~/.tea_agent/provider.yaml —— 密钥与模型能力（唯一事实源）
+version: 1
+providers:
+  deepseek:
+    api_url: https://api.deepseek.com
+    api_key: "sk-xxx"
+    default_model: deepseek-chat
+    models:
+      deepseek-chat:
+        max_context_tokens: 128000
+        max_output_tokens: 8192
+        supports_reasoning: true
+        supports_tools: true
+```
+
+```yaml
+# ~/.tea_agent/config.yaml —— 可选：角色引用 + 运行时参数
 main_model:
-  api_key: "sk-xxx"
-  api_url: "https://api.openai.com/v1"
-  model_name: "gpt-4o"
+  provider: "deepseek"      # 引用 provider.yaml 的供应商名
+  model: "deepseek-chat"    # 引用其 models 下的模型 id
   temperature: 0.65
   max_tokens: 131072
-  options:
-    supports_vision: false
-    supports_reasoning: true
 
-cheap_model:
-  api_key: "sk-xxx"
-  api_url: "https://api.deepseek.com"
-  model_name: "deepseek-chat"
+cheap_model:                # 可选：摘要/记忆等廉价任务
+  provider: "deepseek"
+  model: "deepseek-chat"
   max_tokens: 8192
-  options:
-    supports_vision: false
-    supports_reasoning: true
-
-embedding_model:  # 可选，用于记忆语义搜索
-  api_url: "https://api.siliconflow.cn"
-  model_name: "Qwen/Qwen3-Embedding-4B"
-  api_key: "sk-xxx"
-  dimension: 2560
 
 # 运行时参数
 max_history: 10

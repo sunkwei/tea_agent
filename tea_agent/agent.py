@@ -156,7 +156,8 @@ class Agent:
         if config_path and not (actual_path and os.path.isfile(actual_path)):
             raise FileNotFoundError(
                 f"未找到配置文件: {actual_path or '无'}。\n"
-                f"请创建 ~/.tea_agent/config.yaml 或指定 --config"
+                f"请检查 --config 指向的路径，或省略该参数改用默认配置\n"
+                f"（~/.tea_agent/provider.yaml 是密钥与模型能力的唯一事实源，config.yaml 可选）"
             )
         has_file = bool(actual_path and os.path.isfile(actual_path))
 
@@ -169,7 +170,7 @@ class Agent:
                 f"  api_key: {'✓' if main_m.api_key else '✗'}\n"
                 f"  api_url: {'✓' if main_m.api_url else '✗'}\n"
                 f"  model:   {'✓' if main_m.model_name else '✗'}\n"
-                f"  请运行 python -m tea_agent.setup_wizard --provider 或在 Web 配置页完成配置\n"
+                f"  请运行 python -m tea_agent.setup_wizard --provider 或在 Web 供应商页完成配置\n"
                 f"  config:  {actual_path or '(无 config.yaml，身份三元组取自 provider.yaml)'}"
             )
 

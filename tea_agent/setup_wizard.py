@@ -1,19 +1,24 @@
 """
 配置向导 (setup wizard) — 首次运行引导用户完成基础配置。
 
-当 $HOME/.tea_agent/config.yaml 不存在时，各入口（server / ACP / 渠道）可调用
-``run_setup_wizard()`` 启动交互式向导，引导用户输入主模型的 api_url /
-api_key / model_name 等，生成 config.yaml 后继续启动。
+**首启主路径（推荐）**：``run_provider_setup_wizard()`` —— 当 `~/.tea_agent/provider.yaml`
+缺失或没有任何提供商时，各入口（server / ACP / 渠道）引导用户「选服务商 → 选模型 → 填 Key」，
+结果写入 provider.yaml（密钥与模型能力的唯一事实源）。`config.yaml` **不再是启动前提**，
+缺失时由 `load_config` 兜底 provider.yaml 首个提供商的第一个模型。
+
+**兼容路径（legacy）**：``run_setup_wizard()`` 生成内嵌完整模型块的 config.yaml，
+保留给显式 `--config` 目标档位使用；新流程不再依赖它。
 
 特性：
 - 复用 providers.py 的 Provider 注册表（50+ 模型服务商）
 - 常用 Provider 快捷选择 + 自定义 URL 兜底
-- 可选配置 cheap_model（摘要/记忆）与 vision_model（图片）
+- provider 引导可循环配置多家服务商；可选配置 cheap_model / vision_model 角色
 - 纯标准库，无第三方依赖
 
 独立运行::
 
-    python -m tea_agent.setup_wizard [--config PATH]
+    python -m tea_agent.setup_wizard --provider   # 写 provider.yaml（推荐）
+    python -m tea_agent.setup_wizard [--config PATH]   # 写 config.yaml（legacy）
 """
 
 from __future__ import annotations
@@ -384,7 +389,10 @@ def run_provider_setup_wizard(input_fn: Callable[[str], str] | None = None,
 
 def run_setup_wizard(config_path: str | None = None,
                      input_fn: Callable[[str], str] | None = None) -> str | None:
-    """运行首次配置向导。
+    """运行首次配置向导（legacy：生成内嵌完整模型块的 config.yaml）。
+
+    首启请优先用 ``run_provider_setup_wizard()``（写 provider.yaml）。本函数仅在
+    需要产出/覆盖某个具体 config.yaml 档位时使用。
 
     Args:
         config_path: 目标配置文件路径，默认 ~/.tea_agent/config.yaml

@@ -25,7 +25,7 @@
 | \toolkit_input\ | 模拟鼠标和键盘操作 — Agent 的'手'。可移动鼠标、点击、拖拽、滚动、输入文本、按快捷键。配合 toolkit_screenshot 可实现「看→分析→操作」闭环。 |
 | \toolkit_js_fetch\ | 用 Playwright 无头浏览器抓取 JS 动态渲染的页面内容。跨平台自动选浏览器(Windows→Edge/Linux→Chromium→Firefox)。解决 mcp-se... |
 | \toolkit_kb\ | Markdown 知识库管理。文档存储在 $HOME/.tea_agent/kb/，所有主题共享。支持 add/update/read/list/search/index/dele... |
-| \toolkit_list_provider_models\ | 根据当前配置文件查询指定 API 提供商的可用模型列表。支持按配置文件中的模型名（main_model/cheap_model/embedding_model）查询，也支持直接传入... |
+| \toolkit_list_provider_models\ | 查询当前配置中各角色模型（main_model/cheap_model/vision_model）的可用模型列表：读取该角色的 api_url + api_key 调用 /v1/models；也支持直接传入 api_url 和 api_key 查询任意 OpenAI 兼容端点。 |
 | \toolkit_list_versions\ | 列出工具的所有可用版本。用于查看工具的历史版本。 |
 | \toolkit_lsp\ | 实时代码智能: diagnose/completion/definition/hover/references/context。基于 jedi + ruff。 |
 | \toolkit_mcp\ | MCP (Model Context Protocol) 客户端工具，用于连接外部 MCP Server 并使用第三方工具。支持 stdio 和 SSE 传输方式。 |

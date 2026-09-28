@@ -1,0 +1,69 @@
+# Tea Agent 供应商目录模板 — provider.yaml
+#
+# ⚠️ 本文件是**密钥与模型能力的唯一事实源**：供应商端点 / API Key / 模型属性
+#    （上下文窗口、输出上限、视觉、推理、工具能力）全部在这里声明。
+#
+# 用法（二选一）：
+#   1. 直接运行 tea-agent-api —— 首次启动会自动引导「选服务商 → 选模型 → 填 Key」，
+#      自动生成 ~/.tea_agent/provider.yaml（推荐，无需手工编辑本文件）；
+#   2. 手工复制本文件到 ~/.tea_agent/provider.yaml 后按需修改。
+#
+# 也可在 Web 界面 🏭「供应商与模型配置」页增删改，写回的就是这个文件。
+#
+# 路径覆盖：环境变量 TEA_PROVIDER_FILE 可指向其它路径（测试/多实例隔离用）；
+#          默认 ~/.tea_agent/provider.yaml。
+#
+# 引用方式：~/.tea_agent/config.yaml（可选）用 provider + model 引用本文件条目，
+#          密钥永不写入 config.yaml。见 README「🔧 配置」章节。
+
+version: 1
+
+providers:
+  # ── 供应商名（唯一键，作为 config.yaml 里 provider 字段的取值）────────────────
+  deepseek:
+    # OpenAI 兼容端点（多数服务商需带 /v1 后缀，以实际文档为准）
+    api_url: https://api.deepseek.com
+    # 主密钥；多个 key 用下面的 api_keys 列表（加载只用首个，其余供轮换/备份）
+    api_key: sk-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+    # api_keys:
+    #   - sk-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+    #   - sk-yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy
+    # 默认模型（须存在于下方 models；缺省时取 models 的第一个键）
+    default_model: deepseek-chat
+    # 一句话说明（仅展示用）
+    description: DeepSeek 官方 API
+    # 供应商级能力兜底（模型级未声明时继承）
+    supports_vision: false
+    supports_thinking: true
+
+    # ── 模型目录：config.yaml 的 model 字段引用这里的键 ──────────────────────
+    models:
+      deepseek-chat:
+        # 最大上下文窗口；0 = 未知（会退化为默认 1M，建议显式填写）
+        max_context_tokens: 128000
+        # 最大单次输出（模型能力上限；自动填充 max_tokens 时按窗口 25% 限幅）
+        max_output_tokens: 8192
+        supports_vision: false       # 能否接收图片
+        supports_reasoning: false    # 是否有思维链（reasoning_content）
+        supports_tools: true         # 是否支持 function calling
+        # 思考强度：auto = 自动推导且不下发该参数；
+        # 也可写 none/minimal/low/medium/high/xhigh/max
+        reasoning_effort: auto
+        # 采样默认值（可在配置对话框改并写回）
+        temperature: 0.7
+        top_p: 0.9
+        note: ''
+
+  # ── 第二个供应商示例：本地 Ollama（无需 Key）──────────────────────────────
+  ollama:
+    api_url: http://localhost:11434/v1
+    api_key: ollama
+    default_model: qwen3.6
+    description: 本地 Ollama
+    models:
+      qwen3.6:
+        max_context_tokens: 32768
+        max_output_tokens: 8192
+        supports_tools: true
+        reasoning_effort: auto
+        note: 本地模型窗口较小，显式填写避免误判为大窗口

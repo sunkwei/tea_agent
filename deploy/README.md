@@ -18,12 +18,18 @@ docker compose down
 自定义配置：
 
 ```bash
-# 1. 创建配置文件
-mkdir -p ~/.tea_agent
-cp config.example.yaml ~/.tea_agent/config.yaml
-# 编辑 config.yaml 填入 API Key
+# 方式一（推荐）：直接启动，首启向导会引导选服务商/模型/Key 并写入 provider.yaml
+docker compose up -d
 
-# 2. 使用自定义配置启动
+# 方式二：手工准备密钥与模型目录
+mkdir -p ~/.tea_agent
+cp provider.yaml.example ~/.tea_agent/provider.yaml
+# 编辑 provider.yaml 填入 API Key 与模型能力
+
+# config.yaml 可选：仅在需要覆盖运行参数/绑定角色时才创建
+# cp config.yaml.example 已废弃，直接写引用 provider.yaml 的片段即可（见 README「🔧 配置」）
+
+# 启动
 docker compose up -d
 ```
 

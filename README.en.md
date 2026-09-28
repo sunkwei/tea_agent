@@ -21,7 +21,7 @@
 | 🛡️ **Tool Self-Pruning** | Shrinks the exposed tool set using real usage data (idle tools auto-shielded), three invariants + escape hatches |
 | ♻️ **Resilient Service** | Seamless self-restart (in-flight turn resumes from snapshot, no lost messages) + mid-generation steering |
 | 🖥️ **Multi-Interface** | Web V2 / REST API / ACP / Telegram / WeChat front-ends, one engine |
-| 🧠 **Real Memory** | Human-like long-term memory: tiered priority, semantic retrieval, natural decay, dedup & merge |
+| 🧠 **Real Memory** | Human-like long-term memory: tiered priority, keyword retrieval, natural decay, dedup & merge |
 | 🤖 **Multi-Agent** | 6-stage full-stack collaboration: role agents + event flows + message bus + parallel execution + DAG orchestration |
 | 📡 **Remote Sync** | `toolkit_remote_agent` connects edge devices (RK3588/BM1688), host ↔ device collaboration |
 
@@ -76,12 +76,12 @@ Sending every tool in every request burns tokens and dilutes attention. `tool_sh
 
 ### 3. 🧠 Human-like Long-Term Memory
 
-SQLite-backed + semantic vectors, mimicking human memory:
+SQLite-backed, with retrieval/dedup computed locally (no external vector service), mimicking human memory:
 
 - **Tiered priority**: `CRITICAL / HIGH / MEDIUM / LOW`, key instructions injected first
-- **Semantic retrieval**: embedding cosine similarity, selects ≤30 most relevant from active pool
+- **Relevance retrieval**: keyword match rate (Chinese bigrams + English words), selects ≤30 most relevant from active pool
 - **Natural decay**: Ebbinghaus forgetting curve, old memories demoted; `pinned` exempt
-- **Dedup & merge**: Jaccard + embedding dual-channel, similar memories auto-merged
+- **Dedup & merge**: content_hash exact short-circuit + keyword Jaccard similarity, similar memories auto-merged
 - **Cross-topic summary** (v0.13.3+): background analysis every 3 rounds, discovers cross-session patterns
 
 ### 4. 🤖 Multi-Agent System (v0.11+)
@@ -150,7 +150,7 @@ tea-agent-api
 # http://127.0.0.1:8282
 ```
 
-A config dialog pops up on first launch — fill in your LLM API Key and start chatting.
+On first launch you are guided through provider → model → API Key (written to `~/.tea_agent/provider.yaml`), then you can chat right away. **No `config.yaml` is required to start** — the identity triple falls back to provider.yaml.
 
 ---
 
@@ -174,7 +174,7 @@ A config dialog pops up on first launch — fill in your LLM API Key and start c
 <details>
 <summary><b>🧠 Long-Term Memory — How It Works</b></summary>
 
-**Storage structure**: each memory has `content / priority(0-3) / importance(1-5) / category / tags / embedding / expires_at / pinned`.
+**Storage structure**: each memory has `content / priority(0-3) / importance(1-5) / category / tags / content_hash / expires_at / pinned`.
 
 **Selection algorithm** (≤30 memories injected per conversation):
 ```
@@ -186,7 +186,7 @@ Tiered floor: CRITICAL first (max 10) → HIGH ≥3 → MEDIUM ≥2 → LOW ≥1
 
 **Extraction categories**: `instruction→CRITICAL`, `preference/reminder→HIGH`, `fact→MEDIUM`, `general→LOW`, LLM auto-extracts with 4-level fault-tolerant parsing.
 
-**Dedup & merge**: Jaccard ≥0.6 merge (keep longer content, lower priority, higher importance); embedding cosine ≥0.92 batch dedup.
+**Dedup & merge**: content_hash exact match short-circuits; keyword Jaccard ≥0.6 merges (keep longer content, lower priority, higher importance).
 
 **CRITICAL FIFO**: 30-entry cap, oldest soft-deleted when exceeded.
 
@@ -312,24 +312,50 @@ python build_nuitka.py            # or compile to single-file executable (no Pyt
 
 ## 🔧 Configuration
 
-Config file `~/.tea_agent/config.yaml`:
+Two layers: **keys and the model catalog live in `provider.yaml`; runtime parameters and role bindings live in `config.yaml`**.
+
+| File | Role | Required |
+|------|------|----------|
+| `~/.tea_agent/provider.yaml` | **Single source of truth** — provider endpoints / API keys / model catalog (context window, output cap, vision, reasoning capabilities) | ✅ Yes |
+| `~/.tea_agent/config.yaml` | Runtime parameters + role bindings — `main_model` / `cheap_model` / `vision_model` **reference** provider.yaml entries via `provider` + `model` | Optional |
+
+**`config.yaml` is no longer a startup prerequisite**: when the file is missing, `load_config` falls back to the first model of the first provider in provider.yaml, so it works right after install. First launch (provider.yaml has no usable provider) walks you through provider → model → key, and the Web 🏭 Providers page can add/edit/remove entries at any time (written back to provider.yaml). Keys only ever live in provider.yaml — **config.yaml never embeds secrets**.
+
+`~/.tea_agent/provider.yaml`:
+
+```yaml
+version: 1
+providers:
+  DeepSeek:
+    api_url: "https://api.deepseek.com/v1"
+    api_key: "sk-xxx"              # key belongs to the provider entry (use api_keys for multiple)
+    default_model: "deepseek-chat" # default model (must exist under models)
+    models:
+      deepseek-chat:
+        max_context_tokens: 128000 # 0 = unknown
+        max_output_tokens: 8192    # model capability cap; auto-fill is clamped to 25% of the window
+        supports_tools: true
+        supports_reasoning: false
+        reasoning_effort: auto     # auto = derive automatically, never send the parameter
+```
+
+`~/.tea_agent/config.yaml` (optional — only write overrides that differ from the provider defaults):
 
 ```yaml
 main_model:
-  api_key: "sk-xxx"
-  api_url: "https://api.openai.com/v1"
-  model_name: "gpt-4o"
-  max_context_tokens: 0    # 0=unlimited, >0 enables progressive token trimming
-cheap_model:               # separate config for summarization/memory cheap tasks
-  max_context_tokens: 0
-embedding:
-  provider: openai
-  model: text-embedding-3-small
-vision_model:             # vision model (optional): auto-switch when images present
-  api_key: "sk-xxx"
-  api_url: "https://api.openai.com/v1"
-  model_name: "gpt-4o-mini"    # e.g. also supports mimo-v2.5 and other vision models
+  provider: "DeepSeek"      # references a provider name in provider.yaml
+  model: "deepseek-chat"    # references a model id under that provider
+  max_context_tokens: 0     # 0 = default 1M (1048576); >0 sets the window cap and enables progressive trimming
+cheap_model:                # separate config for summarization/memory cheap tasks
+  provider: "DeepSeek"
+  model: "deepseek-chat"
+vision_model:               # vision model (optional): auto-switch when images are present
+  provider: "DeepSeek"
+  model: "deepseek-v4-flash-vision-exp"   # also supports e.g. mimo-v2.5 and other vision models
 ```
+
+> The inline form (`api_key` / `api_url` / `model_name` written directly in `config.yaml`) still works, but provider.yaml owns keys and capabilities — the reference form is the recommended one. For isolated environments, point `TEA_CONFIG` / `TEA_PROVIDER_FILE` at temp files.
+> Also: multiple `~/.tea_agent/config*.yaml` files are still scanned as candidate providers in the model panel (`config_xxx.yaml` → profile name `xxx`), handy for switching config profiles inside one instance.
 
 - **Context window control**: when `max_context_tokens` is exceeded, 5-stage progressive trim (drop old history → tool output placeholders → clear thinking → truncate long text → drop old turns)
 - **Vision model auto-switch**: with `vision_model` configured, the session automatically uses the vision model when the input contains images (restores the main model after the turn); `toolkit_vision_analyze` also lets the main model delegate image analysis on the fly

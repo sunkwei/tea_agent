@@ -238,15 +238,25 @@ python -m tea_agent.protocol.test_acp_smoke
 
 ## 配置
 
-Tea Agent 使用 `~/.tea_agent/config.yaml` 作为默认配置文件。
-可以通过 `--config` 参数指定其他路径。
+Tea Agent 默认读取 `~/.tea_agent/provider.yaml`（供应商端点 / API Key / 模型能力的唯一事实源）；
+`~/.tea_agent/config.yaml` 可选，用于角色绑定与运行参数覆盖，缺失时自动兜底 provider.yaml 首个模型。
+可以通过 `--config` 参数指定其它配置档路径。
 
 重要配置项：
 
 ```yaml
-main_model: deepseek-v4-flash   # 主模型
-cheap_model: deepseek-v4-flash  # 轻量模型
-embedding_model: ...            # 嵌入模型
+# provider.yaml
+providers:
+  deepseek:
+    api_url: https://api.deepseek.com
+    api_key: "sk-xxx"
+    default_model: deepseek-v4-flash
+    models:
+      deepseek-v4-flash: {max_context_tokens: 1000000, supports_tools: true}
+
+# config.yaml（可选）
+main_model: {provider: deepseek, model: deepseek-v4-flash}   # 主模型
+cheap_model: {provider: deepseek, model: deepseek-v4-flash}  # 轻量模型
 ```
 
 ## 故障排查

@@ -3,6 +3,39 @@
 
 ## [Unreleased]
 
+### Documentation
+- docs(config): 全量同步配置模型 —— `provider.yaml` 才是唯一事实源，`config.yaml` 已**不是启动前提**
+  - 此前 README 把 `~/.tea_agent/config.yaml` 写成唯一配置文件，示例里内嵌 `api_key`；
+    实际上密钥/端点/模型能力全在 `~/.tea_agent/provider.yaml`，config 只以 `provider` + `model`
+    **引用**条目（可以完全缺失，`load_config` 兜底 provider.yaml 首个提供商的第一个模型）。
+  - README.md / README.en.md「配置」章节改为两层表格 + provider.yaml 与引用式 config.yaml
+    双示例，注明内嵌形态仍兼容但非推荐；「30 秒快速开始」改为实际首启流程。
+  - 同步 `docs/使用手册.md`、`docs/使用手册-Server与Web接口.md`、`docs/USER_MANUAL.md`、
+    `docs/工具档位自适应.md`、`docs/TOOLS.md`、`deploy/README.md`、
+    `tea_agent/protocol/ACP_INTEGRATION.md` 的配置说明。
+  - 顺带清掉已下线的 `embedding` 相关表述（向量检索已移除，记忆/技能改用关键词匹配）：
+    删除 `embedding` / `embedding_model` 配置示例，修正「语义搜索」为「关键词检索」。
+
+### Removed
+- 删除 `config.yaml.example`（内嵌密钥的旧模板误导用户），改由 `provider.yaml.example` 承担模板角色
+  - `.gitignore` 放行 `!provider.yaml.example`（此前 `*.example` 把所有模板一并忽略，
+    导致模板既不入库也不进包）；`MANIFEST.in` 加入该模板。
+
+### Fixed
+- `toolkit_list_provider_models` 角色集合含已删除的 `embedding_model`，该分支**恒报错**
+  （`AgentConfig` 只有 main/cheap/vision 三个角色）→ 改为 `vision_model`；
+  同步修正函数 docstring、未知参数提示语与面向模型的元数据描述。
+  > 静默失效：调用 `provider='embedding_model'` 只会得到「配置中未找到」，而 `all` 分支
+  > 静默少查一个真实角色。属文档同步时顺带发现的同源缺陷。
+
+### Changed
+- `setup_wizard.py` 模块 docstring 与 `run_setup_wizard()` 文档更正：明确
+  **首启主路径 = `run_provider_setup_wizard()`（写 provider.yaml）**，
+  `run_setup_wizard()` 为 legacy（生成内嵌完整模型块的 config.yaml）。
+- `agent.py` 报错文案：显式 `--config` 路径不存在时不再提示「请创建
+  ~/.tea_agent/config.yaml」，改为提示检查路径 + 说明 provider.yaml 才是唯一事实源；
+  未配置提示的落点由「Web 配置页」改为「Web 供应商页」。
+
 ## [0.17.0] - 2026-09-25
 
 ### Features

@@ -115,7 +115,7 @@ python -m tea_agent.server --config ~/.tea_agent/my_config.yaml --port 9090
     │  (agent.py)    │ │  (onlinesession)│ │  (store/)    │
     │  · 3 种模式    │ │  · API 通信     │ │  · SQLite    │
     │  · 后处理管道  │ │  · 工具循环     │ │  · 9 个组件   │
-    │  · 异步摘要    │ │  · 历史构建     │ │  · 向量存储   │
+    │  · 异步摘要    │ │  · 历史构建     │ │  · L0–L3 审计 │
     └────────┬───────┘ └────────┬────────┘ └──────┬───────┘
              │                  │                  │
     ┌────────▼──────────────────▼──────────────────▼───────┐
@@ -826,9 +826,11 @@ meta_map (工具元数据) + func_map (函数引用)
 | `MemoryStore` | 长期记忆 |
 | `SummaryStore` | 摘要 (L1/L2/L3) |
 | `ScheduledTaskStore` | 定时任务 |
-| `VectorStore` | 向量存储 |
 | `ConfigHistoryStore` | 配置变更历史 |
-| `SemanticSearch` | 语义搜索 |
+| `ReflectionStore` | 反思记录 |
+| `ToolUsageStore` | 工具使用统计（tool_shield 依据） |
+
+> `VectorStore` / `SemanticSearch` 已随向量能力下线移除，检索改由关键词/正则与 grep 承担。
 
 ### 6.5 Agent Pipeline (`agent_pipeline.py`)
 
@@ -915,30 +917,38 @@ pipeline.register_step("history_build", build_history, position=2)
 
 ### 8.1 配置文件结构
 
+配置分两层：**密钥与模型目录归 `~/.tea_agent/provider.yaml`（唯一事实源），运行参数与角色绑定归 `config.yaml`（可选）**。
+
 ```yaml
-# ~/.tea_agent/config.yaml
+# ~/.tea_agent/provider.yaml —— 唯一事实源：端点 / 密钥 / 模型能力
+version: 1
+providers:
+  deepseek:
+    api_url: https://api.deepseek.com
+    api_key: "sk-xxx"
+    default_model: deepseek-chat
+    models:
+      deepseek-chat:
+        max_context_tokens: 128000
+        max_output_tokens: 8192
+        supports_reasoning: true
+        supports_tools: true
+        reasoning_effort: auto
+```
+
+```yaml
+# ~/.tea_agent/config.yaml —— 可选：角色引用 + 运行参数覆盖
 
 main_model:
-  api_key: "sk-xxx"
-  api_url: "https://api.deepseek.com"
-  model_name: "deepseek-chat"
+  provider: "deepseek"        # 引用 provider.yaml 的供应商名
+  model: "deepseek-chat"      # 引用其 models 下的模型 id
   temperature: 0.65
   max_tokens: 131072
-  options:
-    supports_vision: false
-    supports_reasoning: true
 
-cheap_model:
-  api_key: "sk-xxx"
-  api_url: "https://api.deepseek.com"
-  model_name: "deepseek-chat"
+cheap_model:                  # 摘要/记忆等廉价任务
+  provider: "deepseek"
+  model: "deepseek-chat"
   max_tokens: 8192
-
-embedding_model:
-  api_url: "https://api.siliconflow.cn"
-  model_name: "Qwen/Qwen3-Embedding-4B"
-  api_key: "sk-xxx"
-  dimension: 2560
 
 max_history: 10
 max_iterations: 100
@@ -949,12 +959,17 @@ max_assistant_content: 128000
 memory_extraction_threshold: 2
 ```
 
+`config.yaml` 可以完全缺失 —— 此时 `load_config` 自动兜底 provider.yaml 中第一个提供商的第一个模型。
+密钥只存在于 provider.yaml，**config.yaml 永不内嵌密钥**。内嵌完整模型块（`api_key` / `api_url` /
+`model_name`）的旧写法仍兼容，但引用式是推荐形态。
+
 ### 8.2 配置优先级
 
 ```
-1. 显式指定路径 (--config)
+1. 显式指定路径 (--config) / 环境变量 TEA_CONFIG
 2. $HOME/.tea_agent/config.yaml
-3. tea_agent/config.yaml (包内置回退)
+3. tea_agent/config.yaml（包内置回退）
+（provider.yaml 路径：TEA_PROVIDER_FILE > ~/.tea_agent/provider.yaml）
 ```
 
 ### 8.3 运行时热切换

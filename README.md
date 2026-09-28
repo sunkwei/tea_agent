@@ -75,12 +75,12 @@ toolkit_experience_solidify → 成功→技能，失败→教训，自动结晶
 
 ### 3. 🧠 类人长期记忆系统
 
-模拟人类记忆的工作方式，底层 SQLite + 语义向量：
+模拟人类记忆的工作方式，底层 SQLite 持久化，检索/去重纯本地计算（无外部向量服务）：
 
 - **优先级分层**：`CRITICAL / HIGH / MEDIUM / LOW`，关键指令优先注入
-- **语义检索**：embedding 余弦相似度，从 ≤30 条活跃记忆中选最相关
+- **相关性检索**：关键词匹配率（中文 bigram + 英文词），从 ≤30 条活跃记忆中选最相关
 - **自然衰减**：Ebbinghaus 遗忘曲线，旧记忆逐步降级，`pinned` 豁免
-- **去重合并**：Jaccard + embedding 双通道，相似记忆自动合并提权
+- **去重合并**：content_hash 精确短路 + 关键词 Jaccard 相似度，相似记忆自动合并提权
 - **跨主题汇总**（v0.13.3+）：每 3 轮后台分析，发现跨会话模式
 
 ### 4. 🤖 多 Agent 系统（v0.11+）
@@ -156,7 +156,7 @@ tea-agent-api
 # http://127.0.0.1:8282
 ```
 
-首次启动自动弹出配置窗口，填入 LLM API Key 即可对话。
+首次启动引导「选服务商 → 选模型 → 填 API Key」（写入 `~/.tea_agent/provider.yaml`）即可对话；**`config.yaml` 缺失也能启动**，身份三元组由 provider.yaml 兜底。
 
 ---
 
@@ -317,24 +317,50 @@ python build_nuitka.py            # 或编译为单文件可执行文件（无�
 
 ## 🔧 配置
 
-配置文件 `~/.tea_agent/config.yaml`：
+配置分两层：**密钥与模型目录归 `provider.yaml`，运行参数与角色绑定归 `config.yaml`**。
+
+| 文件 | 角色 | 是否必需 |
+|------|------|---------|
+| `~/.tea_agent/provider.yaml` | **唯一事实源** —— 供应商端点 / API Key / 模型目录（上下文窗口、输出上限、vision、reasoning 等能力） | ✅ 必需 |
+| `~/.tea_agent/config.yaml` | 运行参数 + 角色绑定 —— `main_model` / `cheap_model` / `vision_model` 以 `provider` + `model` **引用** provider.yaml 条目 | 可选 |
+
+**`config.yaml` 不再是启动前提**：文件缺失时 `load_config` 自动兜底 provider.yaml 第一个提供商的第一个模型，装完即可对话。首次启动（provider.yaml 无可用提供商）引导「选服务商 → 选模型 → 填 Key」，也可在 Web 的 🏭 供应商页面随时增删改（写回 provider.yaml）。密钥只落 provider.yaml，**config.yaml 永不内嵌密钥**。
+
+`~/.tea_agent/provider.yaml`：
+
+```yaml
+version: 1
+providers:
+  DeepSeek:
+    api_url: "https://api.deepseek.com/v1"
+    api_key: "sk-xxx"              # 密钥归属 provider 条目（多 key 用 api_keys 列表）
+    default_model: "deepseek-chat" # 默认模型（须存在于 models）
+    models:
+      deepseek-chat:
+        max_context_tokens: 128000 # 0=未知
+        max_output_tokens: 8192    # 模型能力上限；自动填充时按窗口 25% 限幅
+        supports_tools: true
+        supports_reasoning: false
+        reasoning_effort: auto     # auto=自动推导、不下发该参数
+```
+
+`~/.tea_agent/config.yaml`（可选，只写「与 provider 默认不同」的覆盖项）：
 
 ```yaml
 main_model:
-  api_key: "sk-xxx"
-  api_url: "https://api.openai.com/v1"
-  model_name: "gpt-4o"
-  max_context_tokens: 0    # 0=默认 1M(1048576)，>0 显式指定窗口上限并启用渐进式 token 裁剪
-cheap_model:               # 独立配置，用于摘要/记忆等廉价任务
-  max_context_tokens: 0
-embedding:
-  provider: openai
-  model: text-embedding-3-small
-vision_model:             # 视觉模型（可选）：会话含图片时自动切换
-  api_key: "sk-xxx"
-  api_url: "https://api.openai.com/v1"
-  model_name: "gpt-4o-mini"    # 示例：也支持 mimo-v2.5 等视觉模型
+  provider: "DeepSeek"      # 引用 provider.yaml 的供应商名
+  model: "deepseek-chat"    # 引用其 models 下的模型 id
+  max_context_tokens: 0     # 0=默认 1M(1048576)，>0 显式指定窗口上限并启用渐进式 token 裁剪
+cheap_model:                # 独立配置，用于摘要/记忆等廉价任务
+  provider: "DeepSeek"
+  model: "deepseek-chat"
+vision_model:               # 视觉模型（可选）：会话含图片时自动切换
+  provider: "DeepSeek"
+  model: "deepseek-v4-flash-vision-exp"   # 示例：也支持 mimo-v2.5 等视觉模型
 ```
+
+> 内嵌形态（`api_key` / `api_url` / `model_name` 直接写在 `config.yaml`）仍然兼容，但 provider.yaml 是密钥与能力的归属地；引用式是推荐形态。隔离环境可用 `TEA_CONFIG` / `TEA_PROVIDER_FILE` 指向临时文件。
+> 另：`~/.tea_agent/config*.yaml` 多个文件仍会被扫描为模型面板里的候选供应商（`config_xxx.yaml` → 档位名 `xxx`），用于在同一实例内切换配置档。
 
 - **上下文窗口控制**：`max_context_tokens` 作为"上下文已用"百分比的分母（窗口上限），超预算时按 5 级渐进裁剪（删旧历史 → 工具输出占位 → 清 thinking → 截长文 → 删旧轮）。未显式配置时默认 1M（1048576），**不做模型名推断**，避免模型名不匹配导致窗口上限误判。输入预算与 `max_tokens` 联动求解（窗口 − 输出请求 − 2% 安全余量），从源头防止"输入+输出 > 窗口"的 400 溢出；API 真返回 400 时自动修正窗口、激进压缩历史、钳制 max_tokens 后重试。
 - **上下文填充治理（2026-09）**：修复"多轮对话迅速打满窗口"。`provider.yaml` 的 `max_output_tokens` 自动填充时按窗口 25% 限幅（不再把 384K 输出预留算进预算，1M 窗口的输入预算从 446K 回到 580K）；L1 的 `reasoning_content` 以 `rc_keep_steps`（默认 8）分块，只保留最近一块全文、更早的块置空（字段保留，满足 DeepSeek V4 回传要求），单轮 200 步的思考链不再全量重放；L2 单条 `thinking` 限幅 `l2_thinking_max_chars`（默认 6000 字符）且总字符数达到 `l2_max_chars`（默认 120000）即触发 L3 摘要；L2 与 L1 重叠的轮次自动去重；源码文件回放上限 64KB（此前不截断）；`keep_turns` 默认回落 5 并让 `max_history` 真正生效（限制 L1 保留的最近用户轮数）。

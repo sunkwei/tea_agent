@@ -1150,6 +1150,16 @@ body {
 }
 /* 注：.usage-tokens / .usage-detail / .usage-cheap / .usage-cache.cheap 已随
    状态栏精简（去掉 T:(P+C) 明细与便宜模型段）一并移除，避免留下死类。 */
+/* ⏱ 会话耗时 / token 计数（2026-09-28 新增，单行内联） */
+#usage-bar .usage-clock {
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;   /* 数字定宽，跳动不抖动 */
+}
+#usage-bar .usage-count {
+  color: var(--primary);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
 #usage-bar .usage-model {
   color: var(--primary);
   font-weight: 600;

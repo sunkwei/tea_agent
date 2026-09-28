@@ -1469,6 +1469,7 @@ window.sendMessage = async function() {
   isStreaming = true;
   _pendingUsage = null;
   _liveTpsReset();   // 重置实时解码速度采样（首增量到达后才开始计时）
+  _turnStartTs = Date.now();   // ⏱ 会话耗时：本轮计时起点（队列续发经此处也会重置）
 
   // Hide old usage bar
   const oldUsageBar = $('usage-bar');
@@ -1865,8 +1866,24 @@ window.sendMessage = async function() {
  */
 function _usageBarHtml(usage, liveTpsText) {
   // 展示顺序（2026-09-19 起）：tok/s → 主模型 Provider+model → 命中率 → 上下文用量。
+  // 2026-09-28 新增前置两段：会话耗时 ⏱、tokens 计数（均为单行内联，不换行）。
   // 已移除：T:(P+C) 明细、便宜模型、便宜模型命中率 —— 令牌明细噪音大且可从
   // 上下文用量推知量级，便宜模型属内部调度细节、用户无需在状态栏盯。
+  //
+  // 会话耗时 ⏱：本轮发送→当前（生成中实时跳动，流结束定格）。
+  // 与既有段一致：各段自带前导 " | "，缺段时由 _stripLeadingSep 收口，无双分隔符。
+  var elapsedHtml = '';
+  if (_turnStartTs) {
+    elapsedHtml = ' | <span class="usage-clock" title="本轮会话耗时：从发送消息到流结束（含工具调用与等待）">'
+      + '⏱ ' + esc(_fmtElapsed(Date.now() - _turnStartTs)) + '</span>';
+  }
+  // tokens 计数：会话累计总 token（主模型，服务端逐轮累加）。
+  var tokensHtml = '';
+  var _tokTotal = Number(usage.total_tokens) || 0;
+  if (_tokTotal > 0) {
+    tokensHtml = ' | <span class="usage-count" title="本会话累计 tokens：主模型 prompt+completion（服务端逐轮累加）">'
+      + esc(_fmtTokCount(_tokTotal)) + ' tok</span>';
+  }
   //
   // 主模型：Provider 与 model 名并排（如「DeepSeek · deepseek-v4-flash」）。
   // provider 缺失时只显示 model —— 显示错的提供商比不显示更糟。
@@ -1909,7 +1926,25 @@ function _usageBarHtml(usage, liveTpsText) {
     if (_ctxPct !== '' && _ctxPct >= 95) _ctxCls += ' danger';
     contextHtml = ' | <span class="' + _ctxCls + '" title="' + esc(usage.context_used) + '">' + esc(usage.context_used) + '</span>';
   }
-  return _stripLeadingSep(tpsHtml + modelHtml + cacheHtml + contextHtml);
+  return _stripLeadingSep(elapsedHtml + ' | ' + tokensHtml + ' | ' + tpsHtml + modelHtml + cacheHtml + contextHtml);
+}
+
+/** 耗时格式化：<60s 显示秒（1 位小数），≥60s 显示 m 分 s 秒（紧凑单行）。 */
+function _fmtElapsed(ms) {
+  var sec = Math.max(0, (Number(ms) || 0) / 1000);
+  if (sec < 60) return sec.toFixed(1) + 's';
+  var m = Math.floor(sec / 60);
+  var s = Math.round(sec % 60);
+  if (m >= 60) return Math.floor(m / 60) + 'h' + (m % 60) + 'm';
+  return m + 'm' + (s < 10 ? '0' : '') + s + 's';
+}
+
+/** token 计数格式化：<1K 原值，≥1K 缩写（12.3K / 1.2M），紧凑单行。 */
+function _fmtTokCount(n) {
+  var v = Number(n) || 0;
+  if (v < 1000) return String(v);
+  if (v < 1000000) return (v / 1000).toFixed(1) + 'K';
+  return (v / 1000000).toFixed(2) + 'M';
 }
 
 /** 去掉首段残留的前导分隔符「 | 」（首段被省略时会剩下）。 */
@@ -1935,6 +1970,7 @@ function updateUsage(usage) {
    届时覆盖此估算 —— 估算仅填补「首轮尚未结束」这段空窗。
    ══════════════════════════════════════════════════════ */
 var _lastUsageData = null;      // 最近一次服务端 usage 载荷（实时估算要复用它渲染其它字段）
+var _turnStartTs = 0;           // 本轮发送时刻（⏱ 会话耗时计时起点，队列续发时重置）
 var _liveTps = { active: false, firstTs: 0, cnChars: 0, otherChars: 0, text: '' };
 var _liveTpsLastPaint = 0;
 
@@ -1991,7 +2027,9 @@ function _paintLiveTps() {
   if (_lastUsageData) {
     bar.innerHTML = _usageBarHtml(_lastUsageData, _liveTps.text);
   } else {
-    bar.innerHTML = '<span class="usage-live">⏳ 生成中</span>'
+    var _clk = _turnStartTs ? '<span class="usage-clock" title="本轮会话耗时：从发送消息到流结束（含工具调用与等待）">⏱ '
+      + esc(_fmtElapsed(Date.now() - _turnStartTs)) + '</span> | ' : '';
+    bar.innerHTML = _clk + '<span class="usage-live">⏳ 生成中</span>'
       + ' | <span class="usage-tps" title="解码速度（输出 token / 首增量→现在，不含首 token 等待），流结束后替换为服务端实测值">'
       + esc(_liveTps.text) + ' ≈</span>';
   }

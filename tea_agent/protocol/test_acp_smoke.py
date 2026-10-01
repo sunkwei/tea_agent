@@ -1,6 +1,6 @@
 """Quick smoke test: ACP protocol core handlers work correctly."""
 import json
-import os
+import logging
 import sys
 import threading
 import time
@@ -9,11 +9,10 @@ PROJECT_ROOT = "C:/Users/Hetin/work/git/tea_agent"
 if PROJECT_ROOT not in sys.path:
     sys.path.insert(0, PROJECT_ROOT)
 
-import logging
 logging.basicConfig(level=logging.WARNING)
 
-from tea_agent.protocol.acp_agent import AcpAgent
-from tea_agent.protocol.acp_jsonrpc import JsonRpcTransport, JsonRpcMessage, JsonRpcError
+from tea_agent.protocol.acp_agent import AcpAgent  # noqa: E402
+from tea_agent.protocol.acp_jsonrpc import JsonRpcTransport  # noqa: E402
 
 
 def test_session_list_and_delete():
@@ -146,7 +145,6 @@ def test_session_list_and_delete():
     agent.stop()
 
     print("  ✅ All session management tests passed!")
-    return True
 
 
 def test_nes_and_ext():
@@ -218,7 +216,7 @@ def test_nes_and_ext():
     time.sleep(0.15)
     r = _find(output_cap, 21)
     assert r and "result" in r
-    print(f"  ✓ ext/request config/get")
+    print("  ✓ ext/request config/get")
 
     # ext/request: unknown method
     input_sim.add({"jsonrpc":"2.0","id":22,"method":"ext/request","params":{"method":"nonexistent","params":{}}})
@@ -233,7 +231,6 @@ def test_nes_and_ext():
     agent.stop()
 
     print("  ✅ All NES and ext tests passed!")
-    return True
 def test_transport_notifications():
     """Test notifications (no response expected)."""
     print("\nTesting notifications...")
@@ -265,11 +262,10 @@ def test_transport_notifications():
     transport.stop()
 
     # Verify no response was sent for the notification
-    notif_responses = [l for l in output_cap.get_lines() if l.strip() and json.loads(l.strip()).get("method") == "document/didOpen"]
+    notif_responses = [line for line in output_cap.get_lines() if line.strip() and json.loads(line.strip()).get("method") == "document/didOpen"]
     assert len(notif_responses) == 0, "Notification should NOT produce a response"
 
     print("  ✅ Notification test passed!")
-    return True
 
 
 class _InputSim:

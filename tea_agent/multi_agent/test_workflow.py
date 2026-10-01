@@ -6,8 +6,15 @@ import sys
 
 logging.basicConfig(level=logging.WARNING)
 
-sys.path.insert(0, '.')
-from tea_agent.multi_agent import *  # noqa: E402
+from tea_agent.multi_agent import (  # noqa: E402
+    NodeState,
+    NodeType,
+    WorkflowDAG,
+    WorkflowExec,
+    WorkflowNode,
+    WorkflowState,
+    get_execution_pool,
+)
 
 
 def test_empty_dag():

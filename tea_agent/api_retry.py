@@ -19,7 +19,9 @@ OpenAI 兼容接口调用的弹性重试工具。
 
 from __future__ import annotations
 
+import contextlib
 import logging
+import re
 import time
 from collections.abc import Callable
 from typing import Any
@@ -69,6 +71,46 @@ def _is_retryable(exc: Exception) -> bool:
     return any(k in msg for k in _RETRYABLE_MSG_KEYWORDS)
 
 
+# ── 参数级 400 自适应（max_tokens 超上限）──
+# 网络类错误重试即可，但「参数超出模型上限」类 400（如 max_tokens=250000 而模型
+# 最多 131072 输出）重试永远不会成功 —— 正确姿势是降参后重试。这里就地修正
+# kwargs 里的 max_tokens，调用方无感知、无需改签名。
+_PARAM_ERR_KEYWORDS = ("max_tokens", "max output tokens", "completion tokens")
+# 「at most 131072 completion tokens」类报错文本中的硬上限
+_MAX_TOKENS_CAP_RE = re.compile(r"at most\s+(\d+)\s+(?:completion|output)\s*tokens", re.IGNORECASE)
+_MIN_ADAPTIVE_MAX_TOKENS = 256
+_PARAM_ADAPT_MAX = 3
+
+
+def _adapt_request_params(exc: Exception, kwargs: dict) -> bool:
+    """若 exc 是参数超限类错误，就地修正 kwargs["max_tokens"] 并返回 True。
+
+    优先取报错文本中的硬上限（"at most N completion tokens"）；取不到则对半降。
+    已到下限或修正后无变化时返回 False（交由常规重试/抛出逻辑处理）。
+    """
+    msg = str(exc)
+    if not any(k in msg.lower() for k in _PARAM_ERR_KEYWORDS):
+        return False
+    cur = kwargs.get("max_tokens")
+    if not isinstance(cur, (int, float)) or int(cur) <= 0:
+        return False
+    m = _MAX_TOKENS_CAP_RE.search(msg)
+    if m:
+        # 报错给出硬上限时直接采用（可低于对半降的下限——模型上限就是这么小）
+        new_val = int(m.group(1))
+    else:
+        # 无硬上限可循 → 对半降，低于下限则放弃（防止无限减到 0）
+        if int(cur) <= _MIN_ADAPTIVE_MAX_TOKENS:
+            return False
+        new_val = int(cur) // 2
+        if new_val < _MIN_ADAPTIVE_MAX_TOKENS:
+            return False
+    if new_val <= 0 or new_val >= int(cur):
+        return False
+    kwargs["max_tokens"] = new_val
+    return True
+
+
 def _is_connection_error(exc: Exception) -> bool:
     """判断是否为连接层错误（睡眠恢复后网络栈重建，需额外等待）。"""
     name = type(exc).__name__
@@ -104,10 +146,19 @@ def call_with_retry(
         fn 的返回值；重试耗尽后抛出最后一个异常
     """
     attempt = 0
+    param_adapted = 0
     while True:
         try:
             return fn(*args, **kwargs)
         except Exception as e:  # noqa: BLE001 — 需捕获全部异常判断可重试性
+            # 参数超限类 400：降参后立即重试（独立于网络重试计数，不退避）
+            if param_adapted < _PARAM_ADAPT_MAX and _adapt_request_params(e, kwargs):
+                param_adapted += 1
+                logger.warning(
+                    "API 参数超限，自适应降参第 %d/%d 次: %s → max_tokens=%s",
+                    param_adapted, _PARAM_ADAPT_MAX, str(e)[:150], kwargs.get("max_tokens"),
+                )
+                continue
             if attempt >= max_retries or not _is_retryable(e):
                 raise
             attempt += 1
@@ -115,10 +166,8 @@ def call_with_retry(
             if _is_connection_error(e):
                 wait += sleep_recovery_wait
             if on_retry is not None:
-                try:
+                with contextlib.suppress(Exception):
                     on_retry(attempt, e, wait)
-                except Exception:
-                    pass
             logger.warning(
                 "API 调用失败，第 %d/%d 次重试: %s: %s，等待 %.1fs",
                 attempt, max_retries, type(e).__name__, str(e)[:150], wait,

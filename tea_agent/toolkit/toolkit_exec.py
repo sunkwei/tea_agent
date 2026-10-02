@@ -537,7 +537,7 @@ def _run_single_with_monitor(app: str, args: list, timeout: int) -> dict:
         stderr = (stderr + "\n" + hint) if stderr else hint
 
     # ok 语义：超时被终止 = 失败（即使进程自身 exit 0）
-    return {
+    return _spill_result({
         "ok": (retcode == 0) and not timed_out,
         "returncode": retcode,
         "timed_out": timed_out,
@@ -545,7 +545,25 @@ def _run_single_with_monitor(app: str, args: list, timeout: int) -> dict:
         "signal": exit_signal,
         "stdout": stdout,
         "stderr": stderr,
-    }
+    })
+
+
+def _spill_result(result: dict) -> dict:
+    """大输出落盘引用化（旁路，fail-open：失败回退原样返回）。
+
+    stdout/stderr 超阈值时落盘并在结果里给出 locator + 头尾摘要，
+    防止大输出直接进上下文造成爆炸。见 tea_agent/spill.py。
+    """
+    try:
+        from tea_agent.spill import maybe_spill
+
+        for key in ("stdout", "stderr"):
+            val = result.get(key)
+            if isinstance(val, str) and val:
+                result[key] = maybe_spill(val, source=f"toolkit_exec.{key}")
+    except Exception:  # noqa: BLE001 — 引用化失败绝不影响命令结果
+        pass
+    return result
 
 
 def _run_batch_with_monitor(idx, cmd, timeout):
@@ -606,10 +624,8 @@ def _run_batch_with_monitor(idx, cmd, timeout):
             cmd_preview = f"{a} {' '.join(ar[:3])}"
             if len(ar) > 3:
                 cmd_preview += f" ... (+{len(ar)-3} args)"
-            if kill_reason == "monitor":
-                hint = f"⏰ 空闲超时({timeout}s): {cmd_preview}"
-            else:
-                hint = f"⏰ 硬上限超时(>{timeout*4}s): {cmd_preview}"
+            hint = (f"⏰ 空闲超时({timeout}s): {cmd_preview}" if kill_reason == "monitor"
+                    else f"⏰ 硬上限超时(>{timeout*4}s): {cmd_preview}")
             stderr = (stderr + "\n" if stderr else "") + hint
 
         result.update({
@@ -621,6 +637,8 @@ def _run_batch_with_monitor(idx, cmd, timeout):
             "stderr": stderr,
             "error": (retcode != 0) or timed_out,
         })
+        # 大输出落盘引用化（旁路，fail-open：失败原样返回）
+        _spill_result(result)
     except Exception as e:
         result["stderr"] = str(e)
 
@@ -876,22 +894,22 @@ def _coerce_timeout(value) -> int:
       - 不可解析的字符串、布尔等垃圾值 → 30（与签名默认一致）。
     上限一天，避免模型填入离谱值导致回合永久挂起。
     """
-    _UNSET, _BLANK = 30, 120
+    _unset, _blank = 30, 120
     if value is None or value == "":
-        return _BLANK
+        return _blank
     if isinstance(value, bool):
-        return _UNSET
+        return _unset
     if isinstance(value, str):
         try:
             value = int(float(value.strip()))
         except (ValueError, AttributeError):
-            return _UNSET
+            return _unset
     elif isinstance(value, float):
         value = int(value)
     elif not isinstance(value, int):
-        return _UNSET
+        return _unset
     if value <= 0:
-        return _BLANK
+        return _blank
     return min(value, 86400)
 
 

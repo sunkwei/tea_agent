@@ -1417,7 +1417,46 @@ class OnlineToolSession(BaseChatSession):
         # image_url parts 一律剥掉 —— 残留会让非视觉端点/cheap 摘要路径 400，
         # 也会让历史图把后续纯文本轮持续锁在 vision 模型上。当前轮保留，
         # 由回合级/请求级视觉切换处理。见 history_builder.strip_historical_images。
-        return strip_historical_images(build_api_messages(self.context, sp))
+        api_messages = strip_historical_images(build_api_messages(self.context, sp))
+        self._note_request_series(api_messages)
+        return api_messages
+
+    def _note_request_series(self, api_messages: list[dict]) -> None:
+        """记录请求序列连续性（旁路观测，永不改写控制流）。
+
+        _build_api_messages 是所有模型请求（主循环/直答/自愈重试）的唯一消息
+        汇聚点，在此观测既覆盖全部分支又不侵入 tool_loop_runner。前缀被改写
+        （压缩/历史修改）即前缀缓存重置点，见 turn_meta.py。
+        """
+        try:
+            tracker = getattr(self, "turn_meta", None)
+            if tracker is None:
+                from tea_agent.turn_meta import TurnMetaTracker
+
+                tracker = TurnMetaTracker()
+                self.turn_meta = tracker
+            starts = tracker.note_request(api_messages)
+            if starts:
+                logger.debug("turn_meta: 新请求序列（前缀缓存重置）")
+            for v in tracker.last_violations:
+                logger.error("运行时不变式违例 %s", v)
+            from tea_agent import session_events as se
+            if not hasattr(self, "_event_log"):
+                self._event_log = []
+            se.append_event(
+                self._event_log,
+                topic_id=getattr(self, "topic_id", "") or "online",
+                type="step_request",
+                turn=tracker.turns,
+                step=len(tracker.steps),
+                data={"starts_request_series": starts},
+            )
+            se.persist_step_request(
+                getattr(self, "storage", None), getattr(self, "topic_id", "") or "online",
+                tracker.turns, len(tracker.steps),
+                {"starts_request_series": starts})
+        except Exception as e:  # noqa: BLE001 — 观测失败不影响请求
+            logger.debug("turn_meta 观测跳过: %s", e)
 
     # ──────────────────────────────────────────────
     # 意图分析与工具循环

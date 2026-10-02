@@ -319,6 +319,20 @@ class APIComponent(SessionComponent):
         if cache_miss is not None:
             u["prompt_cache_miss_tokens"] += cache_miss
 
+        # 前缀缓存命中率观测（旁路，fail-open，见 token_meter.py）
+        try:
+            meter = getattr(self.ctx, "_token_meter", None)
+            if meter is None:
+                from tea_agent.token_meter import TokenMeter
+
+                meter = TokenMeter()
+                self.ctx._token_meter = meter
+            r = meter.record(usage)
+            if r is not None and r < 0.3 and prompt and prompt > 1000:
+                logger.warning("前缀缓存命中率低: %.0f%% (prompt=%s)", r * 100, prompt)
+        except Exception:
+            pass
+
     def _track_api_usage(self, response, is_cheap=False):
         if hasattr(response, "usage") and response.usage:
             self._accumulate_usage(response.usage, is_cheap=is_cheap)

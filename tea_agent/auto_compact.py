@@ -214,7 +214,7 @@ def compact_messages(
     summary: str = "",
     max_summary_length: int = 1500,
 ) -> tuple[list, str]:
-    """压缩历史消息。
+    """压缩历史消息（入口：委托给可插拔策略，默认截断策略）。
 
     保留最近的 keep_recent 轮，将旧消息合并到摘要。
 
@@ -227,6 +227,37 @@ def compact_messages(
     Returns:
         (compressed_messages, new_summary)
     """
+    strategy = get_compaction_strategy()
+    return strategy(messages, keep_recent=keep_recent, summary=summary,
+                    max_summary_length=max_summary_length)
+
+
+# ── 压缩策略契约（借鉴 dsh compaction 引擎可插拔设计） ──────────────────
+# 策略签名: (messages, keep_recent, summary, max_summary_length)
+#          -> (compressed_messages, new_summary)
+# 默认 = truncate_compact_messages（纯截断，零成本）；可替换为
+# LLM 摘要 / 分支摘要等实现，入口 compact_messages 不变。
+
+_COMPACTION_STRATEGY = None
+
+
+def register_compaction_strategy(fn) -> None:
+    """注册压缩策略（None=恢复默认截断策略）。"""
+    global _COMPACTION_STRATEGY
+    _COMPACTION_STRATEGY = fn
+
+
+def get_compaction_strategy():
+    return _COMPACTION_STRATEGY or truncate_compact_messages
+
+
+def truncate_compact_messages(
+    messages: list,
+    keep_recent: int = 5,
+    summary: str = "",
+    max_summary_length: int = 1500,
+) -> tuple[list, str]:
+    """默认截断策略：保留最近 keep_recent 轮，旧消息合并进摘要。"""
     if not messages:
         return messages, summary
 
@@ -256,10 +287,7 @@ def compact_messages(
     # 合并摘要
     if older_text and len(older_text) > 50:
         new_text = older_text[:max_summary_length]
-        if summary:
-            summary = (summary + "\n---\n" + new_text)[:max_summary_length]
-        else:
-            summary = new_text
+        summary = (summary + "\n---\n" + new_text)[:max_summary_length] if summary else new_text
 
     # 构建压缩后的消息列表
     compressed = list(sys_msgs)

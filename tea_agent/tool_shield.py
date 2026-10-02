@@ -25,6 +25,8 @@ import logging
 import os
 from datetime import datetime, timedelta, timezone
 
+from tea_agent.invariants import InvariantViolation
+from tea_agent.invariants import registry as _invariants
 from tea_agent.store._tool_usage import TABLE as USAGE_TABLE  # noqa: F401  文档/测试引用
 
 logger = logging.getLogger("tool_shield")
@@ -170,7 +172,8 @@ def evaluate(usage: dict[str, dict], *, known_tools, idle_days: int | None = Non
         else:
             kept[tool] = f"{uses} 次使用，最近 {(now - last).days} 天内"
 
-    return {"shielded": shielded, "kept": kept, "idle_days": days, "reason": ""}
+    verdict = {"shielded": shielded, "kept": kept, "idle_days": days, "reason": ""}
+    return _guard_shield_verdict(verdict, usage=usage, observation_full=observation_full)
 
 
 def _storage_or_none():
@@ -229,3 +232,81 @@ def apply_shield(tools: list[dict], known_names=None, storage=None,
         logger.info("tool_shield: 屏蔽 %d/%d 个长期未使用工具: %s",
                     len(hidden), len(tools), ", ".join(sorted(hidden)))
     return kept, hidden
+
+
+# ═════════════ 运行时不变式（注册进 tea_agent.invariants，见该模块说明）═════════════
+# 文档里的"三条不可妥协"升级为可安装断言：evaluate 的输出必须继续满足它们，
+# 一旦被将来的改动破坏，_guard_shield_verdict 会整体回退成"不屏蔽"并大声记日志。
+
+def _check_no_data_no_shield(*, verdict: dict, usage, **_) -> str | None:
+    """不变式 1：无数据 = 不屏蔽。"""
+    if not usage and verdict.get("shielded"):
+        return f"{USAGE_TABLE} 为空却屏蔽了 {sorted(verdict['shielded'])}"
+    return None
+
+
+def _check_observation_window(*, verdict: dict, usage, observation_full: bool, **_) -> str | None:
+    """不变式 2：观测期未满不屏蔽零使用工具（手工 pin=0 例外，用户明确要求优先）。"""
+    if observation_full:
+        return None
+    bad = []
+    for tool in sorted(verdict.get("shielded") or {}):
+        row = (usage or {}).get(tool) or {}
+        if row.get("pin") == 0:
+            continue
+        uses = int(row.get("uses") or 0)
+        if uses <= 0 or not row.get("last_used"):
+            bad.append(tool)
+    return f"观测期未满却屏蔽了零使用工具: {bad}" if bad else None
+
+
+def _check_self_heal_never_shielded(*, verdict: dict, **_) -> str | None:
+    """不变式 3：自愈通路/最小能力集永不屏蔽（手工 pin=0 也不例外）。"""
+    bad = sorted(set(verdict.get("shielded") or {}) & set(ALWAYS_PINNED))
+    return f"自愈通路被屏蔽: {bad}" if bad else None
+
+
+def _check_self_heal_registered(*, registered, **_) -> str | None:
+    """自愈最小集必须始终**在注册表里**（toolkit_reload 扫挂工具时立刻可见）。
+
+    挂在 toolkit.call_tool 检查点：每次真实调用顺手确认「解除屏蔽的梯子」还在。
+    """
+    if registered is None:
+        return None
+    missing = sorted(n for n in ALWAYS_PINNED if n not in registered)
+    return f"自愈最小集缺席注册表: {missing}" if missing else None
+
+
+_invariants.install("tool_shield.no_data_no_shield", "tool_shield.evaluate",
+                    _check_no_data_no_shield, "无数据 = 不屏蔽")
+_invariants.install("tool_shield.observation_window", "tool_shield.evaluate",
+                    _check_observation_window, "观测期未满不屏蔽零使用工具")
+_invariants.install("tool_shield.self_heal_never_shielded", "tool_shield.evaluate",
+                    _check_self_heal_never_shielded, "自愈通路永不屏蔽")
+_invariants.install("tool_shield.self_heal_registered", "toolkit.call_tool",
+                    _check_self_heal_registered, "自愈最小集必须已注册")
+
+
+def _guard_shield_verdict(verdict: dict, *, usage, observation_full: bool) -> dict:
+    """不变式闸门：违反安全不变式的判定**整体回退为「不屏蔽」**（fail-open）。
+
+    fail-open 的方向刻意选「多暴露工具」而非「少暴露」——屏蔽会让 Agent 失去
+    能力，多暴露只是多花点 token。回退时把被屏蔽者并回 kept，保留可观测理由。
+    """
+    try:
+        violations = _invariants.run("tool_shield.evaluate", verdict=verdict,
+                                     usage=usage, observation_full=observation_full)
+    except Exception as e:  # noqa: BLE001 — run 内部已兜底，这里是双保险
+        logger.error("tool_shield: 不变式检查异常，按违例处理: %s", e)
+        violations = [InvariantViolation("tool_shield.check_crashed",
+                                         "tool_shield.evaluate", str(e))]
+    if not violations:
+        return verdict
+    for v in violations:
+        logger.error("tool_shield 不变式违例 %s", v)
+    kept = dict(verdict.get("kept") or {})
+    for tool in sorted(verdict.get("shielded") or {}):
+        kept[tool] = "不变式违例，安全回退：不屏蔽"
+    names = ", ".join(sorted({v.invariant for v in violations}))
+    return {"shielded": {}, "kept": kept, "idle_days": verdict.get("idle_days"),
+            "reason": f"不变式违例（{names}），本次不屏蔽任何工具"}

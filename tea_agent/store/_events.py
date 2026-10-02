@@ -25,6 +25,7 @@ logger = logging.getLogger("Storage.Events")
 EVENT_TYPES = {
     "turn/start", "user/message", "assistant/chunk", "assistant/message",
     "tool/call", "tool/result", "turn/end", "session/fork",
+    "step/request",
 }
 
 
@@ -48,7 +49,6 @@ class SessionEventStore(StoreComponent):
         """
         if event_type not in EVENT_TYPES:
             logger.warning(f"未知事件类型 {event_type!r}，仍将记录")
-        ev_id = None  # id 为 AUTOINCREMENT 自增主键，无需显式提供
         payload_json = json.dumps(payload, ensure_ascii=False, default=str)
         with self._get_connection() as conn:
             c = conn.cursor()

@@ -379,6 +379,26 @@ class Toolkit:
         except Exception as e:  # noqa: BLE001 — 统计失败不影响调用
             logger.debug("record_usage(%s) 跳过: %s", func_name, e)
 
+    def _check_invariants(self, func_name: str) -> None:
+        """运行时不变式检查（旁路）：只记录违例，绝不抛出、绝不改写控制流。
+
+        属性查找放 try 之外（AGENTS.md「旁路代码不得改写控制流」）：取注册表
+        与跑检查分离，取值失败直接跳过，不让旁路观测影响主调用。
+        """
+        registered = getattr(self, "func_map", None)
+        if registered is None:
+            return
+        try:
+            from tea_agent.invariants import registry as inv
+
+            violations = inv.run("toolkit.call_tool",
+                                 func_name=func_name, registered=registered)
+        except Exception as e:  # noqa: BLE001 — 不变式检查永不影响调用
+            logger.debug("invariants(%s) 跳过: %s", func_name, e)
+            return
+        for v in violations:
+            logger.error("运行时不变式违例 %s", v)
+
     def call_tool(self, func_name: str, **kwargs):
         """带缓存的工具调用代理。
 
@@ -410,6 +430,9 @@ class Toolkit:
         # 使用统计（tool_shield 的数据源）：放在缓存判定**之前**——命中缓存同样是
         # 一次真实调用，记在缓存之后就少算，长期会把常用工具误判成"没用过"而屏蔽。
         self._record_usage(func_name)
+
+        # 运行时不变式检查点（旁路观测：只记日志，永不改写控制流）
+        self._check_invariants(func_name)
 
         # 白名单之外 + 用户创建的工具不缓存（真实执行）
         if func_name not in self._CACHE_WHITELIST or func_name in self._user_created_tools:

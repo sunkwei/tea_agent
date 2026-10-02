@@ -238,6 +238,19 @@ def _extract_l1(storage, conversation_id: str, topic_id: str,
         return out
 
     if not rounds:
+        # 事件投影兜底（rounds 无数据才启用，主路径仍是 rounds）
+        events, ev_err = _safe_call(
+            lambda: storage.events.query_events(topic_id) if (topic_id and getattr(storage, "events", None)) else None,
+            None)
+        if not ev_err and events:
+            from tea_agent import session_events as se
+            projected = se.project_l1([se.SessionEvent.from_dict(e) for e in events])
+            if projected:
+                out["available"] = True
+                out["rounds"] = len(projected)
+                out["source"] = "event_projection"
+                out["messages"] = projected[:max_rounds] if max_rounds else projected
+                return out
         out["reason"] = "该回合没有轮次记录（可能未启用工具或无落盘数据）"
         return out
 
@@ -297,6 +310,17 @@ def _extract_l2(storage, topic_id: str, max_chars: int) -> dict:
         out["reason"] = f"读取失败: {err}"
         return out
     if not level2:
+        # 事件投影兜底（统计型视图，纯函数重放）
+        events, ev_err = _safe_call(lambda: storage.events.query_events(topic_id), None)
+        if not ev_err and events:
+            from tea_agent import session_events as se
+            proj = se.project_l2([se.SessionEvent.from_dict(e) for e in events])
+            if proj:
+                out["available"] = True
+                out["entries"] = len(proj)
+                out["items"] = proj
+                out["source"] = "event_projection"
+                return out
         out["reason"] = "该主题暂无 L2 条目（可能已被摘要或尚未累积）"
         return out
 
@@ -363,6 +387,15 @@ def _extract_l3(storage, topic_id: str, max_chars: int) -> dict:
     out.update(fields)
     out["available"] = any(fields.values())
     if not out["available"]:
+        events, ev_err = _safe_call(lambda: storage.events.query_events(topic_id), None)
+        if not ev_err and events:
+            from tea_agent import session_events as se
+            agg = se.project_l3([se.SessionEvent.from_dict(e) for e in events])
+            out["topic_summary"] = agg.get("topic_summary", "")
+            out["series_resets"] = agg.get("series_resets", 0)
+            out["source"] = "event_projection"
+            out["available"] = True
+            return out
         out["reason"] = "该主题暂无 L3 摘要（尚未触发摘要阈值，或摘要被禁用）"
     return out
 

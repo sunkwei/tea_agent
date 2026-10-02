@@ -9,6 +9,7 @@ from openai import OpenAI
 from tea_agent.basesession import extract_reasoning, relaxed_json_loads
 from tea_agent.config import REASONING_EFFORT_VALUES, clamp_reasoning_effort
 from tea_agent.tool_hooks import tool_hooks
+from tea_agent.turn_meta import TurnMetaTracker
 
 logger = logging.getLogger("session.lite")
 
@@ -44,6 +45,8 @@ class LiteSession:
         self.interrupted = False
         self.max_context_tokens = int(max_context_tokens or 0)
         self.tool_profile = (tool_profile or "auto").strip().lower()
+        # turn/step 生命周期与前缀缓存重置点观测（见 turn_meta.py）
+        self.turn_meta = TurnMetaTracker()
 
         # API 客户端
         # API 弹性：从配置读取超时与重试次数（网络中断/睡眠恢复容错）
@@ -365,6 +368,32 @@ class LiteSession:
 
     def _call_api(self, messages: list[dict]):
         """调用 API。"""
+        # 请求序列观测（旁路）：前缀被改写即前缀缓存重置，记录违例但不影响调用
+        starts = self.turn_meta.note_request(messages, model=self.model)
+        if starts:
+            logger.debug("turn_meta: 新请求序列（前缀缓存重置）")
+        for v in self.turn_meta.last_violations:
+            logger.error("运行时不变式违例 %s", v)
+        # 事件日志（旁路 fail-open）：append-only，投影层据此重放 L1/L2/L3
+        try:
+            from tea_agent import session_events as se
+            if not hasattr(self, "_event_log"):
+                self._event_log = []
+            se.append_event(
+                self._event_log,
+                topic_id=getattr(self, "topic_id", "") or "lite",
+                type="step_request",
+                turn=self.turn_meta.turns,
+                step=len(self.turn_meta.steps),
+                data={"starts_request_series": starts, "model": self.model},
+            )
+            se.persist_step_request(
+                getattr(self, "storage", None), getattr(self, "topic_id", "") or "lite",
+                self.turn_meta.turns, len(self.turn_meta.steps),
+                {"starts_request_series": starts, "model": self.model})
+        except Exception as e:  # noqa: BLE001 — 旁路观测不得影响请求
+            logger.debug("session_events 记录跳过: %s", e)
+
         kwargs = {
             "model": self.model,
             "messages": messages,

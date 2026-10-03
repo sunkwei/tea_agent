@@ -299,22 +299,21 @@ class AdminPanel:
 
         if cmd == "status":
             return self._format_status()
-        elif cmd == "agents":
+        if cmd == "agents":
             return self._format_agents()
-        elif cmd == "patterns":
+        if cmd == "patterns":
             return self._format_patterns()
-        elif cmd == "checkpoints":
+        if cmd == "checkpoints":
             return self._format_checkpoints()
-        elif cmd == "traces":
+        if cmd == "traces":
             return self._format_traces()
-        elif cmd == "pool":
+        if cmd == "pool":
             return self._format_pool()
-        elif cmd == "workflow":
+        if cmd == "workflow":
             return self._format_workflow()
-        elif cmd == "report":
+        if cmd == "report":
             return self.report()
-        else:
-            return f"未知命令: {cmd}\n\n{self._cli_help()}"
+        return f"未知命令: {cmd}\n\n{self._cli_help()}"
 
     def _cli_help(self) -> str:
         return """🎛️  AdminPanel CLI

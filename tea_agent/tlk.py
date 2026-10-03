@@ -450,8 +450,7 @@ class Toolkit:
             if now < expire_at:
                 logger.debug(f"Cache HIT: {func_name} (TTL {expire_at - now:.0f}s)")
                 return result
-            else:
-                del self._cache[cache_key]
+            del self._cache[cache_key]
 
         # 执行工具
         result = self.func_map[func_name](**kwargs)
@@ -529,7 +528,7 @@ class Toolkit:
                 else:
                     errors.append(f"{pkg}: {result.stderr[:100]}")
             except Exception as e:
-                errors.append(f"{pkg}: {str(e)}")
+                errors.append(f"{pkg}: {e!s}")
 
         msg = f"📦 自动安装依赖: {', '.join(installed)}"
         if errors:

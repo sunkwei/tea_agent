@@ -43,18 +43,17 @@ def toolkit_lsp(
     try:
         if action == "diagnose":
             return diagnose(project_root, filepath)
-        elif action == "completion":
+        if action == "completion":
             return completion(project_root, filepath, line, col)
-        elif action == "definition":
+        if action == "definition":
             return goto_definition(project_root, filepath, line, col)
-        elif action == "hover":
+        if action == "hover":
             return hover(project_root, filepath, line, col)
-        elif action == "references":
+        if action == "references":
             return references(project_root, filepath, line, col)
-        elif action == "context":
+        if action == "context":
             return collect_context(project_root, filepath, symbol)
-        else:
-            return {"ok": False, "error": f"不支持: {action}"}
+        return {"ok": False, "error": f"不支持: {action}"}
     except Exception as e:
         logger.exception(f"LSP {action} 失败")
         return {"ok": False, "error": str(e)}

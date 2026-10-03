@@ -1053,8 +1053,7 @@ class AcpAgent:
         if cancel_event:
             cancel_event.set()
             return {"success": True, "cancelled": True}
-        else:
-            return {"success": True, "cancelled": False}
+        return {"success": True, "cancelled": False}
 
     def _handle_session_set_mode(
         self, params: Any, msg_id: RequestId

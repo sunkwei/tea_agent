@@ -4,8 +4,6 @@ from __future__ import annotations
 
 from unittest.mock import patch
 
-import pytest
-
 from tea_agent.toolkit import toolkit_server_restart as tsr
 
 

@@ -257,7 +257,7 @@ def toolkit_mode(action: str, text: str = "", mode: str = ""):
         detected = _detect_phase(text)
         return {"ok": True, "detected": detected, "text_snippet": text[:100] if text else "", "labels": _LABELS, "returncode": 0}
 
-    elif action == "switch":
+    if action == "switch":
         resolved = _resolve_mode(mode)
         if resolved == "develop" and mode not in ALL_MODES and mode not in MODE_ALIASES:
             return {"ok": False, "error": f"无效模式: {mode}", "returncode": 1}
@@ -266,7 +266,7 @@ def toolkit_mode(action: str, text: str = "", mode: str = ""):
         _set_mode(mm, resolved, old)
         return {"ok": True, "switched_to": resolved, "requested": mode, "instruction": MODE_INSTRUCTIONS.get(resolved, "")[:100] + "...", "returncode": 0}
 
-    elif action == "auto":
+    if action == "auto":
         detected = _detect_phase(text)
         mm = _get_memory_manager()
         current = _current_mode(mm)
@@ -276,17 +276,15 @@ def toolkit_mode(action: str, text: str = "", mode: str = ""):
         _set_mode(mm, detected, old)
         return {"ok": True, "mode": detected, "switched": True, "from": current, "to": detected, "instruction": MODE_INSTRUCTIONS.get(detected, "")[:100] + "...", "returncode": 0}
 
-    elif action == "status":
+    if action == "status":
         mm = _get_memory_manager()
         old = _get_existing_mode_memory(mm)
         if old:
             current = _current_mode(mm)
             return {"ok": True, "has_mode": True, "mode": current, "content": old["content"], "priority": old["priority"], "id": old["id"], "labels": _LABELS, "returncode": 0}
-        else:
-            return {"ok": True, "has_mode": False, "mode": "develop (default)", "message": "未设置模式，默认 develop", "tip": "使用 toolkit_mode(action='auto', text='用户输入')", "valid_modes": list(_LABELS.keys()), "returncode": 0}
+        return {"ok": True, "has_mode": False, "mode": "develop (default)", "message": "未设置模式，默认 develop", "tip": "使用 toolkit_mode(action='auto', text='用户输入')", "valid_modes": list(_LABELS.keys()), "returncode": 0}
 
-    else:
-        return {"ok": False, "error": f"未知 action: {action}", "returncode": 1}
+    return {"ok": False, "error": f"未知 action: {action}", "returncode": 1}
 
 
 def meta_toolkit_mode() -> dict:

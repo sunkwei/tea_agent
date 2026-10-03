@@ -27,7 +27,6 @@ from pydantic import BaseModel, Field
 
 class StructuredOutput(BaseModel):
     """所有结构化输出的基类。"""
-    pass
 
 
 # ───────────────────────────────────────────────

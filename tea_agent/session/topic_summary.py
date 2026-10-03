@@ -99,14 +99,14 @@ def generate_topic_summary(client, model: str, conversations: list[dict]) -> tup
 
         raw = content.strip()
         # 调试日志：记录 LLM 原始返回
-        logger.info(f"generate_topic_summary 原始返回: model={model}, raw_len={len(raw)}, raw={repr(raw[:80])}")
+        logger.info(f"generate_topic_summary 原始返回: model={model}, raw_len={len(raw)}, raw={raw[:80]!r}")
         # 去掉各种引号包裹（中英文全角半角）
         raw = re.sub(r'^[\'"\u201c\u201d\u2018\u2019\u300c\u300d\uff02\uff07]+', '', raw)
         raw = re.sub(r'[\'"\u201c\u201d\u2018\u2019\u300c\u300d\uff02\uff07]+$', '', raw)
         raw = raw.strip()
 
         if not raw:
-            logger.warning(f"generate_topic_summary: 清洗后 raw 为空, content={repr(content[:80])}")
+            logger.warning(f"generate_topic_summary: 清洗后 raw 为空, content={content[:80]!r}")
             return None, _empty_usage()
 
         # 硬过滤：禁止输出废词标题
@@ -114,12 +114,12 @@ def generate_topic_summary(client, model: str, conversations: list[dict]) -> tup
                      '主题', '这个', '输入', '生成']
         for word in forbidden:
             if word in raw:
-                logger.warning(f"generate_topic_summary: 标题含禁词'{word}'被拒: {repr(raw)}")
+                logger.warning(f"generate_topic_summary: 标题含禁词'{word}'被拒: {raw!r}")
                 return None, _empty_usage()
 
         # 拒绝过短的摘要（<4个字符）
         if len(raw) < 4:
-            logger.warning(f"generate_topic_summary: 摘要过短被拒, len={len(raw)}, raw={repr(raw)}")
+            logger.warning(f"generate_topic_summary: 摘要过短被拒, len={len(raw)}, raw={raw!r}")
             return None, _empty_usage()
 
         if len(raw) > 20:

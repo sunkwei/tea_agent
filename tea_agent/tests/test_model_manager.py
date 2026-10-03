@@ -8,8 +8,6 @@
 
 from __future__ import annotations
 
-import sys
-import types
 import urllib.error as urllib_err
 from pathlib import Path
 
@@ -293,7 +291,6 @@ def test_query_models_cache_expired(svc, monkeypatch):
     svc.query_models("DeepSeek", api_key="sk-test", refresh=True)
     assert len(called) == 1
     # 把缓存时间戳推到过期（TTL=300s 之前）
-    import time as _t
     key = "DeepSeek:sk-test"
     ts, _ = svc._models_cache[key]
     svc._models_cache[key] = (ts - svc._models_cache_ttl - 1, _)

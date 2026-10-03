@@ -253,13 +253,13 @@ class EvolutionActor:
     def _execute_one(self, action_type: str, target: str, reason: str) -> dict:
         if action_type == "evolve_code":
             return self._evolve_code(target, reason)
-        elif action_type == "evolve_prompt":
+        if action_type == "evolve_prompt":
             return self._evolve_prompt(reason)
-        elif action_type == "solidify":
+        if action_type == "solidify":
             return self._solidify(reason)
-        elif action_type == "create_tool":
+        if action_type == "create_tool":
             return self._create_tool(reason)
-        elif action_type == "prune":
+        if action_type == "prune":
             return self._prune(target, reason)
         return {"ok": False, "error": f"unknown_action:{action_type}"}
 
@@ -480,7 +480,7 @@ class EvolutionActor:
 
         if target == "skills":
             return self._prune_skills(keep, reason)
-        elif target == "evolution_log":
+        if target == "evolution_log":
             return _prune_evolution_log(keep)
         return {"ok": True, "pruned": 0, "detail": f"target={target} 无需修剪"}
 

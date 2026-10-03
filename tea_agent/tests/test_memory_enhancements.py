@@ -201,7 +201,6 @@ class TestJiebaRemoved:
         assert not hasattr(server, "_schedule_jieba_warmup")
 
     def test_chinese_bigram_extraction(self):
-        import re as _re
 
         from tea_agent.memory import MemoryManager
 

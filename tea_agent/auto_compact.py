@@ -606,7 +606,7 @@ def run_pre_compact_hooks(ctx: dict) -> list:
         待压缩的消息列表（可能被 hook 修改）
     """
     messages = ctx.get("messages", [])
-    for fn in list(_pre_compact_hooks):
+    for fn in _pre_compact_hooks:
         try:
             result = fn(ctx)
             if isinstance(result, list):
@@ -626,7 +626,7 @@ def run_post_compact_hooks(result: dict) -> dict:
     Returns:
         可能被 hook 修改的结果字典
     """
-    for fn in list(_post_compact_hooks):
+    for fn in _post_compact_hooks:
         try:
             modified = fn(result)
             if isinstance(modified, dict):

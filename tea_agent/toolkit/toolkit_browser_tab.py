@@ -30,8 +30,7 @@ def toolkit_browser_tab(action: str, browser: str = "firefox", tab_title: str = 
 
     if is_windows:
         return _windows_browser_tab(action, browser, tab_title, window_index)
-    else:
-        return _linux_browser_tab(action, browser, tab_title, window_index)
+    return _linux_browser_tab(action, browser, tab_title, window_index)
 
 def _windows_browser_tab(action, browser, tab_title, window_index):
     """Windows 平台实现"""
@@ -79,7 +78,7 @@ def _windows_browser_tab(action, browser, tab_title, window_index):
                 return True
 
             # 根据浏览器类型匹配
-            if browser_name_lower == "firefox" and "firefox" in title.lower() or browser_name_lower == "chrome" and "chrome" in title.lower() or browser_name_lower == "edge" and ("edge" in title.lower() or "microsoft" in title.lower()):
+            if (browser_name_lower == "firefox" and "firefox" in title.lower()) or (browser_name_lower == "chrome" and "chrome" in title.lower()) or (browser_name_lower == "edge" and ("edge" in title.lower() or "microsoft" in title.lower())):
                 windows.append({"hwnd": hwnd, "title": title})
             return True
 
@@ -103,13 +102,13 @@ def _windows_browser_tab(action, browser, tab_title, window_index):
             })
         return {"ok": True, "browser": browser, "tabs": tabs, "count": len(tabs)}
 
-    elif action == "get_active_tab":
+    if action == "get_active_tab":
         # 获取当前活动窗口
         hwnd = get_foreground_window()
         title = get_window_text(hwnd)
         return {"ok": True, "browser": browser, "active_tab": title, "hwnd": hwnd}
 
-    elif action == "activate_tab":
+    if action == "activate_tab":
         if not tab_title:
             return {"ok": False, "error": "activate_tab 需要 tab_title 参数"}
 
@@ -152,8 +151,7 @@ def _windows_browser_tab(action, browser, tab_title, window_index):
             "success": success
         }
 
-    else:
-        return {"ok": False, "error": f"未知 action: {action}"}
+    return {"ok": False, "error": f"未知 action: {action}"}
 
 def _linux_browser_tab(action, browser, tab_title, window_index):
     """Linux 平台实现（使用 xdotool/wmctrl）"""
@@ -182,7 +180,7 @@ def _linux_browser_tab(action, browser, tab_title, window_index):
         if action == "list_tabs":
             return {"ok": True, "browser": browser, "tabs": browser_windows, "count": len(browser_windows)}
 
-        elif action == "activate_tab":
+        if action == "activate_tab":
             if not tab_title:
                 return {"ok": False, "error": "activate_tab 需要 tab_title 参数"}
 

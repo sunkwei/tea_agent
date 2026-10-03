@@ -399,8 +399,7 @@ def _action_build(directory, force):
             stale = _check_index_stale(directory, run_dir)
             if not stale:
                 return f"✅ 知识库已存在 (更新于 {age/60:.0f} 分钟前)，使用 force=true 强制重建"
-            else:
-                _log("⚠ 检测到源码变更，自动重建索引")
+            _log("⚠ 检测到源码变更，自动重建索引")
 
     _log(f"🏗 构建项目知识库: {directory}")
     t0 = time.time()
@@ -494,13 +493,12 @@ def _action_query(directory, symbol, query_type):
             for e in entries[:10]:
                 parts.append(f"- [{e['kind']}] `{e['path']}:{e['line']}`")
             return '\n'.join(parts)
-        else:
-            matches = [k for k in index if symbol.lower() in k.lower()]
-            if matches:
-                if len(matches) == 1:
-                    return _action_query(directory, matches[0], 'symbol')
-                return f"未找到 `{symbol}`，相关: {', '.join(f'`{m}`' for m in matches[:15])}"
-            return f"❌ 未找到 `{symbol}`"
+        matches = [k for k in index if symbol.lower() in k.lower()]
+        if matches:
+            if len(matches) == 1:
+                return _action_query(directory, matches[0], 'symbol')
+            return f"未找到 `{symbol}`，相关: {', '.join(f'`{m}`' for m in matches[:15])}"
+        return f"❌ 未找到 `{symbol}`"
 
     if not os.path.exists(cg_path):
         return "❌ 无调用图，请先 build"
@@ -1019,9 +1017,9 @@ def toolkit_explr(action="build", directory=".", symbol=None, query_type="symbol
     force_bool = force in ("true", "True", "1")
     if action == "build":
         return _action_build(directory, force_bool)
-    elif action == "generate_docs":
+    if action == "generate_docs":
         return _action_generate_docs(directory)
-    elif action == "query":
+    if action == "query":
         if query_type == "arch_context":
             return _extract_arch_context(directory, symbol)
         if query_type == "impact":
@@ -1029,10 +1027,9 @@ def toolkit_explr(action="build", directory=".", symbol=None, query_type="symbol
         if query_type == "deps":
             return _action_deps(directory)
         return _action_query(directory, symbol, query_type)
-    elif action == "status":
+    if action == "status":
         return _action_status(directory)
-    else:
-        return f"❌ 未知 action: {action}"
+    return f"❌ 未知 action: {action}"
 
 # @2026-05-19 gen by claude, 新增 impact(影响分析) / deps(依赖图) 查询类型 + filepath 参数
 def meta_toolkit_explr() -> dict:

@@ -96,9 +96,8 @@ def toolkit_memory(action: str, content: str = "", category: str = "general", pr
             if hard:
                 ok = storage.delete_memory(id)
                 return f"🗑️ 记忆 #{id} 已彻底删除。" if ok else f"❌ 记忆 #{id} 不存在。"
-            else:
-                ok = storage.deactivate_memory(id)
-                return f"💤 记忆 #{id} 已标记失效（软删除）。" if ok else f"❌ 记忆 #{id} 不存在。"
+            ok = storage.deactivate_memory(id)
+            return f"💤 记忆 #{id} 已标记失效（软删除）。" if ok else f"❌ 记忆 #{id} 不存在。"
         except Exception as e:
             return f"❌ 操作失败: {e}"
 
@@ -138,8 +137,7 @@ def toolkit_memory(action: str, content: str = "", category: str = "general", pr
             result = extractor.extract_from_topic(topic_id, force=force)
             if result["status"] == "success":
                 return f"✅ 自动提取完成: 保存 {result['extracted']} 条记忆, 跳过 {result['skipped']} 条 (共分析 {result['total_conversations']} 条对话)"
-            else:
-                return f"⚠️ {result['status']}"
+            return f"⚠️ {result['status']}"
         except Exception as e:
             return f"❌ 自动提取失败: {e}"
 

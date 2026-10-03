@@ -329,19 +329,18 @@ def toolkit_task_resume(action: str = "check", plan_id: str = None) -> dict:
                 "hint": "；".join(hints) + ("。" if hints else ""),
             }
 
-        elif action == "resume_todo":
+        if action == "resume_todo":
             # 恢复待办执行
             from tea_agent.toolkit.toolkit_todo import toolkit_todo
             return toolkit_todo(action="show")
 
-        elif action == "resume_plan":
+        if action == "resume_plan":
             if not plan_id:
                 return {"ok": False, "error": "resume_plan 需要 plan_id"}
             from tea_agent.toolkit.toolkit_plan import toolkit_plan
             return toolkit_plan(action="show", plan_id=plan_id)
 
-        else:
-            return {"ok": False, "error": f"未知 action: {action}"}
+        return {"ok": False, "error": f"未知 action: {action}"}
 
     except Exception as e:
         logger.exception("toolkit_task_resume")

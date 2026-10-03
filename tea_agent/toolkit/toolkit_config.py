@@ -37,7 +37,7 @@ def toolkit_config(action: str = "list", key: str = "", value: str = "") -> str:
             lines.append(f"  {k} = {v}")
         return "\n".join(lines)
 
-    elif action == "get":
+    if action == "get":
         if not key:
             return "❌ 需要提供 key 参数"
         val = cfg.get(key)
@@ -45,7 +45,7 @@ def toolkit_config(action: str = "list", key: str = "", value: str = "") -> str:
             return f"❌ 未知配置键: {key}"
         return f"{key} = {val}"
 
-    elif action == "set":
+    if action == "set":
         if not key:
             return "❌ 需要提供 key 参数"
         if not value:
@@ -77,7 +77,7 @@ def toolkit_config(action: str = "list", key: str = "", value: str = "") -> str:
 
         return f"✅ {key}: {old_val} → {new_val}"
 
-    elif action == "history":
+    if action == "history":
         if not storage:
             return "❌ Storage 未初始化"
         changes = storage.get_config_history(key=key if key else "", limit=20)
@@ -93,8 +93,7 @@ def toolkit_config(action: str = "list", key: str = "", value: str = "") -> str:
                 lines.append(f"    原因: {ch['reason']}")
         return "\n".join(lines)
 
-    else:
-        return f"❌ 未知操作: {action}。支持: list, get, set, history"
+    return f"❌ 未知操作: {action}。支持: list, get, set, history"
 
 def meta_toolkit_config() -> dict:
     """Meta toolkit config."""

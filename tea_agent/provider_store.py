@@ -761,9 +761,7 @@ class ProviderStore:
                 if k not in cleaned:
                     continue
                 v = cleaned[k]
-                if k in _FLOAT_FIELDS or k in _BOOL_FIELDS:
-                    cfg[k] = v
-                elif v not in ("", [], 0, False):
+                if k in _FLOAT_FIELDS or k in _BOOL_FIELDS or v not in ("", [], 0, False):
                     cfg[k] = v
         if not p.get("default_model"):
             p["default_model"] = model

@@ -93,12 +93,12 @@ def toolkit_pkg(action: str, packages: str = None, module: str = None):
             "missing_packages": missing,
         }
 
-    elif action == "check" and module:
+    if action == "check" and module:
         ok = _check_module(module)
         ver = _get_version(module) if ok else None
         return {"module": module, "installed": ok, "version": ver}
 
-    elif action == "install" and packages:
+    if action == "install" and packages:
         pkg_list = []
         for p in packages.split(","):
             p = p.strip()
@@ -120,7 +120,7 @@ def toolkit_pkg(action: str, packages: str = None, module: str = None):
             "stdout": stdout[-500:] if stdout else "",
         }
 
-    elif action == "ensure":
+    if action == "ensure":
         """确保依赖就绪 — 检查并自动安装缺失的"""
         pkgs = _list_installed()
         missing = [p["package"] for p in pkgs if not p["installed"] and p["package"] != "unknown"]
@@ -135,17 +135,16 @@ def toolkit_pkg(action: str, packages: str = None, module: str = None):
             "all_ok": len(missing) == 0 or len(installed) == len(missing),
         }
 
-    else:
-        return {
-            "error": f"未知 action: {action}",
-            "supported": ["list", "check", "install", "ensure"],
-            "examples": [
-                "toolkit_pkg(action='list')",
-                "toolkit_pkg(action='check', module='jieba')",
-                "toolkit_pkg(action='install', packages='jieba,Pillow')",
-                "toolkit_pkg(action='ensure')",
-            ],
-        }
+    return {
+        "error": f"未知 action: {action}",
+        "supported": ["list", "check", "install", "ensure"],
+        "examples": [
+            "toolkit_pkg(action='list')",
+            "toolkit_pkg(action='check', module='jieba')",
+            "toolkit_pkg(action='install', packages='jieba,Pillow')",
+            "toolkit_pkg(action='ensure')",
+        ],
+    }
 
 def meta_toolkit_pkg() -> dict:
     """Meta toolkit pkg."""

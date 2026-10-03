@@ -626,12 +626,12 @@ class LoadBalancer:
                 self._rr_index += 1
             return nodes[idx].pool
 
-        elif self.strategy == LoadBalancerStrategy.LEAST_CONNECTIONS:
+        if self.strategy == LoadBalancerStrategy.LEAST_CONNECTIONS:
             # 选择当前连接数最少的节点
             best = min(nodes, key=lambda n: n.load_ratio())
             return best.pool
 
-        elif self.strategy == LoadBalancerStrategy.WEIGHTED:
+        if self.strategy == LoadBalancerStrategy.WEIGHTED:
             # 加权随机选择
             import random
             total_weight = sum(n.weight for n in nodes)
@@ -643,9 +643,9 @@ class LoadBalancer:
                     return n.pool
             return nodes[-1].pool
 
-        else:  # RANDOM
-            import random
-            return random.choice(nodes).pool
+        # RANDOM
+        import random
+        return random.choice(nodes).pool
 
     def submit(
         self,

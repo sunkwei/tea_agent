@@ -175,13 +175,11 @@ class SessionComponent(ABC):
     @abstractmethod
     def initialize(self) -> None:
         """子类实现：初始化组件资源。"""
-        pass
 
     @property
     @abstractmethod
     def name(self) -> str:
         """子类实现：返回组件唯一标识名。"""
-        pass
 
     def save_agent_config(self, config: Any) -> None:
         """保存 Agent 配置变更到 storage。"""

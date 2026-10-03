@@ -103,8 +103,7 @@ def toolkit_build(action: str, directory: str = "."):
             with open(filepath, "w", encoding="utf-8") as f:
                 f.write(content)
             return "Applied changes: " + ", ".join(changes)
-        else:
-            return "No changes needed."
+        return "No changes needed."
 
     else:
         return f"❌ 未知 action: '{action}'，可选: package / fix"

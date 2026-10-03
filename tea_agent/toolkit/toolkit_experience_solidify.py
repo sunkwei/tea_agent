@@ -44,23 +44,21 @@ def toolkit_experience_solidify(
     """
     if action == "analyze":
         return _analyze_execution(task, result, success, tools_used, duration, error)
-    elif action == "solidify":
+    if action == "solidify":
         return _solidify_pattern(task, result, tools_used, pattern_name)
-    elif action == "lesson":
+    if action == "lesson":
         return _record_lesson(task, error, tools_used)
-    elif action == "auto":
+    if action == "auto":
         if success:
             return _solidify_pattern(task, result, tools_used, pattern_name)
-        else:
-            return _record_lesson(task, error, tools_used)
-    elif action == "record":
+        return _record_lesson(task, error, tools_used)
+    if action == "record":
         return _exp_record(description, category, tags, outcome, notes)
-    elif action == "list":
+    if action == "list":
         return _exp_list(limit)
-    elif action == "search":
+    if action == "search":
         return _exp_search(query, limit)
-    else:
-        return {"ok": False, "error": f"unknown_action:{action}"}
+    return {"ok": False, "error": f"unknown_action:{action}"}
 
 
 def _analyze_execution(task: str, result: str, success: bool, tools_used: list[str], duration: float, error: str) -> dict:

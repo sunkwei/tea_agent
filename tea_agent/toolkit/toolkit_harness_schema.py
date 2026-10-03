@@ -340,11 +340,11 @@ def toolkit_harness_schema(action: str = "generate", format: str = "json") -> di
             "generated_at": schema["generated_at"],
         }
 
-    elif action == "tools":
+    if action == "tools":
         return {"tools": _get_tools_schemas(), "total": 0}
 
-    else:  # generate
-        return generate_harness_schema(include_tools=True)
+    # generate
+    return generate_harness_schema(include_tools=True)
 
 
 # ── Meta for toolkit registration ──────────────────────

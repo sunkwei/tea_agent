@@ -201,7 +201,7 @@ def toolkit_remote_agent(
             return {"error": "host 是必需的"}
         return _register_device(device_id, host, port, working_path, auth_code)
 
-    elif action == "unregister":
+    if action == "unregister":
         if not device_id:
             return {"error": "device_id 是必需的"}
         with _registry_lock:

@@ -17,8 +17,6 @@ anything-llm #5683、langchain #35094 等生态证据）。
 import logging
 from types import SimpleNamespace
 
-import pytest
-
 from tea_agent.basesession import BaseChatSession
 from tea_agent.session.context import SessionContext
 from tea_agent.session.history_builder import build_api_messages

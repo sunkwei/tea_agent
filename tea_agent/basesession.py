@@ -366,7 +366,6 @@ class BaseChatSession(ABC):
         Returns:
             Tuple[str, bool]: (助手完整回复, 是否使用了工具调用)
         """
-        pass
 
     def add_user_message(self, msg):
         """添加用户消息，支持纯文本或含图片的结构化输入"""
@@ -673,7 +672,7 @@ class BaseChatSession(ABC):
                         1,
                     )
                 return (val, 0)
-            elif isinstance(val, dict):
+            if isinstance(val, dict):
                 new_d = {}
                 total_trunc = 0
                 for k, v in val.items():
@@ -681,7 +680,7 @@ class BaseChatSession(ABC):
                     new_d[k] = cv
                     total_trunc += ct
                 return (new_d, total_trunc)
-            elif isinstance(val, list):
+            if isinstance(val, list):
                 new_l = []
                 total_trunc = 0
                 for i, v in enumerate(val):
@@ -689,9 +688,8 @@ class BaseChatSession(ABC):
                     new_l.append(cv)
                     total_trunc += ct
                 return (new_l, total_trunc)
-            else:
-                # number, bool, null
-                return (val, 0)
+            # number, bool, null
+            return (val, 0)
 
         compressed_obj, truncated = _compress_value(obj)
 
@@ -1066,4 +1064,4 @@ class BaseChatSession(ABC):
 
     def _trim_messages(self):  # noqa: B027
         """[DISABLED: 2026-05-20] no references — trimming now via L3 summary"""
-        pass  # DISABLED
+        # DISABLED

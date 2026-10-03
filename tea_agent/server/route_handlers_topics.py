@@ -192,7 +192,7 @@ async def handle_web_topic_plans(request):
                     p = json.load(f)
                 if p.get("topic_id") == topic_id or p.get("topic_id") == "" or not topic_id:
                     plan_status = (p.get("status") or "").lower()
-                    if status_filter == "all" or status_filter == "done" and plan_status == "done" or status_filter == "failed" and plan_status == "failed" or status_filter == "active" and plan_status not in ("done", "failed"):
+                    if status_filter == "all" or (status_filter == "done" and plan_status == "done") or (status_filter == "failed" and plan_status == "failed") or (status_filter == "active" and plan_status not in ("done", "failed")):
                         plans.append(p)
     except Exception as e:
         logger.warning(f"handle_web_topic_plans failed: {e}")

@@ -52,22 +52,22 @@ def toolkit_input(
             pg.moveTo(x, y, duration=duration)
             return json.dumps({"action": "move", "to": [x, y], "ok": True}, ensure_ascii=False)
 
-        elif action == "click":
+        if action == "click":
             pg.moveTo(x, y, duration=duration * 0.5)
             pg.click(x, y, button=button)
             return json.dumps({"action": "click", "at": [x, y], "button": button, "ok": True}, ensure_ascii=False)
 
-        elif action == "double_click":
+        if action == "double_click":
             pg.moveTo(x, y, duration=duration * 0.5)
             pg.doubleClick(x, y, button=button)
             return json.dumps({"action": "double_click", "at": [x, y], "ok": True}, ensure_ascii=False)
 
-        elif action == "right_click":
+        if action == "right_click":
             pg.moveTo(x, y, duration=duration * 0.5)
             pg.rightClick(x, y)
             return json.dumps({"action": "right_click", "at": [x, y], "ok": True}, ensure_ascii=False)
 
-        elif action == "drag":
+        if action == "drag":
             pg.moveTo(x, y, duration=duration * 0.5)
             pg.drag(dx, dy, duration=duration, button=button)
             end_x, end_y = x + dx, y + dy
@@ -78,7 +78,7 @@ def toolkit_input(
                 "ok": True
             }, ensure_ascii=False)
 
-        elif action == "position":
+        if action == "position":
             pos = pg.position()
             screen = pg.size()
             return json.dumps({
@@ -88,12 +88,12 @@ def toolkit_input(
                 "screen": f"{screen.width}x{screen.height}",
             }, ensure_ascii=False)
 
-        elif action == "scroll":
+        if action == "scroll":
             pg.scroll(amount, x=x if x else None, y=y if y else None)
             return json.dumps({"action": "scroll", "amount": amount, "ok": True}, ensure_ascii=False)
 
         # ── 键盘操作 ──
-        elif action == "type":
+        if action == "type":
             if not text:
                 return "❌ type 需要提供 text 参数"
             pg.typewrite(text, interval=0.02)
@@ -104,13 +104,13 @@ def toolkit_input(
                 "ok": True,
             }, ensure_ascii=False)
 
-        elif action == "press":
+        if action == "press":
             if not keys:
                 return "❌ press 需要提供 keys 参数"
             pg.press(keys)
             return json.dumps({"action": "press", "key": keys, "ok": True}, ensure_ascii=False)
 
-        elif action == "hotkey":
+        if action == "hotkey":
             if not keys:
                 return "❌ hotkey 需要提供 keys 参数（如 'ctrl+c'）"
             key_list = [k.strip() for k in keys.split("+")]
@@ -118,12 +118,11 @@ def toolkit_input(
             return json.dumps({"action": "hotkey", "keys": keys, "ok": True}, ensure_ascii=False)
 
         # ── 信息 ──
-        elif action == "screen_size":
+        if action == "screen_size":
             s = pg.size()
             return json.dumps({"action": "screen_size", "width": s.width, "height": s.height}, ensure_ascii=False)
 
-        else:
-            return f"❌ 未知操作: {action}。支持: move, click, double_click, right_click, drag, position, scroll, type, press, hotkey, screen_size"
+        return f"❌ 未知操作: {action}。支持: move, click, double_click, right_click, drag, position, scroll, type, press, hotkey, screen_size"
 
     except pg.FailSafeException:
         return "⚠️ 触发 FailSafe：鼠标移到了左上角 (0,0)，操作已取消。"

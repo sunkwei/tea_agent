@@ -27,19 +27,9 @@ def _ensure_plans_dir():
     os.makedirs(PLANS_DIR, exist_ok=True)
 
 def _plan_path(plan_id: str) -> str:
-    """Internal: plan path.
-
-    Args:
-        plan_id: Description.
-    """
     return os.path.join(PLANS_DIR, f"{plan_id}.json")
 
 def _load_plan(plan_id: str) -> dict | None:
-    """Internal: load plan.
-
-    Args:
-        plan_id: Description.
-    """
     path = _plan_path(plan_id)
     if not os.path.exists(path):
         return None
@@ -47,11 +37,6 @@ def _load_plan(plan_id: str) -> dict | None:
         return json.load(f)
 
 def _save_plan(plan: dict):
-    """Internal: save plan.
-
-    Args:
-        plan: Description.
-    """
     _ensure_plans_dir()
     plan["updated_at"] = datetime.now().isoformat()
     with open(_plan_path(plan["id"]), "w", encoding="utf-8") as f:
@@ -72,12 +57,6 @@ def _get_topic_id() -> str | None:
     return None
 
 def _new_plan(goal: str, steps: list[dict]) -> dict:
-    """Internal: new plan.
-
-    Args:
-        goal: Description.
-        steps: Description.
-    """
     now = datetime.now().isoformat()
     normalized = []
     for i, s in enumerate(steps):
@@ -113,12 +92,6 @@ def _new_plan(goal: str, steps: list[dict]) -> dict:
 # ── 核心逻辑 ────────────────────────────────────────────
 
 def _deps_satisfied(step: dict, all_steps: list[dict]) -> bool:
-    """Internal: deps satisfied.
-
-    Args:
-        step: Description.
-        all_steps: Description.
-    """
     for dep_id in step.get("depends_on", []):
         dep = next((s for s in all_steps if s["id"] == dep_id), None)
         if not dep or dep["status"] != "done":
@@ -126,23 +99,12 @@ def _deps_satisfied(step: dict, all_steps: list[dict]) -> bool:
     return True
 
 def _next_pending(plan: dict) -> dict | None:
-    """Internal: next pending.
-
-    Args:
-        plan: Description.
-    """
     for step in plan["steps"]:
         if step["status"] == "pending" and _deps_satisfied(step, plan["steps"]):
             return step
     return None
 
 def _count_status(plan: dict, status: str) -> int:
-    """Internal: count status.
-
-    Args:
-        plan: Description.
-        status: Description.
-    """
     return sum(1 for s in plan["steps"] if s["status"] == status)
 
 # ── 工具入口 ────────────────────────────────────────────
@@ -171,7 +133,7 @@ def toolkit_plan(
                 "hint": f"action='run' plan_id='{plan['id']}' 执行全部",
             }
 
-        elif action == "show":
+        if action == "show":
             if not plan_id:
                 return {"ok": False, "error": "show 需要 plan_id"}
             plan = _load_plan(plan_id)
@@ -182,19 +144,19 @@ def toolkit_plan(
                 "progress": f"{_count_status(plan, 'done')}/{len(plan['steps'])} done",
             }
 
-        elif action == "step":
+        if action == "step":
             return _do_step(plan_id, step_id, cwd)
 
-        elif action == "verify":
+        if action == "verify":
             return _do_verify(plan_id, step_id, cwd)
 
-        elif action == "run":
+        if action == "run":
             return _do_run(plan_id, cwd)
 
-        elif action == "resume":
+        if action == "resume":
             return _do_resume(plan_id, cwd)
 
-        elif action == "review":
+        if action == "review":
             """画布审阅模式 — 展示计划但绝不修改文件，支持 diff 预览"""
             if not plan_id:
                 return {"ok": False, "error": "review 需要 plan_id"}
@@ -266,7 +228,7 @@ def toolkit_plan(
                 "hint": "review 仅展示计划，不修改任何文件。使用 action='run' 执行。",
             }
 
-        elif action == "canvas":
+        if action == "canvas":
             """画布模式 — 创建一个空白画布计划用于 brainstorming"""
             if not goal:
                 return {"ok": False, "error": "canvas 需要 goal 参数"}
@@ -285,7 +247,7 @@ def toolkit_plan(
                 "hint": f"画布已创建 (plan_id='{plan['id']}')。使用 action='review' 查看，action='insert' 添加步骤，确认后 action='run' 执行。",
             }
 
-        elif action == "list":
+        if action == "list":
             _ensure_plans_dir()
             plans = []
             for fname in sorted(os.listdir(PLANS_DIR), reverse=True):
@@ -297,7 +259,7 @@ def toolkit_plan(
                         "updated": p.get("updated_at", "")[:19],
                     })
             return {"ok": True, "plans": plans}
-        elif action == "delete":
+        if action == "delete":
             if not plan_id:
                 return {"ok": False, "error": "delete 需要 plan_id"}
             path = _plan_path(plan_id)
@@ -306,26 +268,25 @@ def toolkit_plan(
                 return {"ok": True, "deleted": plan_id}
             return {"ok": False, "error": f"计划不存在: {plan_id}"}
 
-        elif action == "decompose":
+        if action == "decompose":
             if not goal:
                 return {"ok": False, "error": "decompose 需要 goal 参数"}
             return _decompose_goal(goal, cwd)
 
         # ── 动态规划操作 ──
-        elif action == "insert":
+        if action == "insert":
             return _insert_step(plan_id, step_id, steps)
 
-        elif action == "replace":
+        if action == "replace":
             return _replace_step(plan_id, step_id, steps)
 
-        elif action == "delete_step":
+        if action == "delete_step":
             return _delete_step(plan_id, step_id)
 
-        elif action == "replan":
+        if action == "replan":
             return _replan(plan_id, steps, cwd)
 
-        else:
-            return {"ok": False, "error": f"未知 action: {action}"}
+        return {"ok": False, "error": f"未知 action: {action}"}
 
     except Exception as e:
         logger.exception(f"toolkit_plan: {e}")
@@ -334,13 +295,6 @@ def toolkit_plan(
 # ── Action 实现 ──────────────────────────────────────────
 
 def _do_step(plan_id, step_id, cwd):
-    """Internal: do step.
-
-    Args:
-        plan_id: Description.
-        step_id: Description.
-        cwd: Description.
-    """
     if not plan_id:
         return {"ok": False, "error": "step 需要 plan_id"}
     plan = _load_plan(plan_id)
@@ -366,13 +320,6 @@ def _do_step(plan_id, step_id, cwd):
     return _execute_step(plan, step, cwd)
 
 def _do_verify(plan_id, step_id, cwd):
-    """Internal: do verify.
-
-    Args:
-        plan_id: Description.
-        step_id: Description.
-        cwd: Description.
-    """
     if not plan_id:
         return {"ok": False, "error": "verify 需要 plan_id"}
     plan = _load_plan(plan_id)
@@ -387,12 +334,6 @@ def _do_verify(plan_id, step_id, cwd):
     return {"ok": True, "verified": len(results), "results": results}
 
 def _do_run(plan_id, cwd):
-    """Internal: do run.
-
-    Args:
-        plan_id: Description.
-        cwd: Description.
-    """
     if not plan_id:
         return {"ok": False, "error": "run 需要 plan_id"}
     plan = _load_plan(plan_id)
@@ -417,12 +358,6 @@ def _do_run(plan_id, cwd):
     return {"ok": True, "executed": executed, "plan_id": plan_id, "summary": _step_summary(plan)}
 
 def _do_resume(plan_id, cwd):
-    """Internal: do resume.
-
-    Args:
-        plan_id: Description.
-        cwd: Description.
-    """
     if not plan_id:
         return {"ok": False, "error": "resume 需要 plan_id"}
     plan = _load_plan(plan_id)
@@ -438,22 +373,10 @@ def _do_resume(plan_id, cwd):
 # ── 内部辅助 ────────────────────────────────────────────
 
 def _step_summary(plan: dict) -> str:
-    """Internal: step summary.
-
-    Args:
-        plan: Description.
-    """
     icons = {"done": "✓", "failed": "✗", "running": "▶", "pending": "○", "skipped": "−"}
     return "\n".join(f"  {icons.get(s['status'],'?')} [{s['id']}] {s['desc']}" for s in plan["steps"])
 
 def _execute_step(plan: dict, step: dict, cwd: str) -> dict:
-    """Internal: execute step.
-
-    Args:
-        plan: Description.
-        step: Description.
-        cwd: Description.
-    """
     step["status"] = "running"
     step["started_at"] = datetime.now().isoformat()
     plan["current_step"] = step["id"]
@@ -522,12 +445,6 @@ def _execute_step(plan: dict, step: dict, cwd: str) -> dict:
             "plan_progress": f"{_count_status(plan, 'done')}/{len(plan['steps'])}"}
 
 def _verify_step(step: dict, cwd: str) -> dict:
-    """Internal: verify step.
-
-    Args:
-        step: Description.
-        cwd: Description.
-    """
     verify_type = step.get("verify", "py_compile")
     results = {}
     try:

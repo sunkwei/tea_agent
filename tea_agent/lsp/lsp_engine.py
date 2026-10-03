@@ -574,10 +574,9 @@ def diagnose_auto(project_root: str, filepath: str = None) -> dict:
     ext = Path(filepath).suffix.lower()
     if ext in ('.py', '.pyw', '.pyi'):
         return diagnose(project_root, filepath)
-    elif ext in ('.cpp', '.cc', '.cxx', '.c', '.h', '.hpp', '.hxx'):
+    if ext in ('.cpp', '.cc', '.cxx', '.c', '.h', '.hpp', '.hxx'):
         return cpp_diagnose(project_root, filepath)
-    else:
-        return {"ok": True, "diagnostics": [], "total": 0, "hint": f"不支持的文件类型: {ext}"}
+    return {"ok": True, "diagnostics": [], "total": 0, "hint": f"不支持的文件类型: {ext}"}
 
 
 def goto_definition_auto(project_root: str, filepath: str, line: int, col: int) -> dict:
@@ -585,10 +584,9 @@ def goto_definition_auto(project_root: str, filepath: str, line: int, col: int) 
     ext = Path(filepath).suffix.lower()
     if ext in ('.py', '.pyw', '.pyi'):
         return goto_definition(project_root, filepath, line, col)
-    elif ext in ('.cpp', '.cc', '.cxx', '.c', '.h', '.hpp', '.hxx'):
+    if ext in ('.cpp', '.cc', '.cxx', '.c', '.h', '.hpp', '.hxx'):
         return cpp_goto_definition(project_root, filepath, line, col)
-    else:
-        return {"ok": False, "error": f"不支持的文件类型: {ext}"}
+    return {"ok": False, "error": f"不支持的文件类型: {ext}"}
 
 
 def completion_auto(project_root: str, filepath: str, line: int, col: int) -> dict:
@@ -596,7 +594,6 @@ def completion_auto(project_root: str, filepath: str, line: int, col: int) -> di
     ext = Path(filepath).suffix.lower()
     if ext in ('.py', '.pyw', '.pyi'):
         return completion(project_root, filepath, line, col)
-    elif ext in ('.cpp', '.cc', '.cxx', '.c', '.h', '.hpp', '.hxx'):
+    if ext in ('.cpp', '.cc', '.cxx', '.c', '.h', '.hpp', '.hxx'):
         return cpp_completion(project_root, filepath, line, col)
-    else:
-        return {"ok": False, "error": f"不支持的文件类型: {ext}"}
+    return {"ok": False, "error": f"不支持的文件类型: {ext}"}

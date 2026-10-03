@@ -132,12 +132,6 @@ def toolkit_scheduler(action: str, **kwargs):
 
     # ── 调度解析 ──
     def parse_schedule(schedule: str, from_time: datetime = None):
-        """Parse schedule.
-
-        Args:
-            schedule: Description.
-            from_time: Description.
-        """
         if not schedule:
             return None
         now = from_time or datetime.now()
@@ -176,12 +170,6 @@ def toolkit_scheduler(action: str, **kwargs):
         return None
 
     def _match_cron(pattern: str, value: int) -> bool:
-        """Internal: match cron.
-
-        Args:
-            pattern: Description.
-            value: Description.
-        """
         if pattern == "*":
             return True
         for part in pattern.split(","):
@@ -218,12 +206,6 @@ def toolkit_scheduler(action: str, **kwargs):
         return ",".join(out)
 
     def _parse_cron(expr: str, now: datetime):
-        """Internal: parse cron.
-
-        Args:
-            expr: Description.
-            now: Description.
-        """
         parts = expr.strip().split()
         if len(parts) != 5:
             return None
@@ -423,7 +405,7 @@ def toolkit_scheduler(action: str, **kwargs):
             tasks.append(t)
         return {"tasks": tasks, "count": len(tasks), "scheduler_running": _main_mod._tea_scheduler_running}
 
-    elif action == "add":
+    if action == "add":
         name = kwargs.get("name", "")
         command = kwargs.get("command", "")
         schedule = kwargs.get("schedule", "")
@@ -444,7 +426,7 @@ def toolkit_scheduler(action: str, **kwargs):
         conn.close()
         return {"status": "added", "task_id": tid, "next_run": next_run.isoformat() if next_run else None}
 
-    elif action == "update":
+    if action == "update":
         tid = kwargs.get("task_id", "")
         if not tid:
             return {"error": "需要 task_id 参数"}
@@ -478,7 +460,7 @@ def toolkit_scheduler(action: str, **kwargs):
         conn.close()
         return {"status": "updated"}
 
-    elif action == "delete":
+    if action == "delete":
         tid = kwargs.get("task_id", "")
         if not tid:
             return {"error": "需要 task_id 参数"}
@@ -488,7 +470,7 @@ def toolkit_scheduler(action: str, **kwargs):
         conn.close()
         return {"status": "deleted"}
 
-    elif action == "enable":
+    if action == "enable":
         tid = kwargs.get("task_id", "")
         conn = _get_conn()
         conn.execute("UPDATE scheduled_tasks SET enabled=1, updated_at=CURRENT_TIMESTAMP WHERE id=?", (tid,))
@@ -496,7 +478,7 @@ def toolkit_scheduler(action: str, **kwargs):
         conn.close()
         return {"status": "enabled"}
 
-    elif action == "disable":
+    if action == "disable":
         tid = kwargs.get("task_id", "")
         conn = _get_conn()
         conn.execute("UPDATE scheduled_tasks SET enabled=0, updated_at=CURRENT_TIMESTAMP WHERE id=?", (tid,))
@@ -504,7 +486,7 @@ def toolkit_scheduler(action: str, **kwargs):
         conn.close()
         return {"status": "disabled"}
 
-    elif action == "run":
+    if action == "run":
         tid = kwargs.get("task_id", "")
         if not tid:
             return {"error": "需要 task_id 参数"}
@@ -525,7 +507,7 @@ def toolkit_scheduler(action: str, **kwargs):
         conn2.close()
         return {"status": "executed", "exit_code": exit_code, "output": output[:500]}
 
-    elif action == "start":
+    if action == "start":
         if _main_mod._tea_scheduler_running:
             return {"status": "already_running", "pid": _main_mod._tea_scheduler_pid}
         t = threading.Thread(target=_scheduler_loop, daemon=True)
@@ -534,11 +516,11 @@ def toolkit_scheduler(action: str, **kwargs):
         time.sleep(0.3)
         return {"status": "started", "pid": _main_mod._tea_scheduler_pid, "check_interval": CHECK_INTERVAL}
 
-    elif action == "stop":
+    if action == "stop":
         _main_mod._tea_scheduler_running = False
         return {"status": "stopped"}
 
-    elif action == "status":
+    if action == "status":
         return {
             "running": _main_mod._tea_scheduler_running,
             "pid": _main_mod._tea_scheduler_pid,
@@ -546,7 +528,7 @@ def toolkit_scheduler(action: str, **kwargs):
             "db_path": DB_PATH,
         }
 
-    elif action == "test_schedule":
+    if action == "test_schedule":
         schedule = kwargs.get("schedule", "")
         if not schedule:
             return {"error": "需要 schedule 参数"}
@@ -557,7 +539,7 @@ def toolkit_scheduler(action: str, **kwargs):
             "next_label": _format_next({"schedule": schedule, "next_run": next_run.isoformat() if next_run else None}),
         }
 
-    elif action == "save_script":
+    if action == "save_script":
         script_id = kwargs.get("script_id", "")
         name = kwargs.get("name", "")
         content = kwargs.get("content", "")
@@ -566,7 +548,7 @@ def toolkit_scheduler(action: str, **kwargs):
             return {"error": "需要 script_id, name, content 参数"}
         return _save_script_to_db(script_id, name, content, description)
 
-    elif action == "get_script":
+    if action == "get_script":
         script_id = kwargs.get("script_id", "")
         if not script_id:
             return {"error": "需要 script_id 参数"}
@@ -575,7 +557,7 @@ def toolkit_scheduler(action: str, **kwargs):
             return {"error": f"脚本不存在: {script_id}"}
         return script
 
-    elif action == "list_scripts":
+    if action == "list_scripts":
         conn = _get_conn()
         conn.execute("""
             CREATE TABLE IF NOT EXISTS scheduled_scripts (
@@ -592,7 +574,7 @@ def toolkit_scheduler(action: str, **kwargs):
         conn.close()
         return {"scripts": [dict(r) for r in rows], "count": len(rows)}
 
-    elif action == "delete_script":
+    if action == "delete_script":
         script_id = kwargs.get("script_id", "")
         if not script_id:
             return {"error": "需要 script_id 参数"}
@@ -602,7 +584,7 @@ def toolkit_scheduler(action: str, **kwargs):
         conn.close()
         return {"status": "deleted"}
 
-    elif action == "add_script_task":
+    if action == "add_script_task":
         """添加基于脚本的定时任务"""
         script_id = kwargs.get("script_id", "")
         name = kwargs.get("name", "")
@@ -629,10 +611,9 @@ def toolkit_scheduler(action: str, **kwargs):
         conn.close()
         return {"status": "added", "task_id": tid, "next_run": next_run.isoformat() if next_run else None}
 
-    else:
-        return {"error": f"未知 action: {action}",
-                "supported": ["list","add","update","delete","enable","disable","run","start","stop","status","test_schedule",
-                              "save_script","get_script","list_scripts","delete_script","add_script_task"]}
+    return {"error": f"未知 action: {action}",
+            "supported": ["list","add","update","delete","enable","disable","run","start","stop","status","test_schedule",
+                          "save_script","get_script","list_scripts","delete_script","add_script_task"]}
 
 def _format_next(task: dict) -> str:
     """格式化下次执行时间为人可读"""

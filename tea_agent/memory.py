@@ -268,14 +268,13 @@ class MemoryManager:
             delta_days = (now - last_dt).days
             if delta_days <= 1:
                 return 1.0
-            elif delta_days <= 7:
+            if delta_days <= 7:
                 return 0.9
-            elif delta_days <= 30:
+            if delta_days <= 30:
                 return 0.7
-            elif delta_days <= 90:
+            if delta_days <= 90:
                 return 0.5
-            else:
-                return 0.3
+            return 0.3
         except Exception:
             return 0.3
 

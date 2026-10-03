@@ -174,10 +174,9 @@ class MessageQueue:
 
             if self.mode == QueueMode.ONE_AT_A_TIME:
                 return [self._steering_queue.pop(0)]
-            else:
-                messages = list(self._steering_queue)
-                self._steering_queue.clear()
-                return messages
+            messages = list(self._steering_queue)
+            self._steering_queue.clear()
+            return messages
 
     def get_followup(self) -> list[QueuedMessage]:
         """获取所有待处理的 follow-up 消息。"""

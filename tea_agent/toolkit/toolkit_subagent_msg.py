@@ -49,14 +49,13 @@ def toolkit_subagent_msg(
     """
     if action == "send":
         return _send_message(to=to, message=message)
-    elif action == "check_inbox":
+    if action == "check_inbox":
         return _check_inbox(agent_id=agent_id, limit=limit)
-    elif action == "poll":
+    if action == "poll":
         return _poll_all(limit=limit)
-    elif action == "clear":
+    if action == "clear":
         return _clear_inbox(agent_id=agent_id)
-    else:
-        return {"error": f"Unknown action: {action}"}
+    return {"error": f"Unknown action: {action}"}
 
 
 def _send_message(to: str, message: str) -> dict:
@@ -128,8 +127,7 @@ def _clear_inbox(agent_id: str) -> dict:
 
     with _registry_lock:
         count = len(_message_registry.get(agent_id, []))
-        if agent_id in _message_registry:
-            del _message_registry[agent_id]
+        _message_registry.pop(agent_id, None)
 
     return {"ok": True, "agent_id": agent_id, "cleared": count}
 

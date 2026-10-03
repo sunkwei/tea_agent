@@ -159,7 +159,7 @@ def toolkit_todo(action: str, items: list = None, index: int = None) -> dict:
                 "persisted": _get_topic_id() is not None,
             }
 
-        elif action == "check":
+        if action == "check":
             if index is None:
                 return {"ok": False, "error": "check needs index"}
             if 0 <= index < len(_todos):
@@ -173,7 +173,7 @@ def toolkit_todo(action: str, items: list = None, index: int = None) -> dict:
                 }
             return {"ok": False, "error": f"index {index} out of range (0..{len(_todos)-1})"}
 
-        elif action == "show":
+        if action == "show":
             if not _todos:
                 topic_id = _get_topic_id()
                 return {
@@ -192,7 +192,7 @@ def toolkit_todo(action: str, items: list = None, index: int = None) -> dict:
                 "topic_id": topic_id[:8] + "..." if topic_id else None,
             }
 
-        elif action == "clear":
+        if action == "clear":
             n = len(_todos)
             _todos.clear()
             # 清除 DB 中当前 topic 的记录
@@ -210,12 +210,11 @@ def toolkit_todo(action: str, items: list = None, index: int = None) -> dict:
                         logger.warning(f"todo clear db failed: {e}")
             return {"ok": True, "msg": f"cleared {n} items"}
 
-        elif action == "restore":
+        if action == "restore":
             _restore_from_db()
             return {"ok": True, "todo": _fmt(), "progress": f"{_done()}/{len(_todos)}"}
 
-        else:
-            return {"ok": False, "error": f"unknown action: {action}"}
+        return {"ok": False, "error": f"unknown action: {action}"}
 
     except Exception as e:
         logger.exception("toolkit_todo")

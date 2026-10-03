@@ -417,12 +417,6 @@ class ConversationStore(L0SnapshotStoreMixin, ImageStoreMixin, StoreComponent):
         return result
 
     def get_recent_conversations(self, topic_id: str, limit: int = 3) -> list[dict]:
-        """Get the recent conversations.
-
-        Args:
-            topic_id: Description.
-            limit: Description.
-        """
         c = self.conn.cursor()
         c.execute(
             "SELECT * FROM conversations WHERE topic_id = ? ORDER BY stamp DESC LIMIT ?",

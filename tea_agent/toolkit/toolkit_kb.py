@@ -8,18 +8,6 @@ logger = logging.getLogger("toolkit")
 """toolkit_kb -- Markdown 知识库管理工具。"""
 
 def toolkit_kb(action, title="", content="", tags="", category="", query="", brief="", sort="time"):
-    """Toolkit kb.
-
-    Args:
-        action: Description.
-        title: Description.
-        content: Description.
-        tags: Description.
-        category: Description.
-        query: Description.
-        brief: Description.
-        sort: Description.
-    """
     logger.info(f"toolkit_kb called: action={action!r}, title={repr(title)[:80]}, content={repr(content)[:80]}, tags={tags!r}, category={category!r}, query={repr(query)[:80]}, brief={repr(brief)[:80]}, sort={sort!r}")
 
     import os
@@ -37,22 +25,11 @@ def toolkit_kb(action, title="", content="", tags="", category="", query="", bri
     KB_DIR.mkdir(parents=True, exist_ok=True)
 
     def sanitize(name):
-        """Sanitize.
-
-        Args:
-            name: Description.
-        """
         name = re.sub(r"[/\\:*?\"<>|]", "_", name)
         name = re.sub(r"\s+", "_", name)
         return name[:120]
 
     def _meta(text, key):
-        """Internal: meta.
-
-        Args:
-            text: Description.
-            key: Description.
-        """
         m = re.search(rf"<!--.*?\b{key}:(\S+).*?-->", text)
         return m.group(1) if m else ""
 
@@ -93,7 +70,7 @@ def toolkit_kb(action, title="", content="", tags="", category="", query="", bri
         rebuild_index()
         return f"✅ 已保存: {filepath} ({len(content)} chars)"
 
-    elif action == "update":
+    if action == "update":
         filename = sanitize(title) + ".md"
         filepath = KB_DIR / filename
         if filepath.exists():
@@ -101,10 +78,9 @@ def toolkit_kb(action, title="", content="", tags="", category="", query="", bri
                 f.write("\n" + content)
             rebuild_index()
             return f"✅ 已追加: {filepath} (+{len(content)} chars)"
-        else:
-            return toolkit_kb("add", title=title, content=content, tags=tags, category=category, brief=brief)
+        return toolkit_kb("add", title=title, content=content, tags=tags, category=category, brief=brief)
 
-    elif action == "read":
+    if action == "read":
         filename = sanitize(title) + ".md"
         filepath = KB_DIR / filename
         if filepath.exists():
@@ -113,7 +89,7 @@ def toolkit_kb(action, title="", content="", tags="", category="", query="", bri
             return clean
         return f"❌ 未找到: {filename}"
 
-    elif action == "list":
+    if action == "list":
         md_files = list(KB_DIR.glob("*.md"))
         if category:
             filtered = []
@@ -142,7 +118,7 @@ def toolkit_kb(action, title="", content="", tags="", category="", query="", bri
             lines.append(f"  {f.stem:<40} {mtime}  {size:>6}B  {f.name}")
         return "\n".join(lines)
 
-    elif action == "search":
+    if action == "search":
         results = []
         try:
             cmd = ["grep", "-r", "-n", "-i", "--include=*.md", query, str(KB_DIR)]
@@ -172,11 +148,11 @@ def toolkit_kb(action, title="", content="", tags="", category="", query="", bri
             f"  {f}:{l}: {c}" for f, l, c in results[:30]
         )
 
-    elif action == "index":
+    if action == "index":
         rebuild_index()
         return f"✅ 索引已重建: {INDEX_FILE}"
 
-    elif action == "delete":
+    if action == "delete":
         filename = sanitize(title) + ".md"
         filepath = KB_DIR / filename
         if filepath.exists():
@@ -185,7 +161,7 @@ def toolkit_kb(action, title="", content="", tags="", category="", query="", bri
             return f"🗑️ 已删除: {filename}"
         return f"❌ 未找到: {filename}"
 
-    elif action == "status":
+    if action == "status":
         md_files = list(KB_DIR.glob("*.md"))
         total_size = sum(f.stat().st_size for f in md_files)
         return f"📚 KB: {len(md_files)} 篇文档, 共 {total_size}B | 路径: {KB_DIR}"

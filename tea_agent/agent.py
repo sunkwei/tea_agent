@@ -596,10 +596,9 @@ class Agent:
         """
         if isinstance(user_msg, str):
             return user_msg
-        elif isinstance(user_msg, dict):
+        if isinstance(user_msg, dict):
             return user_msg.get("text", "")
-        else:
-            return str(user_msg)
+        return str(user_msg)
 
     def _start_background_tasks(
         self,

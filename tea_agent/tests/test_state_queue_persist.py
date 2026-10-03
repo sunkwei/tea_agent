@@ -5,12 +5,10 @@
 内存是干净的，只有磁盘错 —— 于是重启后用户早已撤回的消息死灰复燃。
 （与项目此前修过的「删除的记忆被后台重建」同族。）
 """
-import builtins
 import importlib
 import json
 import os
 import sys
-import tempfile
 import threading
 import time
 

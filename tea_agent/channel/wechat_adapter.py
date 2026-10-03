@@ -385,7 +385,7 @@ class WeChatAdapter:
                     logger.warning("Token 无效或已过期，需重新登录")
                     self._clear_credentials()
                     break
-                elif resp.status_code >= 500:
+                if resp.status_code >= 500:
                     logger.warning(f"服务端错误 HTTP {resp.status_code}，等待重试...")
                     time.sleep(5)
                     continue

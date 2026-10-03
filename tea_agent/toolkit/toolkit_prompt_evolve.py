@@ -40,7 +40,7 @@ def toolkit_prompt_evolve(action: str = "current", version: str = "", content: s
             f"---\n{pm.current_prompt}\n---"
         )
 
-    elif action == "evolve":
+    if action == "evolve":
         # 获取最近的反思建议
         reflection_mgr = getattr(session, 'reflection_manager', None)
         suggestion = None
@@ -52,7 +52,7 @@ def toolkit_prompt_evolve(action: str = "current", version: str = "", content: s
             return f"✅ 系统提示词已进化到 v{pm.current_version} (id={new_id})"
         return "⚠️ 提示词进化未产生新版本（可能无变化或 LLM 调用失败）"
 
-    elif action == "list":
+    if action == "list":
         versions = pm.list_versions()
         if not versions:
             return "📝 暂无历史版本"
@@ -67,7 +67,7 @@ def toolkit_prompt_evolve(action: str = "current", version: str = "", content: s
             )
         return "\n".join(lines)
 
-    elif action == "rollback":
+    if action == "rollback":
         if not version:
             return "❌ 需要提供 version 参数（如 '1'）"
         ok = pm.rollback(version)
@@ -75,7 +75,7 @@ def toolkit_prompt_evolve(action: str = "current", version: str = "", content: s
             return f"✅ 已回滚到 v{version}"
         return f"❌ 回滚失败: 版本 {version} 不存在"
 
-    elif action == "set":
+    if action == "set":
         if not content:
             return "❌ 需要提供 content 参数（完整提示词文本）"
         if len(content) < 20:
@@ -83,7 +83,7 @@ def toolkit_prompt_evolve(action: str = "current", version: str = "", content: s
         new_id = pm.manual_set(content, reason="Agent 手动设置")
         return f"✅ 已创建新版本 v{pm.current_version} (id={new_id})"
 
-    elif action == "stats":
+    if action == "stats":
         stats = pm.get_stats()
         return (
             f"📊 系统提示词统计:\n"
@@ -92,8 +92,7 @@ def toolkit_prompt_evolve(action: str = "current", version: str = "", content: s
             f"  当前 ID: {stats['current_id']}"
         )
 
-    else:
-        return f"❌ 未知操作: {action}。支持: current, evolve, list, rollback, set, stats"
+    return f"❌ 未知操作: {action}。支持: current, evolve, list, rollback, set, stats"
 
 def meta_toolkit_prompt_evolve() -> dict:
     """Meta toolkit prompt evolve."""

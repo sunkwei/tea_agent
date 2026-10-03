@@ -263,7 +263,6 @@ class TestExtractFilesFromSymbolIndex:
     ])
     def test_corrupted_index_degrades_silently(self, tmp_path, monkeypatch, caplog, bad):
         """索引损坏应只返回正则提取到的路径，不抛异常、不打 ERROR。"""
-        import logging
         monkeypatch.chdir(tmp_path)
         self._make_index(tmp_path, bad)
         with caplog.at_level(logging.WARNING):

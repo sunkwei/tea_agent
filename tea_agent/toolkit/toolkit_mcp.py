@@ -36,16 +36,15 @@ def toolkit_mcp(action: str = "connect", server_name: str = "", command: str = "
 
     if action == "connect":
         return _mcp_connect(server_name, command, args or [], transport, url)
-    elif action == "list_tools":
+    if action == "list_tools":
         return _mcp_list_tools(server_name)
-    elif action == "call_tool":
+    if action == "call_tool":
         return _mcp_call(server_name, tool_name, tool_args or {})
-    elif action == "disconnect":
+    if action == "disconnect":
         return _mcp_disconnect(server_name)
-    elif action == "status":
+    if action == "status":
         return _mcp_status()
-    else:
-        return {"ok": False, "error": f"未知 action: {action}", "returncode": 1}
+    return {"ok": False, "error": f"未知 action: {action}", "returncode": 1}
 
 # MCP 客户端全局状态
 _MCP_SERVERS = {}  # server_name → {"session": ..., "stdio": ..., "transport": ..., "keepalive": ...}

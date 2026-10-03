@@ -163,10 +163,7 @@ class TestInjectInterruptionKnowledge:
 import os
 import tempfile
 
-import pytest
-
 from tea_agent.onlinesession import (
-    INTERRUPT_SIMILARITY_THRESHOLD,
     classify_interruption,
 )
 from tea_agent.store._interruptions import InterruptionStore

@@ -329,7 +329,7 @@ def toolkit_custom_commands(
             return {"ok": True, "name": name, "scope": scope, "path": fpath,
                     "msg": f"命令 '{name}' 已添加 ({scope}级)"}
 
-        elif action == "list":
+        if action == "list":
             cmds = _scan_commands()
             if tag:
                 cmds = [c for c in cmds if tag in c.get("tags", [])]
@@ -345,7 +345,7 @@ def toolkit_custom_commands(
                 } for c in cmds],
             }
 
-        elif action == "show":
+        if action == "show":
             if not name:
                 return {"ok": False, "error": "show 需要 name 参数"}
             cmds = _scan_commands()
@@ -354,7 +354,7 @@ def toolkit_custom_commands(
                     return {"ok": True, "command": c}
             return {"ok": False, "error": f"命令 '{name}' 不存在"}
 
-        elif action == "run":
+        if action == "run":
             if not name:
                 return {"ok": False, "error": "run 需要 name 参数"}
             cmds = _scan_commands()
@@ -398,7 +398,7 @@ def toolkit_custom_commands(
                         else f"请提供缺失的参数: {', '.join(all_unresolved)}",
             }
 
-        elif action == "delete":
+        if action == "delete":
             if not name:
                 return {"ok": False, "error": "delete 需要 name 参数"}
             deleted = False
@@ -411,7 +411,7 @@ def toolkit_custom_commands(
             return {"ok": deleted, "name": name,
                     "msg": f"命令 '{name}' 已删除" if deleted else f"命令 '{name}' 不存在"}
 
-        elif action == "search":
+        if action == "search":
             cmds = _scan_commands()
             results = []
             q = (query or "").lower()
@@ -428,7 +428,7 @@ def toolkit_custom_commands(
                 })
             return {"ok": True, "total": len(results), "commands": results}
 
-        elif action == "builtin":
+        if action == "builtin":
             count = 0
             for name, content in _BUILTIN_COMMANDS.items():
                 fpath = os.path.join(_get_user_commands_dir(), f"{name}.md")
@@ -437,8 +437,7 @@ def toolkit_custom_commands(
                 count += 1
             return {"ok": True, "count": count, "msg": f"已重置 {count} 个内置命令"}
 
-        else:
-            return {"ok": False, "error": f"未知 action: {action}"}
+        return {"ok": False, "error": f"未知 action: {action}"}
 
     except Exception as e:
         logger.exception(f"toolkit_custom_commands: {e}")

@@ -955,9 +955,9 @@ class WorkflowTemplate:
                 for k, v in vars_dict.items():
                     obj = obj.replace("{{" + k + "}}", str(v))
                 return obj
-            elif isinstance(obj, dict):
+            if isinstance(obj, dict):
                 return {k: _replace(v) for k, v in obj.items()}
-            elif isinstance(obj, list):
+            if isinstance(obj, list):
                 return [_replace(item) for item in obj]
             return obj
 

@@ -21,7 +21,7 @@ def toolkit_query_chat_history(action="schema", conversation_id=None, keyword=No
         conn.close()
         return result
 
-    elif action == "query":
+    if action == "query":
         if not conversation_id:
             conn.close()
             return "Error: conversation_id required"
@@ -40,7 +40,7 @@ def toolkit_query_chat_history(action="schema", conversation_id=None, keyword=No
         conn.close()
         return result
 
-    elif action == "topic":
+    if action == "topic":
         if not topic_id:
             conn.close()
             return "Error: topic_id required"
@@ -65,7 +65,7 @@ def toolkit_query_chat_history(action="schema", conversation_id=None, keyword=No
         conn.close()
         return result
 
-    elif action == "search":
+    if action == "search":
         if not keyword:
             conn.close()
             return "Error: keyword required"

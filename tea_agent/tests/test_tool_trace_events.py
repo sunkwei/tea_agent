@@ -14,7 +14,7 @@ import pytest
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..")))
 
-from tea_agent.onlinesession import ToolComponent, _summarize_json  # noqa: E402
+from tea_agent.onlinesession import _summarize_json  # noqa: E402
 from tea_agent.store._core import Storage  # noqa: E402
 from tea_agent.store._events import EVENT_TYPES  # noqa: E402
 

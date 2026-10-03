@@ -18,7 +18,6 @@ import json
 import logging
 import os
 import subprocess
-from pathlib import Path
 from tea_agent.path_filters import iter_files
 
 logger = logging.getLogger("toolkit.batch_process")

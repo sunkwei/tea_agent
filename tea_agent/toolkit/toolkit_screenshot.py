@@ -83,12 +83,6 @@ def toolkit_screenshot(action: str, region: str = None, monitor: int = None, out
         return None
 
     def _x11_screenshot(out_path, geo=None):
-        """Internal: x11 screenshot.
-
-        Args:
-            out_path: Description.
-            geo: Description.
-        """
         try:
             import mss
             with mss.mss() as sct:
@@ -239,9 +233,8 @@ def toolkit_screenshot(action: str, region: str = None, monitor: int = None, out
         size = os.path.getsize(result)
         return {"success": True, "path": result, "size": size, "size_kb": round(size/1024,1),
                 "method": method, "display_server": ds, "desktop": de}
-    else:
-        return {"success": False, "error": f"所有截屏方式均失败 (ds={ds}, de={de})",
-                "tried": method, "tip": "Wayland用户请安装 spectacle、gnome-screenshot 或 grim"}
+    return {"success": False, "error": f"所有截屏方式均失败 (ds={ds}, de={de})",
+            "tried": method, "tip": "Wayland用户请安装 spectacle、gnome-screenshot 或 grim"}
 
 def meta_toolkit_screenshot() -> dict:
     """Meta toolkit screenshot."""

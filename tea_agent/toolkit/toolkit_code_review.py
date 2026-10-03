@@ -20,7 +20,6 @@ import py_compile
 import re
 import subprocess
 from datetime import datetime
-from pathlib import Path
 from typing import Any
 
 from tea_agent.lsp.lsp_engine import semantic_diagnose
@@ -146,9 +145,9 @@ def _complexity_score(total: int, code: int, max_indent: int) -> str:
     else: score += 1
     if score >= 13:
         return "简单"
-    elif score >= 8:
+    if score >= 8:
         return "中等"
-    else: return "复杂"
+    return "复杂"
 
 
 def _check_style(filepath: str) -> dict[str, Any]:

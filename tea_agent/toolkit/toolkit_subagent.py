@@ -471,7 +471,7 @@ def toolkit_subagent(
             "message": f"Sub-agent {agent_id} created (async, depth={new_depth})",
         }
 
-    elif action == "spawn_sync":
+    if action == "spawn_sync":
         """Sync spawn sub-agent (block until complete)."""
         if not goal:
             return {"error": "goal parameter is required"}
@@ -506,7 +506,7 @@ def toolkit_subagent(
         )
         return result
 
-    elif action == "status":
+    if action == "status":
         """Query sub-agent status."""
         if agent_id:
             with _registry_lock:
@@ -544,7 +544,7 @@ def toolkit_subagent(
             ]
         return {"agents": results, "total": len(results)}
 
-    elif action == "list":
+    if action == "list":
         """List all sub-agents."""
         with _registry_lock:
             agents = [
@@ -563,7 +563,7 @@ def toolkit_subagent(
         agents.sort(key=lambda x: x.get("created_at", ""), reverse=True)
         return {"agents": agents, "total": len(agents)}
 
-    elif action == "collect":
+    if action == "collect":
         """Collect all completed results."""
         with _registry_lock:
             completed = [
@@ -587,7 +587,7 @@ def toolkit_subagent(
             "message": f"{len(completed)} sub-agents completed",
         }
 
-    elif action == "cancel":
+    if action == "cancel":
         """Cancel a sub-agent."""
         if not agent_id:
             return {"error": "agent_id parameter is required"}

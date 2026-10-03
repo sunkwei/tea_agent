@@ -1204,7 +1204,7 @@ def execute_tool_loop(session, context: dict) -> dict:
                     session.add_assistant_message(full_reply)
                     session.tools_comp.collect_max_iterations_round(full_reply)
                     return {"full_reply": full_reply, "used_tools": used_tools, "loop_detected": True}
-                elif loop_count >= 2:
+                if loop_count >= 2:
                     callback("\n⚠️ 检测到重复输出，请尝试不同方法...\n")
             else:
                 session._loop_count = 0
@@ -1260,19 +1260,18 @@ def execute_tool_loop(session, context: dict) -> dict:
                     session._max_iter_extra_pending = 10
                     on_status(f"⏳ 已续命{extra}轮，继续生成... (ESC 打断)")
                     continue
-                else:
-                    warning = f"\n\n[警告：已达到最大迭代次数 {session.max_iterations}，对话终止]"
-                    callback(warning)
-                    full_reply += warning
-                    session.add_assistant_message(full_reply)
-                    session.tools_comp.collect_max_iterations_round(full_reply)
-                    break
+                warning = f"\n\n[警告：已达到最大迭代次数 {session.max_iterations}，对话终止]"
+                callback(warning)
+                full_reply += warning
+                session.add_assistant_message(full_reply)
+                session.tools_comp.collect_max_iterations_round(full_reply)
+                break
 
             if content:
                 callback("")
             continue
 
-        elif tool_calls_data:
+        if tool_calls_data:
             # 模型本轮返回了工具调用，但参数全部非法且无法修复 → 该轮被丢弃。
             # 旧实现直接 return 终止回合，模型零自纠机会：一次畸形输出（真实案例：
             # 流式截断的 batch 长参数）即浪费整轮对话。改为「注入错误反馈 + 有限
@@ -1326,7 +1325,7 @@ def execute_tool_loop(session, context: dict) -> dict:
                 "error": "invalid_tool_call_args",
             }
 
-        elif content:
+        if content:
             iterations += 1
             assistant_msg = {"role": "assistant", "content": session._cap_message_text(content)}
             if session.context.supports_reasoning:
@@ -1346,8 +1345,7 @@ def execute_tool_loop(session, context: dict) -> dict:
                     on_status(f"📨 已投递后续任务，继续处理（{followup_rounds}/{MAX_FOLLOWUP_ROUNDS}）")
                 continue
             break
-        else:
-            break
+        break
 
     # ── 最终输出格式检查 ──
     _rules = _get_validate_rules(session)

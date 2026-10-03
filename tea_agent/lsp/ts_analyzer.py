@@ -8,7 +8,6 @@ import logging
 import os
 import time
 from collections import defaultdict
-from pathlib import Path
 
 from tea_agent.path_filters import is_junk_path, iter_files
 

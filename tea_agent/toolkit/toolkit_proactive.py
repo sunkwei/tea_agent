@@ -14,14 +14,13 @@ def toolkit_proactive(action: str, content: str = "", priority: int = 2, goal_id
     try:
         if action == "check":
             return _check_proactive()
-        elif action == "goal":
+        if action == "goal":
             return _add_goal(content, priority)
-        elif action == "done":
+        if action == "done":
             return _complete_goal(goal_id)
-        elif action == "list_goals":
+        if action == "list_goals":
             return _list_goals()
-        else:
-            return {"ok": False, "error": f"未知 action: {action}", "returncode": 1}
+        return {"ok": False, "error": f"未知 action: {action}", "returncode": 1}
     except Exception as e:
         return {"ok": False, "error": f"自主心跳出错: {e}", "returncode": 1}
 
@@ -81,12 +80,6 @@ def _check_proactive():
         return {"ok": False, "error": f"检查失败: {e}", "returncode": 1}
 
 def _add_goal(content: str, priority: int = 2):
-    """Internal: add goal.
-
-    Args:
-        content: Description.
-        priority: Description.
-    """
     if not content or not content.strip():
         return {"ok": False, "error": "目标内容不能为空", "returncode": 1}
     priority = max(0, min(3, priority))
@@ -104,11 +97,6 @@ def _add_goal(content: str, priority: int = 2):
         return {"ok": False, "error": f"设定目标失败: {e}", "returncode": 1}
 
 def _complete_goal(goal_id: int):
-    """Internal: complete goal.
-
-    Args:
-        goal_id: Description.
-    """
     if not goal_id:
         return {"ok": False, "error": "需要提供 goal_id", "returncode": 1}
     try:

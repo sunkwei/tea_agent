@@ -33,12 +33,6 @@ class TopicStore(StoreComponent):
     # ── 主题 CRUD ──
 
     def create_topic(self, title: str, topic_id: str = None) -> str:
-        """Create topic.
-
-        Args:
-            title: Description.
-            topic_id: Description.
-        """
         # 使用临时连接
         with self._get_connection() as conn:
             conn.row_factory = __import__('sqlite3').Row
@@ -320,11 +314,6 @@ class TopicStore(StoreComponent):
         return result
 
     def get_topic_tokens(self, topic_id: str) -> dict:
-        """Get the topic tokens.
-
-        Args:
-            topic_id: Description.
-        """
         c = self.conn.cursor()
         c.execute("SELECT * FROM topic_token_stats WHERE topic_id = ?", (topic_id,))
         row = c.fetchone()

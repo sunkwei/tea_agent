@@ -288,7 +288,7 @@ def toolkit_diff(
             return {"ok": True, "diffs": diffs, "combined": combined,
                     "file_count": len(diffs)}
 
-        elif action == "preview":
+        if action == "preview":
             if not files:
                 return {"ok": False, "error": "preview 需要 files 参数"}
             previews = []
@@ -319,7 +319,7 @@ def toolkit_diff(
                 "hint": "所有文件无冲突 ✓" if all_safe else f"{len(conflicts)} 个文件有冲突，请解决后再 apply",
             }
 
-        elif action == "apply":
+        if action == "apply":
             if not files:
                 return {"ok": False, "error": "apply 需要 files 参数"}
             if not description:

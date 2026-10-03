@@ -360,12 +360,11 @@ def _render_markdown(pdf, text, body_font, code_font, indent=0, text_color=(50, 
                 code_lang = ""
                 i += 1
                 continue
-            else:
-                in_code_block = True
-                code_lang = stripped[3:].strip()
-                code_buffer = []
-                i += 1
-                continue
+            in_code_block = True
+            code_lang = stripped[3:].strip()
+            code_buffer = []
+            i += 1
+            continue
         if in_code_block:
             code_buffer.append(line)
             i += 1
@@ -465,7 +464,7 @@ def _render_markdown(pdf, text, body_font, code_font, indent=0, text_color=(50, 
             list_type = "ul"
             i += 1
             continue
-        elif ol_match:
+        if ol_match:
             indent_level = len(ol_match.group(1)) // 2
             list_counter += 1
             content = ol_match.group(2)
@@ -478,8 +477,7 @@ def _render_markdown(pdf, text, body_font, code_font, indent=0, text_color=(50, 
             list_type = "ol"
             i += 1
             continue
-        else:
-            list_counter = 0
+        list_counter = 0
 
         # ── Regular paragraph ──
         pdf.set_x(pdf.l_margin + indent)
@@ -1327,35 +1325,34 @@ def export_topic_pdf(topic_id: str, output_path: str = None,
         output_path = output_path or os.path.join(_default_export_dir(), f"export_{topic_id[:8]}_full.pdf")
         return _make_full_topic_pdf(topic_title, conversations, output_path)
 
-    else:
-        # ── mode == "latest": fetch the last conversation only ──
-        c.execute(
-            "SELECT * FROM conversations WHERE topic_id = ? ORDER BY stamp DESC LIMIT 1",
-            (topic_id,),
-        )
-        conv = c.fetchone()
-        if not conv:
-            conn.close()
-            raise ValueError(f"No conversations for topic {topic_id}")
-        user_msg, image_ids = _parse_user_payload(conv["user_msg"])
-        blob_map = _fetch_image_blobs(conn, image_ids)
-        images = [blob_map[i] for i in image_ids if i in blob_map]
-        user_msg = _sanitize(user_msg)
-        ai_msg = _sanitize(conv["ai_msg"])
-        stamp = conv["stamp"]
-
-        # Full interaction timeline: thinking + tool calls + tool returns
-        reasoning_text = ""
-        if filter_mode == "full":
-            rounds_data = _load_rounds_map(conn, [conv]).get(conv["id"])
-            if rounds_data:
-                with contextlib.suppress(Exception):
-                    reasoning_text = _build_full_interactions_md(rounds_data)
-
+    # ── mode == "latest": fetch the last conversation only ──
+    c.execute(
+        "SELECT * FROM conversations WHERE topic_id = ? ORDER BY stamp DESC LIMIT 1",
+        (topic_id,),
+    )
+    conv = c.fetchone()
+    if not conv:
         conn.close()
-        output_path = output_path or os.path.join(_default_export_dir(), f"export_{topic_id[:8]}.pdf")
-        return _make_pdf(topic_title, stamp, user_msg, ai_msg, reasoning_text, output_path,
-                         images=images)
+        raise ValueError(f"No conversations for topic {topic_id}")
+    user_msg, image_ids = _parse_user_payload(conv["user_msg"])
+    blob_map = _fetch_image_blobs(conn, image_ids)
+    images = [blob_map[i] for i in image_ids if i in blob_map]
+    user_msg = _sanitize(user_msg)
+    ai_msg = _sanitize(conv["ai_msg"])
+    stamp = conv["stamp"]
+
+    # Full interaction timeline: thinking + tool calls + tool returns
+    reasoning_text = ""
+    if filter_mode == "full":
+        rounds_data = _load_rounds_map(conn, [conv]).get(conv["id"])
+        if rounds_data:
+            with contextlib.suppress(Exception):
+                reasoning_text = _build_full_interactions_md(rounds_data)
+
+    conn.close()
+    output_path = output_path or os.path.join(_default_export_dir(), f"export_{topic_id[:8]}.pdf")
+    return _make_pdf(topic_title, stamp, user_msg, ai_msg, reasoning_text, output_path,
+                     images=images)
 
 
 # ═══════════════════════════════════════════════════════════════

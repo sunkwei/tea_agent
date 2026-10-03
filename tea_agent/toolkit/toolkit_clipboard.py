@@ -213,18 +213,18 @@ def _read_clipboard() -> str:
                                 "[System.Windows.Forms.Clipboard]::GetText()"],
                                capture_output=True, text=True, timeout=3)
             return r.stdout.strip()
-        elif sys.platform == "darwin":  # macOS
+        if sys.platform == "darwin":  # macOS
             r = subprocess.run(["pbpaste"], capture_output=True, text=True, timeout=3)
             return r.stdout.strip()
-        else:  # Linux
-            for cmd in [["xclip", "-o", "-selection", "clipboard"],
-                        ["xsel", "-o", "-b"]]:
-                try:
-                    r = subprocess.run(cmd, capture_output=True, text=True, timeout=3)
-                    if r.stdout.strip(): return r.stdout.strip()
-                except Exception:
-                    continue
-            return ""
+        # Linux
+        for cmd in [["xclip", "-o", "-selection", "clipboard"],
+                    ["xsel", "-o", "-b"]]:
+            try:
+                r = subprocess.run(cmd, capture_output=True, text=True, timeout=3)
+                if r.stdout.strip(): return r.stdout.strip()
+            except Exception:
+                continue
+        return ""
     except Exception as e:
         logger.debug(f"clipboard read failed: {e}")
         return ""
@@ -322,13 +322,13 @@ def toolkit_clipboard(action: str = "read", format: str = "text") -> dict:
         routing["text"] = text[:5000]
         return routing
 
-    elif action == "start":
+    if action == "start":
         return start_monitoring()
 
-    elif action == "stop":
+    if action == "stop":
         return stop_monitoring()
 
-    elif action == "status":
+    if action == "status":
         return {
             "running": _running,
             "last_clip_subtype": "",

@@ -563,8 +563,7 @@ class RoleDispatcher:
     def _build_summary(goal: str, completed: int, total: int, time: float, success: bool) -> str:
         if success:
             return f"✅ 全部完成: {goal} ({total} 步, {time:.1f}s)"
-        else:
-            return f"⚠️ 部分完成: {goal} ({completed}/{total} 步, {time:.1f}s)"
+        return f"⚠️ 部分完成: {goal} ({completed}/{total} 步, {time:.1f}s)"
 
 
 # ───────────────────────────────────────────────
@@ -580,4 +579,3 @@ class Dispatcher(_DispatcherV1):
 
     推荐使用 RoleDispatcher 替代。
     """
-    pass

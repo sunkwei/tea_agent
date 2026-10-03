@@ -40,24 +40,15 @@ def toolkit_search(query: str, max_results: int = 10, lang: str = "", engine: st
 
     if search_type == "code":
         return _search_codebase(query, root_path, glob_pattern, max_results)
-    elif search_type == "symbol":
+    if search_type == "symbol":
         return _search_symbol(query, root_path, max_results)
-    elif search_type == "github":
+    if search_type == "github":
         return _search_github(query, engine, max_results)
-    else:
-        if engine == "baidu":
-            return _search_baidu(query, max_results)
-        else:
-            return _search_duckduckgo(query, max_results, lang)
+    if engine == "baidu":
+        return _search_baidu(query, max_results)
+    return _search_duckduckgo(query, max_results, lang)
 
 def _search_duckduckgo(query: str, max_results: int, lang: str):
-    """Internal: search duckduckgo.
-
-    Args:
-        query: Description.
-        max_results: Description.
-        lang: Description.
-    """
     import re
     from urllib.parse import parse_qs, unquote, urlparse
 
@@ -129,12 +120,6 @@ def _search_duckduckgo(query: str, max_results: int, lang: str):
 
 
 def _search_baidu(query: str, max_results: int):
-    """Internal: search baidu.
-
-    Args:
-        query: Description.
-        max_results: Description.
-    """
     from urllib.parse import parse_qs, urlparse
 
     import requests
@@ -542,11 +527,11 @@ def _search_github(query: str, search_type: str, max_results: int):
     except requests.HTTPError as e:
         if e.response.status_code == 403:
             return {"ok": False, "error": "GitHub API 速率限制", "returncode": 1}
-        elif e.response.status_code == 401:
+        if e.response.status_code == 401:
             if api_type == "code":
                 return {"ok": False, "error": "GitHub 代码搜索需要认证", "returncode": 1}
             return {"ok": False, "error": "GitHub API 认证失败", "returncode": 1}
-        elif e.response.status_code == 422:
+        if e.response.status_code == 422:
             return {"ok": False, "error": "GitHub 搜索语法错误", "returncode": 1}
         return {"ok": False, "error": f"GitHub API 错误: {e.response.status_code}", "returncode": 1}
     except Exception as e:

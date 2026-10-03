@@ -42,10 +42,9 @@ def toolkit_format_code(
     # 根据语言选择格式化工具
     if language == "python":
         return _format_python(action, path, style)
-    elif language == "cpp":
+    if language == "cpp":
         return _format_cpp(action, path, style)
-    else:
-        return f"❌ 不支持的语言: {language}"
+    return f"❌ 不支持的语言: {language}"
 
 
 def _detect_language(path: str) -> str:
@@ -54,7 +53,7 @@ def _detect_language(path: str) -> str:
         ext = Path(path).suffix.lower()
         if ext in ('.py', '.pyw', '.pyi'):
             return "python"
-        elif ext in ('.c', '.cpp', '.cc', '.cxx', '.h', '.hpp', '.hxx', '.cu', '.cuh'):
+        if ext in ('.c', '.cpp', '.cc', '.cxx', '.h', '.hpp', '.hxx', '.cu', '.cuh'):
             return "cpp"
     elif os.path.isdir(path):
         # 检查目录中的文件类型
@@ -64,7 +63,7 @@ def _detect_language(path: str) -> str:
 
         if py_files:
             return "python"
-        elif cpp_files:
+        if cpp_files:
             return "cpp"
 
     return "unknown"
@@ -105,13 +104,10 @@ def _format_python(action: str, path: str, style: str) -> str:
         if action == "check":
             if result.returncode == 0:
                 return f"✅ {path} 格式符合规范"
-            else:
-                return f"⚠️ {path} 格式不符合规范:\n{result.stdout}"
-        else:
-            if result.returncode == 0:
-                return f"✅ {path} 格式化完成\n{result.stdout}"
-            else:
-                return f"❌ 格式化失败:\n{result.stderr}"
+            return f"⚠️ {path} 格式不符合规范:\n{result.stdout}"
+        if result.returncode == 0:
+            return f"✅ {path} 格式化完成\n{result.stdout}"
+        return f"❌ 格式化失败:\n{result.stderr}"
 
     except subprocess.TimeoutExpired:
         return "❌ 格式化超时"
@@ -173,10 +169,8 @@ def _format_cpp(action: str, path: str, style: str) -> str:
         if result.returncode == 0:
             if action == "check":
                 return f"✅ {path} 格式符合规范"
-            else:
-                return f"✅ {path} 格式化完成"
-        else:
-            return f"⚠️ {path} 格式问题:\n{result.stderr or result.stdout}"
+            return f"✅ {path} 格式化完成"
+        return f"⚠️ {path} 格式问题:\n{result.stderr or result.stdout}"
 
     except subprocess.TimeoutExpired:
         return "❌ 格式化超时"

@@ -197,7 +197,6 @@ class AgentTool:
         """异步执行工作器。"""
         self.call(task, context)
         # 结果已记录到 _call_history
-        pass
 
     def to_tool_schema(self) -> dict:
         """

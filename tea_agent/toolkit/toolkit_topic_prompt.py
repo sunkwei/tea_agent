@@ -85,11 +85,10 @@ def toolkit_topic_prompt(action: str = "get", content: str = "") -> str:
             if current:
                 title = storage.get_topic(topic_id).get("title", topic_id)
                 return f"📋 当前主题「{title}」的自定义系统提示词：\n\n{current}"
-            else:
-                title = storage.get_topic(topic_id).get("title", topic_id)
-                return f"ℹ️ 当前主题「{title}」没有自定义系统提示词，使用全局进化版。"
+            title = storage.get_topic(topic_id).get("title", topic_id)
+            return f"ℹ️ 当前主题「{title}」没有自定义系统提示词，使用全局进化版。"
 
-        elif action == "set":
+        if action == "set":
             if not content or not content.strip():
                 return "❌ content 参数不能为空。用法：toolkit_topic_prompt(action='set', content='你的系统提示词')"
             content = content.strip()
@@ -98,12 +97,12 @@ def toolkit_topic_prompt(action: str = "get", content: str = "") -> str:
             prompt_len = len(content)
             return f"✅ 已设置主题「{title}」的自定义系统提示词（{prompt_len} 字符）。\n接下来的对话将使用此提示词。"
 
-        elif action == "clear":
+        if action == "clear":
             storage.set_topic_system_prompt(topic_id, None)
             title = storage.get_topic(topic_id).get("title", topic_id)
             return f"✅ 已清除主题「{title}」的自定义系统提示词，恢复使用全局进化版本。"
 
-        elif action == "status":
+        if action == "status":
             topic_sp = storage.get_topic_system_prompt(topic_id)
             title = storage.get_topic(topic_id).get("title", topic_id)
 
@@ -122,18 +121,16 @@ def toolkit_topic_prompt(action: str = "get", content: str = "") -> str:
                     f"│ 全局进化版: {global_info}\n"
                     f"└─────────────────────────────────────"
                 )
-            else:
-                return (
-                    f"📊 System Prompt 状态 (主题: {title})\n"
-                    f"┌─────────────────────────────────────\n"
-                    f"│ 来源: 全局进化版\n"
-                    f"│ 版本: {global_info}\n"
-                    f"│ 说明: 使用 toolkit_topic_prompt(action='set', content=...) 设置主题自定义提示词\n"
-                    f"└─────────────────────────────────────"
-                )
+            return (
+                f"📊 System Prompt 状态 (主题: {title})\n"
+                f"┌─────────────────────────────────────\n"
+                f"│ 来源: 全局进化版\n"
+                f"│ 版本: {global_info}\n"
+                f"│ 说明: 使用 toolkit_topic_prompt(action='set', content=...) 设置主题自定义提示词\n"
+                f"└─────────────────────────────────────"
+            )
 
-        else:
-            return f"❌ 未知操作: {action}。支持: get, set, clear, status"
+        return f"❌ 未知操作: {action}。支持: get, set, clear, status"
 
     except Exception as e:
         logger.exception(f"操作失败: {e}")

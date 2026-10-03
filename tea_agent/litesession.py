@@ -256,9 +256,8 @@ class LiteSession:
 
                 state["iterations"] += 1
                 continue
-            else:
-                # 无工具调用，对话结束
-                break
+            # 无工具调用，对话结束
+            break
 
     def _handle_tool_calls(
         self,

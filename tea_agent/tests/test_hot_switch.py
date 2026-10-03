@@ -8,8 +8,6 @@ apply_provider 写入磁盘 config.yaml 后，AgentModule 的 config_cache
 
 from __future__ import annotations
 
-import os
-
 import pytest
 
 
@@ -59,9 +57,10 @@ def _session_model():
 
 def test_apply_invalidates_config_cache(hot_switch_env, monkeypatch):
     """apply 后 create_session 应读到新模型（修复前命中旧缓存）。"""
+    from starlette.testclient import TestClient
+
     from tea_agent.server.modules.agent_module import AgentModule
     from tea_agent.server.server import create_app
-    from starlette.testclient import TestClient
 
     # 保证 config_cache 干净（避免受其他测试/会话污染）
     AgentModule.invalidate_config_cache()
@@ -94,9 +93,10 @@ def test_apply_invalidates_config_cache(hot_switch_env, monkeypatch):
 
 def test_api_model_switch_persists_and_invalidates(hot_switch_env, monkeypatch):
     """POST /api/model 热切换后：落盘 + 失效缓存 → 新会话读新模型。"""
+    from starlette.testclient import TestClient
+
     from tea_agent.server.modules.agent_module import AgentModule
     from tea_agent.server.server import create_app
-    from starlette.testclient import TestClient
 
     AgentModule.invalidate_config_cache()
     app = create_app()

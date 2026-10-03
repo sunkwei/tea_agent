@@ -489,7 +489,7 @@ def _run_single_with_monitor(app: str, args: list, timeout: int) -> dict:
             "timeout_kind": "",
             "signal": None,
             "stdout": "",
-            "stderr": f"命令启动失败: {app}\n{str(e)}",
+            "stderr": f"命令启动失败: {app}\n{e!s}",
         }
 
     monitor = _ProcessMonitor(process.pid, base_timeout=timeout)
@@ -1270,14 +1270,14 @@ def toolkit_exec(app: str = "", args: list = None, action: str = "single",
             "total": len(commands),
         }
 
-    else:  # action == "single"
-        if args is None:
-            args = []
+    # action == "single"
+    if args is None:
+        args = []
 
-        # 使用智能超时：监控进程资源使用，动态延长超时
-        effective_timeout = timeout if timeout else 120
-        result = _run_single_with_monitor(app, args, effective_timeout)
-        return result
+    # 使用智能超时：监控进程资源使用，动态延长超时
+    effective_timeout = timeout if timeout else 120
+    result = _run_single_with_monitor(app, args, effective_timeout)
+    return result
 
 def meta_toolkit_exec() -> dict:
     """Meta toolkit exec."""

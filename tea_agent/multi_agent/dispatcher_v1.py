@@ -306,8 +306,7 @@ class Dispatcher:
     def _build_summary(self, goal: str, successful: int, total: int, time: float) -> str:
         if successful == total:
             return f"✅ 全部完成: {goal} ({total} 步, {time:.1f}s)"
-        else:
-            return f"⚠️ 部分完成: {goal} ({successful}/{total} 步, {time:.1f}s)"
+        return f"⚠️ 部分完成: {goal} ({successful}/{total} 步, {time:.1f}s)"
 
     def visualize(self, goal: str) -> str:
         """可视化执行计划（不执行）。"""

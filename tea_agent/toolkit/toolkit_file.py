@@ -66,7 +66,7 @@ def toolkit_file(action: str, filename: str = "", content: str = "", path: str =
         except FileNotFoundError:
             return f"Error: File '{filename}' not found."
         except Exception as e:
-            return f"Error: {str(e)}"
+            return f"Error: {e!s}"
 
     elif action == "write":
         ok, resolved = _resolve_path(filename)
@@ -93,7 +93,7 @@ def toolkit_file(action: str, filename: str = "", content: str = "", path: str =
                 pass
             return 0
         except Exception as e:
-            return f"Error: {str(e)}"
+            return f"Error: {e!s}"
     elif action == "list":
         ok, resolved = _resolve_path(path)
         if not ok:
@@ -105,12 +105,6 @@ def toolkit_file(action: str, filename: str = "", content: str = "", path: str =
         output_lines = [f"📂 Directory Listing: {target}"]
 
         def scan_dir(current_dir, indent=""):
-            """Scan dir.
-
-            Args:
-                current_dir: Description.
-                indent: Description.
-            """
             try:
                 items = sorted(current_dir.iterdir(), key=lambda x: (not x.is_dir(), x.name.lower()))
             except PermissionError:

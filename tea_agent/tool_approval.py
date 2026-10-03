@@ -334,7 +334,7 @@ def make_post_hook():
     def _post(tool_name: str, args: dict, result: Any):
         level, reason = classify_risk(tool_name, args)
         if level is None:
-            return None
+            return
 
         status = "unknown"
         duration = None
@@ -349,7 +349,7 @@ def make_post_hook():
 
         _audit("tool/result", tool_name, phase="post", status=status,
                detail={"risk": level, "args_preview": args}, duration_ms=duration)
-        return None
+        return
 
     return _post
 

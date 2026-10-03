@@ -67,11 +67,6 @@ class MemoryStore(StoreComponent):
         return mid
 
     def _enforce_critical_limit(self, max_critical: int = 30):
-        """Internal: enforce critical limit.
-
-        Args:
-            max_critical: Description.
-        """
         c = self.conn.cursor()
         c.execute(
             "SELECT COUNT(*) FROM memories WHERE is_active = 1 AND priority = 0"
@@ -92,11 +87,6 @@ class MemoryStore(StoreComponent):
         c.close()
 
     def update_memory(self, memory_id: str, **fields) -> bool:
-        """Update memory.
-
-        Args:
-            memory_id: Description.
-        """
         allowed = {
             "content", "category", "priority", "importance",
             "expires_at", "is_active", "tags", "last_accessed_at", "pinned",
@@ -124,19 +114,9 @@ class MemoryStore(StoreComponent):
         return affected > 0
 
     def deactivate_memory(self, memory_id: str) -> bool:
-        """Deactivate memory.
-
-        Args:
-            memory_id: Description.
-        """
         return self.update_memory(memory_id, is_active=0)
 
     def delete_memory(self, memory_id: str) -> bool:
-        """Delete memory.
-
-        Args:
-            memory_id: Description.
-        """
         c = self.conn.cursor()
         c.execute("DELETE FROM memories WHERE id = ?", (memory_id,))
         self.conn.commit()
@@ -145,11 +125,6 @@ class MemoryStore(StoreComponent):
         return affected > 0
 
     def get_active_memories(self, limit: int = 50) -> list[dict]:
-        """Get the active memories.
-
-        Args:
-            limit: Description.
-        """
         self.cleanup_expired_memories()
         c = self.conn.cursor()
         c.execute(
@@ -177,15 +152,6 @@ class MemoryStore(StoreComponent):
         self, query: str = "", category: str = "",
         tags: list[str] | None = None, min_importance: int = 0, limit: int = 20,
     ) -> list[dict]:
-        """Search memories.
-
-        Args:
-            query: Description.
-            category: Description.
-            tags: Description.
-            min_importance: Description.
-            limit: Description.
-        """
         self.cleanup_expired_memories()
         conditions = ["is_active = 1"]
         params: list = []
@@ -229,11 +195,6 @@ class MemoryStore(StoreComponent):
         return affected
 
     def touch_memory(self, memory_id: str):
-        """Touch memory.
-
-        Args:
-            memory_id: Description.
-        """
         c = self.conn.cursor()
         c.execute(
             "UPDATE memories SET last_accessed_at = datetime('now', 'localtime') WHERE id = ?",

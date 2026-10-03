@@ -180,7 +180,7 @@ def _replace_text(file_path: str, old_text: str, new_text: str,
         return result
 
     except Exception as e:
-        return {"ok": False, "error": f"❌ replace_text 失败: {str(e)}", "returncode": 1}
+        return {"ok": False, "error": f"❌ replace_text 失败: {e!s}", "returncode": 1}
 
 
 def _tuple_to_dict(tup):
@@ -220,10 +220,9 @@ def _apply_patch(file_path: str, patch_content: str, preview: bool, backup: bool
                     capture_output=True, text=True, timeout=30)
                 if result.returncode == 0:
                     return {"ok": True, "message": f"✅ 成功应用 patch 到 {file_path}", "returncode": 0}
-                else:
-                    if backup and os.path.exists(file_path + '.bak'):
-                        shutil.copy2(file_path + '.bak', file_path)
-                    return {"ok": False, "error": f"❌ patch 应用失败:\n{result.stderr}\n{result.stdout}", "returncode": 1}
+                if backup and os.path.exists(file_path + '.bak'):
+                    shutil.copy2(file_path + '.bak', file_path)
+                return {"ok": False, "error": f"❌ patch 应用失败:\n{result.stderr}\n{result.stdout}", "returncode": 1}
             finally:
                 try:
                     os.unlink(patch_file)
@@ -234,7 +233,7 @@ def _apply_patch(file_path: str, patch_content: str, preview: bool, backup: bool
             return _apply_patch_python(file_path, original_content,
                                        patch_content, preview, backup)
     except Exception as e:
-        return {"ok": False, "error": f"❌ 应用 patch 失败: {str(e)}", "returncode": 1}
+        return {"ok": False, "error": f"❌ 应用 patch 失败: {e!s}", "returncode": 1}
 
 
 def _apply_patch_python(file_path: str, original_content: str,
@@ -330,7 +329,7 @@ def _apply_patch_python(file_path: str, original_content: str,
             return (0, f"✅ 成功应用编辑到 {file_path} {vrf}", "")
         return (0, f"✅ 成功应用编辑到 {file_path}", "")
     except Exception as e:
-        return (1, "", f"❌ 应用 patch 失败: {str(e)}")
+        return (1, "", f"❌ 应用 patch 失败: {e!s}")
 
 
 def _insert_lines(file_path: str, start_line: int, new_text: str,
@@ -387,7 +386,7 @@ def _insert_lines(file_path: str, start_line: int, new_text: str,
         return (0, f"✅ 成功在 {file_path}:{start_line} 插入 "
                    f"{len(insert_lines_list)} 行", "")
     except Exception as e:
-        return (1, "", f"❌ 插入失败: {str(e)}")
+        return (1, "", f"❌ 插入失败: {e!s}")
 
 
 def _delete_lines(file_path: str, start_line: int, end_line: int,
@@ -430,7 +429,7 @@ def _delete_lines(file_path: str, start_line: int, end_line: int,
         return (0, f"✅ 成功删除 {file_path}:{start_line}-{end_line} "
                    f"({len(deleted)} 行)", "")
     except Exception as e:
-        return (1, "", f"❌ 删除失败: {str(e)}")
+        return (1, "", f"❌ 删除失败: {e!s}")
 
 
 def _replace_lines(file_path: str, start_line: int, end_line: int,
@@ -489,7 +488,7 @@ def _replace_lines(file_path: str, start_line: int, end_line: int,
         return (0, f"✅ 成功替换 {file_path}:{start_line}-{end_line} "
                    f"({len(old_lines)}→{len(insert_list)} 行)", "")
     except Exception as e:
-        return (1, "", f"❌ 替换失败: {str(e)}")
+        return (1, "", f"❌ 替换失败: {e!s}")
 
 
 def _preview_patch(file_path: str, patch_content: str):

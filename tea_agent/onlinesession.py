@@ -45,6 +45,12 @@ from tea_agent.tool_shield import apply_shield
 
 logger = logging.getLogger("session")
 
+# 不变式观测点专用 logger。本模块由三段代码合并而来，`logger` 曾被
+# "session.tool" 与 "session.summarizer" 两次重绑，末次生效 —— 于是前缀连续性
+# 违例的 ERROR 挂在 summarizer 名下，而摘要器与这条报错毫无关系（查日志的人会去
+# 翻错地方）。专用名让来源可追；模块级 `logger` 只保留一次绑定。
+_log_turn_meta = logging.getLogger("session.turn_meta")
+
 _CHUNK_FLUSH_CHARS = 128
 # 模块级函数
 
@@ -155,8 +161,6 @@ def extract_mode(result: dict):
 
 
 
-logger = logging.getLogger("session.tool")
-
 # ── 模块级纯函数（原 session_tools_builder）──
 
 # 核心工具集：任何任务都可能需要的常驻原语。
@@ -187,11 +191,6 @@ def filter_tools(tools: list, tool_filter: list = None) -> list:
 def has_tool(tools: list, name: str) -> bool:
     """检查工具列表中是否存在指定名称的工具。"""
     return any(t.get("function", {}).get("name") == name for t in tools)
-
-
-
-
-logger = logging.getLogger("session.summarizer")
 
 
 
@@ -1458,9 +1457,9 @@ class OnlineToolSession(BaseChatSession):
                 self.turn_meta = tracker
             starts = tracker.note_request(api_messages)
             if starts:
-                logger.debug("turn_meta: 新请求序列（前缀缓存重置）")
+                _log_turn_meta.debug("turn_meta: 新请求序列（前缀缓存重置）")
             for v in tracker.last_violations:
-                logger.error("运行时不变式违例 %s", v)
+                _log_turn_meta.error("运行时不变式违例 %s", v)
             from tea_agent import session_events as se
             if not hasattr(self, "_event_log"):
                 self._event_log = []
@@ -1477,7 +1476,7 @@ class OnlineToolSession(BaseChatSession):
                 tracker.turns, len(tracker.steps),
                 {"starts_request_series": starts})
         except Exception as e:  # noqa: BLE001 — 观测失败不影响请求
-            logger.debug("turn_meta 观测跳过: %s", e)
+            _log_turn_meta.debug("turn_meta 观测跳过: %s", e)
 
     # ──────────────────────────────────────────────
     # 意图分析与工具循环

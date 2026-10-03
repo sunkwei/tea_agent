@@ -101,3 +101,47 @@ def test_online_session_excludes_tail_from_series_check():
 
     assert out == full, "返回值必须是**完整**消息（尾巴要真的发给 API）"
     assert captured == [full[:-1]], "只有稳定前缀参与连续性判定"
+
+
+# ── 日志来源：违例 ERROR 不得挂在无关组件名下 ──
+
+def test_violation_is_logged_under_its_own_source(caplog):
+    """契约：prefix_stable 违例必须挂在 turn_meta 观测点名下。
+
+    缺陷形态：onlinesession 系三段代码合并，模块级 `logger` 被重绑为
+    "session.tool" / "session.summarizer"，末次生效 → 违例 ERROR 自称
+    summarizer，把查日志的人引向摘要器（与这条报错毫无关系）。
+    """
+    import logging
+
+    from tea_agent.onlinesession import OnlineToolSession, _log_turn_meta
+
+    assert _log_turn_meta.name == "session.turn_meta"
+    sess = OnlineToolSession.__new__(OnlineToolSession)
+    sess.turn_meta = TurnMetaTracker()
+    sess.turn_meta.note_request([_m("system", "sp"), _m("user", "u1")])
+
+    with caplog.at_level(logging.ERROR, logger="session.turn_meta"):
+        sess._note_request_series([_m("system", "被偷改的 sp"),
+                                   _m("user", "u1"), _m("user", "u2")])
+
+    recs = [r for r in caplog.records if "prefix_stable" in r.getMessage()]
+    assert recs, "真·前缀改写必须报违例"
+    assert recs[0].name == "session.turn_meta", f"日志来源错标: {recs[0].name}"
+    assert recs[0].levelno == logging.ERROR
+
+
+def test_module_logger_is_not_clobbered_by_merged_sections():
+    """onlinesession 是单模块：模块级 logger 只应有一个绑定。
+
+    重绑会让被合并进来的各段日志**集体**错标（末次绑定生效），
+    所以这里钉的是「只有一个」而非某个具体名字。
+    """
+    import re
+
+    import tea_agent.onlinesession as m
+
+    src = __import__("pathlib").Path(m.__file__).read_text(encoding="utf-8")
+    binds = re.findall(r"^(logger|_log_\w+) = logging\.getLogger\(", src, re.M)
+    assert binds == ["logger", "_log_turn_meta"], f"模块级 logger 绑定异常: {binds}"
+    assert m.logger.name == "session"

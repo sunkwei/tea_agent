@@ -924,6 +924,23 @@ class OnlineToolSession(BaseChatSession):
         except Exception:
             logger.debug("append turn/end marker failed (isolated)", exc_info=True)
 
+    def _emit_search_refs(self, callback: Callable[[str], None]) -> None:
+        """回合收尾：列出本回合搜索/抓取过的 http 参考链接。
+
+        与 ``_emit_storage_notice`` 同理：经 ``callback`` 直达 UI，**不并入
+        full_reply**（后者会被持久化进对话历史，每轮追加即污染上下文）。
+        纯旁路：异常一律吞掉。
+        """
+        try:
+            from tea_agent.search_refs import format_refs_text
+
+            refs = getattr(self.context, "_search_refs", None) or []
+            text = format_refs_text(refs)
+            if text:
+                callback("\n\n" + text)
+        except Exception:
+            logger.debug("search refs emit failed (isolated)", exc_info=True)
+
     def _emit_storage_notice(self, callback: Callable[[str], None]) -> None:
         """临时目录回退时，向用户明示 db 路径并要求手动备份。
 
@@ -1418,7 +1435,11 @@ class OnlineToolSession(BaseChatSession):
         # 也会让历史图把后续纯文本轮持续锁在 vision 模型上。当前轮保留，
         # 由回合级/请求级视觉切换处理。见 history_builder.strip_historical_images。
         api_messages = strip_historical_images(build_api_messages(self.context, sp))
-        self._note_request_series(api_messages)
+        # 前缀连续性判定须排除尾部动态消息：它每次请求都重新追加到末尾，
+        # 位置随新消息后移，纳入比对会把正常的尾部追加误判成「前缀被改写」。
+        tail = getattr(self.context, "_dynamic_tail_count", 0) or 0
+        stable = api_messages[: len(api_messages) - tail] if tail else api_messages
+        self._note_request_series(stable)
         return api_messages
 
     def _note_request_series(self, api_messages: list[dict]) -> None:
@@ -1531,6 +1552,8 @@ class OnlineToolSession(BaseChatSession):
         # 沿用上一回合的数字（数字为真但归属错误，比不显示更有害）。
         reset_decode_stats(self.context)
         self._rounds_collector = []
+        # 搜索引用是「本回合参考来源」：清零后不会把上一轮的链接重复列出
+        self.context._search_refs = []
         self._extra_iterations = 0
         self._max_iter_wait.clear()
         self._max_iter_extra_pending = 10
@@ -1847,6 +1870,7 @@ class OnlineToolSession(BaseChatSession):
         Returns:
             ``(full_reply, used_tools)``，其中 full_reply 与入参逐字相同
         """
+        self._emit_search_refs(callback)
         self._emit_storage_notice(callback)
         return full_reply, used_tools
 

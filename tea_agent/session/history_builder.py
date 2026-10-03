@@ -1872,6 +1872,13 @@ def build_api_messages(context: Any, system_prompt: str) -> list[dict]:
     dynamic_text = _get_dynamic_context(context)
     if dynamic_text:
         result.append({"role": "user", "content": dynamic_text})
+    # 记录尾部动态消息条数：它每次请求都重新追加到**末尾**，故不属于稳定前缀。
+    # turn_meta 的前缀连续性判定必须排除它 —— 否则工具循环内新消息插在它之前，
+    # 它的位置后移就会被误判为「前缀被改写」（实测每步刷一条 ERROR，纯噪声）。
+    try:
+        context._dynamic_tail_count = 1 if dynamic_text else 0
+    except Exception:  # noqa: BLE001 — 旁路记录不得影响构建
+        logger.debug("dynamic tail count record failed (isolated)", exc_info=True)
 
     # 防御性校验（DeepSeek V4 thinking 模式）：含 tool_calls 的 assistant 消息
     # 必须**携带 reasoning_content 字段**（值可为空字符串——V4 在部分 tool_call

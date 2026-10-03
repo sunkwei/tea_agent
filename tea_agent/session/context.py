@@ -155,6 +155,15 @@ class SessionContext:
     # ── 自进化 ──
     evolution_trigger: Any = None
 
+    # ── 搜索引用（回合级） ──
+    # 本回合搜索/抓取类工具产出过的 http(s) 参考链接，由 ToolComponent 采集、
+    # reset_session_state 清零、_finalize_turn_reply 经 callback 列出（不入库）。
+    _search_refs: list[dict] = field(default_factory=list)
+
+    # 尾部动态上下文消息条数（build_api_messages 每次构建写入）。
+    # 该消息恒追加在末尾、不参与前缀缓存连续性判定，见 history_builder 注释。
+    _dynamic_tail_count: int = 0
+
 
 class SessionComponent(ABC):
     """会话组件基类 — 所有功能组件继承此类。"""

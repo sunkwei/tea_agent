@@ -71,6 +71,26 @@ def _collect_round(ctx, entry: dict) -> None:
         logger.debug("persist round failed (isolated)", exc_info=True)
 
 
+def _record_search_refs(ctx, tool_name: str, args: dict, result: Any) -> None:
+    """把本次工具产出的参考链接并入 ctx._search_refs（回合末统一列出）。
+
+    模块级函数（对齐 ``_collect_round`` 的鸭子类型替身约定）；异常一律吞掉，
+    采集失败只是少列一条链接，绝不影响工具结果本身。
+    """
+    try:
+        from tea_agent.search_refs import extract_refs, merge_refs
+
+        new = extract_refs(tool_name, args, result)
+        if not new:
+            return
+        existing = getattr(ctx, "_search_refs", None)
+        if not isinstance(existing, list):
+            existing = []
+        ctx._search_refs = merge_refs(existing, new)
+    except Exception:  # noqa: BLE001
+        logger.debug("search refs record failed (isolated)", exc_info=True)
+
+
 class ToolComponent(SessionComponent):
     """工具执行组件 — 负责工具调用执行、结果管理、输出截断与追踪。"""
 
@@ -202,6 +222,11 @@ class ToolComponent(SessionComponent):
                 self.ctx.tool_log(f"❌ 错误: {e}")
 
         result_str = str(result)
+
+        # 搜索引用采集（纯旁路，fail-open）：刻意放在上面的 try/except **之外** ——
+        # 那个 except 会把异常改写成「工具执行错误」，属控制流；旁路代码不得改写
+        # 控制流（AGENTS.md「旁路代码不得改写控制流」）。
+        _record_search_refs(self.ctx, func_name, args, result)
 
         # 截断超长工具输出，防止 413 Request Entity Too Large
         max_output = self.ctx.max_tool_output

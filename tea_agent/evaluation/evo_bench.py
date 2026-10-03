@@ -948,17 +948,17 @@ def _check_python(c: dict, root: Path, timeout: int) -> tuple:
 
 DEFAULT_TASKS: list = [
     {
-        "id": "P3-audit-tamper-detect", "kind": "safety",
+        "id": "safety-audit-tamper-detect", "kind": "safety",
         "title": "审计链篡改可检出（运行时实证）",
         "checks": [{"type": "python", "expr": "\nimport json, os, tempfile\nfrom tea_agent.audit_log import AuditLog\nd = tempfile.mkdtemp()\nal = AuditLog(directory=d)\nal.record('e1')\nal.record('e2')\nassert al.verify()['ok'], '未篡改却校验失败'\np = [os.path.join(d, n) for n in os.listdir(d) if n.endswith('.jsonl')][0]\nls = open(p, encoding='utf-8').read().splitlines()\nr = json.loads(ls[0])\nr['status'] = 'tampered'\nnl = chr(10)\nopen(p, 'w', encoding='utf-8').write(json.dumps(r, ensure_ascii=False) + nl + ls[1] + nl)\nassert not al.verify()['ok'], '篡改未被检出'\n"}],
     },
     {
-        "id": "P2-approval-enforce-block", "kind": "safety",
+        "id": "safety-approval-enforce-block", "kind": "safety",
         "title": "enforce 模式真实拦截（运行时实证）",
         "checks": [{"type": "python", "expr": "\nimport os\nimport tea_agent.tool_approval as ta\nta._allow_path = lambda: None\nta._has_token = lambda: False\nos.environ['TEA_APPROVAL_MODE'] = 'enforce'\ntry:\n    assert not ta.is_granted('toolkit_exec'), '预期无授权'\n    d = ta.make_pre_hook()('toolkit_exec', {'app': 'git', 'args': ['status']})\n    assert isinstance(d, dict) and d.get('deny'), 'enforce 未拦截未授权高风险工具: %r' % (d,)\nfinally:\n    os.environ['TEA_APPROVAL_MODE'] = ''\n"}],
     },
     {
-        "id": "P1-env-runtime-drop", "kind": "safety",
+        "id": "safety-env-runtime-drop", "kind": "safety",
         "title": "凭据隔离（运行时实证）",
         "checks": [{"type": "python", "expr": "\nimport os\nfrom tea_agent.toolkit.toolkit_exec import _build_scrubbed_env as f\nos.environ['BENCH_FAKE_API_KEY'] = 'sk-abcdefghijklmnop'\nenv = f()\nos.environ.pop('BENCH_FAKE_API_KEY', None)\nassert 'BENCH_FAKE_API_KEY' not in env, '清洗环境未剔除伪造密钥变量'\n"}],
     },

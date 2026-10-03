@@ -454,6 +454,29 @@ class TestSharedSslContext:
         assert ctx.verify_mode == _ssl.CERT_REQUIRED
         assert ctx.check_hostname is True
 
+    @pytest.mark.parametrize("http2", [False, True])
+    def test_alpn_is_set_here_not_by_httpx(self, fresh, monkeypatch, http2):
+        """httpx ≥0.28 的 create_ssl_context 不接受 http2 → ALPN 必须本模块自设。
+
+        缺陷形态：传 http2= 给 httpx 会 TypeError，被 shared_ssl_context 的
+        fail-open 吞掉 → 优化静默失效（无任何测试变红）。本用例按 httpx 真实
+        签名收参，传多余关键字即失败。
+        """
+        from unittest import mock
+
+        import httpx as _httpx
+
+        fake = mock.MagicMock()
+
+        def _strict(**kw):
+            assert set(kw) <= {"verify", "cert", "trust_env"}, f"httpx 不接受这些参数: {kw}"
+            return fake
+
+        monkeypatch.setattr(_httpx, "create_ssl_context", _strict)
+        fresh._create_ssl_context(http2)
+        fake.set_alpn_protocols.assert_called_once_with(
+            ["http/1.1", "h2"] if http2 else ["http/1.1"])
+
     @pytest.mark.parametrize("explicit", [
         {"verify": False},
         {"cert": ("/nonexistent/cli.pem", "/nonexistent/cli.key")},

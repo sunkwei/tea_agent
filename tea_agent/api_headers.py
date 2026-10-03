@@ -314,13 +314,19 @@ def _create_ssl_context(http2: bool) -> ssl.SSLContext:
     """构造与 ``httpx.Client(verify=True)`` 等价的 SSLContext。
 
     刻意复用 httpx 自己的工厂（而非手搓 ``ssl.create_default_context``）：CA 包
-    选择（尊重 ``SSL_CERT_FILE``/``SSL_CERT_DIR``）、TLS 最低版本、cipher 白名单、
-    ALPN 等细节与 httpx 内部路径完全一致，不给校验强度留口径偏差。
+    选择（尊重 ``SSL_CERT_FILE``/``SSL_CERT_DIR``）、TLS 最低版本、cipher 白名单
+    等细节与 httpx 内部路径完全一致，不给校验强度留口径偏差。
     单独抽成函数是为了让测试能替换它。
     """
     from httpx import create_ssl_context
 
-    return create_ssl_context(verify=True, http2=http2)
+    ctx = create_ssl_context(verify=True)
+    # ALPN 必须在此自行设置：httpx ≥0.28 的 create_ssl_context 已不接受 http2 参数
+    # （传了即 TypeError，被上层 fail-open 吞掉 → 优化静默失效）。httpcore 每次建连
+    # 会对传入 context 调 set_alpn_protocols（httpcore/_sync/connection.py），故按
+    # http2 分桶持有各自对象，避免同一 context 被并发改写。
+    ctx.set_alpn_protocols(["http/1.1", "h2"] if http2 else ["http/1.1"])
+    return ctx
 
 
 def shared_ssl_context(http2: bool = False) -> ssl.SSLContext | None:

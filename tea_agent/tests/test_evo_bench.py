@@ -376,3 +376,45 @@ def test_compare_coverage_threshold_respected(temp_history):
                              candidate={"score": 1.0, "total": 8},
                              coverage_threshold=2)
     assert r["decision"] == "no_change", r
+
+
+# ── 任务 id 命名空间：内置任务不得与实验探针撞名 ──────────────────────
+
+RUNTIME_SAFETY_TASKS = [
+    "safety-env-runtime-drop",
+    "safety-approval-enforce-block",
+    "safety-audit-tamper-detect",
+]
+
+
+def test_default_task_ids_are_unique():
+    from tea_agent.evaluation.evo_bench import DEFAULT_TASKS
+
+    ids = [t.get("id") for t in DEFAULT_TASKS]
+    dup = sorted({i for i in ids if ids.count(i) > 1})
+    assert not dup, f"DEFAULT_TASKS 存在重复 id: {dup}"
+
+
+def test_default_task_ids_do_not_collide_with_experiment_probes():
+    """内置任务 id 必须与实验探针 id 不相交。
+
+    撞名的后果不是报错而是**静默失效**：实验把探针插到 DEFAULT_TASKS 顶部，
+    ``load_tasks`` 按 id 去重 → 同 id 的既有任务使探针「插了等于没插」，任务数
+    不增、该改进轮被判 no_change（2026-10-01 实测 6 轮改进只认 3 轮）。
+    故约定长期任务一律用 ``safety-*`` 命名（见 CHANGELOG）。
+    """
+    from tea_agent.evaluation.evo_bench import DEFAULT_TASKS
+    from tea_agent.evaluation.evo_experiment import IMPROVEMENTS, REGRESSIONS
+
+    probe_ids = {m[0] for m in IMPROVEMENTS} | {r[0] for r in REGRESSIONS}
+    ids = {t.get("id") for t in DEFAULT_TASKS}
+    leaked = sorted(ids & probe_ids)
+    assert not leaked, f"内置任务 id 与探针撞名（探针将被去重静默吞掉）: {leaked}"
+
+
+@pytest.mark.parametrize("tid", RUNTIME_SAFETY_TASKS)
+def test_runtime_safety_tasks_present(tid):
+    """3 条运行时安全任务必须仍在（防止用「删掉」替代「改名」）。"""
+    from tea_agent.evaluation.evo_bench import DEFAULT_TASKS
+
+    assert tid in {t.get("id") for t in DEFAULT_TASKS}

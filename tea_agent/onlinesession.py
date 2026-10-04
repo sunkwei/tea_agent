@@ -37,6 +37,10 @@ from tea_agent.session.history_builder import (
 from tea_agent.session.prompts import (
     COMPACT_SYSTEM_PROMPT,
 )
+from tea_agent.session.thinking_synth import (
+    MuseThinkingSynthesizer,
+    synth_nonstream_thinking,
+)
 from tea_agent.session.tool_loop_runner import execute_tool_loop
 from tea_agent.session_pipeline import SessionPipeline
 from tea_agent.tool_hooks import tool_hooks
@@ -1032,6 +1036,50 @@ class OnlineToolSession(BaseChatSession):
         except Exception as e:
             logger.debug(f"解码速率样本记录失败（已忽略）: {e}")
 
+    def _consume_non_stream_response(
+        self, response, callback
+    ) -> tuple[str, list[dict], str]:
+        """消费非流式响应 → ``(content, tool_calls_data, reasoning_content)``。
+
+        非流式无「解码阶段」可言（整段一次性返回），不做 tok/s 测量：用总耗时算出的
+        数字既非 prefill 也非 decode，展示只会误导。
+        """
+        if getattr(response, "usage", None):
+            self.api._accumulate_usage(response.usage)
+        if not getattr(response, "choices", None):
+            return "", [], []
+
+        msg = response.choices[0].message
+        reasoning_parts: list[str] = []
+        # vLLM 思考模式（Qwen3.8 等）返回 `reasoning` 字段，OpenAI/DeepSeek 兼容端点为
+        # `reasoning_content`；extract_reasoning 统一提取
+        real_rc = extract_reasoning(msg)
+        if real_rc:
+            reasoning_parts.append(real_rc)
+            callback(f"[THINK]{real_rc}")
+        else:
+            # B: Muse inline-thinking 兼容 — 无原生 reasoning 时由正文合成思考预览
+            synth_text = synth_nonstream_thinking(self.context.model, msg.content or "")
+            if synth_text:
+                reasoning_parts.append(synth_text)
+                callback(f"[THINK]{synth_text}")
+                callback("[THINK_DONE]")
+
+        if msg.content:
+            callback(msg.content)
+        tool_calls_data = [
+            {
+                "id": tc.id,
+                "type": "function",
+                "function": {
+                    "name": tc.function.name,
+                    "arguments": tc.function.arguments,
+                },
+            }
+            for tc in (msg.tool_calls or [])
+        ]
+        return msg.content or "", tool_calls_data, "".join(reasoning_parts)
+
     def _process_stream_with_reasoning(
         self,
         response,
@@ -1044,17 +1092,25 @@ class OnlineToolSession(BaseChatSession):
         Args:
             response: OpenAI 流式/非流式响应对象
             callback: 流式增量回调（UI 实时展示）
-            retry_factory: 可选；流迭代中断（断流，如 incomplete chunked read）时
-                重新创建 stream 的可调用对象。断流重试会丢弃已收部分重新生成，
-                保证工具调用参数完整（工具调用增量是流式的，半截参数不可用）。
+            retry_factory: 可选；流迭代中断（断流，如 incomplete chunked read）时重新创建
+                stream 的可调用对象。断流重试会丢弃已收部分重新生成，保证工具调用参数
+                完整（工具调用增量是流式的，半截参数不可用）。
             max_stream_retries: 断流最大重试次数（默认 3，指数退避）
 
         Returns:
             (content, tool_calls_data, reasoning_content)
+
+        注：非流式分支见 :meth:`_consume_non_stream_response`，Muse 思考合成判定见
+        :mod:`tea_agent.session.thinking_synth`；此处只保留流式主循环。
         """
-        content_parts = []
-        tool_calls_data = []
-        reasoning_parts = []
+        if self.context.no_stream_chunk:
+            return self._consume_non_stream_response(response, callback)
+
+        content_parts: list[str] = []
+        tool_calls_data: list[dict] = []
+        reasoning_parts: list[str] = []
+        # 每轮新建：合成状态是本轮调用的局部状态，不外溢到实例（断流重试时一并重置）
+        synth = MuseThinkingSynthesizer(self.context.model, self.context.enable_thinking)
 
         # ── 解码速度（tok/s）计时锚点 ──
         # _decode_start_ts: 请求发出（进入本方法）时刻，用于首 token 等待（TTFT）；
@@ -1067,172 +1123,98 @@ class OnlineToolSession(BaseChatSession):
         self._decode_start_ts = time.monotonic()
         self._decode_first_ts: float | None = None
         # 本轮输出 token 的计数基线（usage.completion_tokens 累计值）。
-        # 断流重试会丢弃已收内容重新生成，此时基线一并前移，保证统计的是
-        # 最终成功那一版输出，而不是「两次尝试之和 / 一次尝试的耗时」。
-        _dec_tokens_base = completion_tokens_total(self.context)
+        # 断流重试会丢弃已收内容重新生成，此时基线一并前移，保证统计的是最终成功
+        # 那一版输出，而不是「两次尝试之和 / 一次尝试的耗时」。
+        dec_tokens_base = completion_tokens_total(self.context)
+        first_out_marked = False
 
         def _mark_first_output() -> None:
-            nonlocal _first_out_marked
-            if not _first_out_marked:
+            nonlocal first_out_marked
+            if not first_out_marked:
                 self._decode_first_ts = time.monotonic()
-                _first_out_marked = True
-
-        _first_out_marked = False
+                first_out_marked = True
 
         def _record_decode_speed() -> None:
             """落盘本轮解码速度（旁路统计，失败绝不影响主流程）。"""
             try:
-                _end_ts = time.monotonic()
-                _tokens = max(0, completion_tokens_total(self.context) - _dec_tokens_base)
-                _estimated = False
-                if _tokens <= 0:
+                end_ts = time.monotonic()
+                tokens = max(0, completion_tokens_total(self.context) - dec_tokens_base)
+                estimated = False
+                if tokens <= 0:
                     # 供应商未回传 usage（未开 include_usage / 兼容端点省略）
                     # → 退化为字符启发式估算，并标记为估算值，避免前端把
                     # 一个凭空数字当成实测。
-                    _text = "".join(content_parts) + "".join(reasoning_parts)
-                    if _text:
-                        _estimated = True
-                        _tokens = max(1, estimate_tokens(_text) - 4)  # 去掉 +4 结构开销
+                    text = "".join(content_parts) + "".join(reasoning_parts)
+                    if text:
+                        estimated = True
+                        tokens = max(1, estimate_tokens(text) - 4)  # 去掉 +4 结构开销
                 record_decode_stats(
                     self.context,
-                    _tokens,
+                    tokens,
                     getattr(self, "_decode_start_ts", None),
                     getattr(self, "_decode_first_ts", None),
-                    _end_ts,
-                    estimated=_estimated,
+                    end_ts,
+                    estimated=estimated,
                 )
             except Exception:
                 logger.debug("decode speed record failed", exc_info=True)
 
-        # 非流式模式
-        if self.context.no_stream_chunk:
-            if hasattr(response, "usage") and response.usage:
-                self.api._accumulate_usage(response.usage)
-            if response.choices:
-                msg = response.choices[0].message
-                # vLLM 思考模式（Qwen3.8 等）返回 `reasoning` 字段，
-                # OpenAI/DeepSeek 兼容端点为 `reasoning_content`；统一提取
-                _rc = extract_reasoning(msg)
-                _has_rc = bool(_rc)
-                if _has_rc:
-                    reasoning_parts.append(_rc)
-                    callback(f"[THINK]{_rc}")
-                # B: Muse inline-thinking 兼容 — 无 reasoning_content 时合成
-                _is_muse_ns = "muse" in (self.context.model or "").lower() or "spark" in (self.context.model or "").lower()
-                if not _has_rc and _is_muse_ns and msg.content:
-                    _budget_ns = 1600
-                    _syn = msg.content[:_budget_ns] if len(msg.content) > _budget_ns else msg.content
-                    # 仅当内容含思考痕迹或足够长时才合成，避免短回答误判
-                    if len(msg.content) > 200 or any(k in msg.content for k in ("思考", "推理", "逐步", "分析", "think")):
-                        reasoning_parts.append(_syn)
-                        callback(f"[THINK]{_syn}")
-                        callback("[THINK_DONE]")
-                if msg.content:
-                    content_parts.append(msg.content)
-                    callback(msg.content)
-                if msg.tool_calls:
-                    for tc in msg.tool_calls:
-                        tool_calls_data.append(
-                            {
-                                "id": tc.id,
-                                "type": "function",
-                                "function": {
-                                    "name": tc.function.name,
-                                    "arguments": tc.function.arguments,
-                                },
-                            }
-                        )
-            content = "".join(content_parts)
-            reasoning_content = "".join(reasoning_parts)
-            # 非流式模式无「解码阶段」可言（整段一次性返回），不做 tok/s 测量：
-            # 用总耗时算出来的数字既非 prefill 也非 decode，展示只会误导。
-            return content, tool_calls_data, reasoning_content
-
-        # 流式模式（带断流重试 + AI 回复增量实时落盘）
-        # 借鉴 DeepSeek Harness append-only log：不等 final msg，边收边落盘，
-        # 中断时已生成的回复内容仍可从 session_events 重建。
-        self._muse_syn_done = False
-        self._muse_syn_active = False
         stream_retries = 0
-        _chunk_buf: list[str] = []
-        _chunk_chars = 0
+        chunk_buf: list[str] = []
+        chunk_chars = 0
 
         def _flush_chunk_buf() -> None:
-            nonlocal _chunk_buf, _chunk_chars
-            if _chunk_buf:
-                self._log_assistant_chunk("".join(_chunk_buf))
-                _chunk_buf = []
-                _chunk_chars = 0
+            nonlocal chunk_buf, chunk_chars
+            if chunk_buf:
+                self._log_assistant_chunk("".join(chunk_buf))
+                chunk_buf = []
+                chunk_chars = 0
 
         while True:
             try:
                 for chunk in response:
-                    if hasattr(chunk, "usage") and chunk.usage:
+                    if getattr(chunk, "usage", None):
                         self.api._accumulate_usage(chunk.usage)
 
-                    if not hasattr(chunk, "choices") or not chunk.choices:
+                    if not getattr(chunk, "choices", None):
                         continue
 
                     delta = chunk.choices[0].delta
 
                     # 推理内容：兼容端点为 `reasoning_content`，
                     # vLLM 思考模式（Qwen3.8 等）为 `reasoning`；统一提取
-                    _rc = extract_reasoning(delta)
-                    if _rc:
+                    delta_rc = extract_reasoning(delta)
+                    if delta_rc:
                         _mark_first_output()
-                        reasoning_parts.append(_rc)
-                        callback(f"[THINK]{_rc}")
-
-                    # B: Muse inline-thinking 流式合成 — 首段 content 合成思考预览
-                    # Muse Spark 经 opencode 代理不提供 delta.reasoning_content，思考写在 content 里。
-                    # 仅当启用思考、用 Muse 模型、且无原生 reasoning 时，用首 ~1600 字符合成 [THINK]。
-                    _already_syn = getattr(self, "_muse_syn_done", False)
-                    _is_muse_model = "muse" in (self.context.model or "").lower() or "spark" in (self.context.model or "").lower()
-                    _can_syn = (not _already_syn and self.context.enable_thinking and _is_muse_model
-                                and delta.content and len("".join(reasoning_parts)) < 1600
-                                and len("".join(content_parts)) < 2200)
-                    # 已有原生 reasoning 则永不合成；已合成首段后继续追加直到 1600
-                    _has_real_rc = bool(reasoning_parts) and not getattr(self, "_muse_syn_active", False) and len("".join(content_parts)) == 0
-                    # 区分：若 reasoning_parts 来自真实 RC（首包前已有），则 _has_real_rc 已可判定；
-                    # 更稳妥：检查首包是否走过原生分支
-                    if _can_syn:
-                        # 若已有原生 reasoning（非合成），跳过
-                        if reasoning_parts and not getattr(self, "_muse_syn_active", False):
-                            # reasoning_parts 非空但非合成期 → 说明是真实 RC，禁止合成
-                            pass
-                        else:
-                            _peek = delta.content
-                            _has_marker = _peek.lstrip().startswith("### 思考") or "思考" in _peek[:160] or "逐步推理" in _peek[:160] or "推理" in _peek[:80]
-                            _is_early = len("".join(content_parts)) < 600
-                            _should_syn = _has_marker or (_is_early and len(_peek) > 20) or getattr(self, "_muse_syn_active", False)
-                            if _should_syn:
-                                self._muse_syn_active = True
-                                _budget_left = 1600 - len("".join(reasoning_parts))
-                                _take = _peek[:max(0, _budget_left)] if _budget_left > 0 else ""
-                                if _take:
-                                    reasoning_parts.append(_take)
-                                    callback(f"[THINK]{_take}")
-                                    if len("".join(reasoning_parts)) >= 1200 or "### 第一步" in _peek or len("".join(reasoning_parts)) >= 1600:
-                                        callback("[THINK_DONE]")
-                                        self._muse_syn_done = True
-                                    # 仍保留原文在 content 中（不截断），思考面板为合成预览
-                    # 流结束兜底闭合（保证有 THINK 就有 DONE）
-                    # 在循环外处理，见下方 _flush 后
+                        synth.note_native_reasoning()  # 有真思考 → 禁用正文合成
+                        reasoning_parts.append(delta_rc)
+                        callback(f"[THINK]{delta_rc}")
 
                     if delta.content:
                         _mark_first_output()
+                        # B: Muse inline-thinking 流式合成 — 思考写在 content 里时，
+                        # 用正文前置片段合成思考预览（正文本身不截断）
+                        take, synth_done = synth.feed(
+                            delta.content,
+                            len("".join(reasoning_parts)),
+                            len("".join(content_parts)),
+                        )
+                        if take:
+                            reasoning_parts.append(take)
+                            callback(f"[THINK]{take}")
+                            if synth_done:
+                                callback("[THINK_DONE]")
+
                         content_parts.append(delta.content)
                         callback(delta.content)
                         # 实时落盘：节流累积，达阈值即 append assistant/chunk 事件
-                        _chunk_buf.append(delta.content)
-                        _chunk_chars += len(delta.content)
-                        if _chunk_chars >= _CHUNK_FLUSH_CHARS:
+                        chunk_buf.append(delta.content)
+                        chunk_chars += len(delta.content)
+                        if chunk_chars >= _CHUNK_FLUSH_CHARS:
                             _flush_chunk_buf()
 
                     if delta.tool_calls:
-                        self.api.accumulate_tool_calls_from_delta(
-                            delta, tool_calls_data
-                        )
+                        self.api.accumulate_tool_calls_from_delta(delta, tool_calls_data)
                 _flush_chunk_buf()  # 正常结束：flush 剩余增量
                 break  # 正常消费完成
             except Exception as e:
@@ -1258,12 +1240,15 @@ class OnlineToolSession(BaseChatSession):
                 content_parts = []
                 tool_calls_data = []
                 reasoning_parts = []
+                synth = MuseThinkingSynthesizer(
+                    self.context.model, self.context.enable_thinking
+                )
                 # 解码速度计时同步前移：重试产出的 token 只统计最终那一版，
                 # 且首个增量时刻重新判定（上一版的首包不属于本版输出）。
                 self._decode_start_ts = time.monotonic()
                 self._decode_first_ts = None
-                _first_out_marked = False
-                _dec_tokens_base = completion_tokens_total(self.context)
+                first_out_marked = False
+                dec_tokens_base = completion_tokens_total(self.context)
                 callback("\n⚠️ 连接中断，正在自动重试…\n")
 
                 time.sleep(1.5 * (2 ** (stream_retries - 1)))
@@ -1273,17 +1258,10 @@ class OnlineToolSession(BaseChatSession):
         reasoning_content = "".join(reasoning_parts)
         _record_decode_speed()
         # B 兜底：Muse 合成思考若未闭合，补一次 DONE，避免前端悬挂
-        if (
-            reasoning_parts
-            and "muse" in (self.context.model or "").lower()
-            and not getattr(self, "_muse_syn_done", False)
-        ):
+        if synth.needs_final_done(bool(reasoning_parts)):
             callback("[THINK_DONE]")
-            self._muse_syn_done = True
-        # 下一轮重置
-        self._muse_syn_done = False
-        self._muse_syn_active = False
         return content, tool_calls_data, reasoning_content
+
 
     # ──────────────────────────────────────────────
     # Pipeline 设置

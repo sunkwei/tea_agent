@@ -25,27 +25,45 @@ from tea_agent.invariants import registry as _invariants
 logger = logging.getLogger("turn_meta")
 
 
-def _msg_key(msg: dict) -> str:
-    """单条消息的等价指纹（role + 内容 + 工具标识，忽略无关字段顺序）。"""
+def _msg_key(msg: dict, *, ignore_reasoning: bool = False) -> str:
+    """单条消息的等价指纹（role + 内容 + 工具标识，忽略无关字段顺序）。
+
+    ignore_reasoning=True 时剥离 ``reasoning_content``：它是模型内部思考链，
+    框架在跨块边界有意置空（``_blank_stale_reasoning`` 上下文治理）——这是
+    合法的缓存治理动作，不是「对话历史被旁路改写」，不构成 prefix_stable 违例。
+    """
     try:
+        if (ignore_reasoning and isinstance(msg, dict)
+                and "reasoning_content" in msg):
+            msg = {k: v for k, v in msg.items() if k != "reasoning_content"}
         raw = json.dumps(msg, sort_keys=True, ensure_ascii=False, default=str)
     except (TypeError, ValueError):
         raw = repr(msg)
     return hashlib.sha1(raw.encode("utf-8", "replace")).hexdigest()
 
 
-def same_series(prev: list[dict] | None, current: list[dict] | None) -> bool:
-    """prev 是否为 current 的逐条前缀（True=同一请求序列，前缀缓存可延续）。
-
-    纯函数、无副作用；None/空 prev 视为新序列（首个请求无从延续）。
-    """
+def _same_series(prev: list[dict] | None, current: list[dict] | None, *,
+                 ignore_reasoning: bool = False) -> bool:
+    """prev 是否为 current 的逐条前缀（内部实现，可切换 reasoning 口径）。"""
     if not prev:
         return False
     cur = current or []
     if len(prev) > len(cur):
         return False
-    return all(_msg_key(a) == _msg_key(b)
+    return all(_msg_key(a, ignore_reasoning=ignore_reasoning)
+               == _msg_key(b, ignore_reasoning=ignore_reasoning)
                for a, b in zip(prev, cur, strict=False))  # cur 可更长（尾部追加）
+
+
+def same_series(prev: list[dict] | None, current: list[dict] | None) -> bool:
+    """prev 是否为 current 的逐条前缀（True=同一请求序列，前缀缓存可延续）。
+
+    纯函数、无副作用；None/空 prev 视为新序列（首个请求无从延续）。
+    注：``reasoning_content`` 参与比较——它被置空同样使前缀缓存失效，故按
+    新序列计（starts_request_series 口径）；但 prefix_stable 违例判定用
+    ``ignore_reasoning=True``（置空是治理，非历史改写），二者口径不同。
+    """
+    return _same_series(prev, current)
 
 
 @dataclass
@@ -111,10 +129,16 @@ class TurnMetaTracker:
 
 
 def _check_prefix_stable(*, prev, current, declared, **_) -> str | None:
-    """前缀被改写（非追加）就必须声明新序列，否则属于未声明的历史改写。"""
+    """前缀被改写（非追加）就必须声明新序列，否则属于未声明的历史改写。
+
+    reasoning_content 不参与语义比较：框架的 ``_blank_stale_reasoning`` 在
+    跨块边界有意把旧思考链置空以治理上下文填充，属合法缓存治理，不构成
+    「对话历史被旁路改写」——若纳入比较，工具循环每 rc_keep_steps 步就刷
+    一条误报 ERROR（实测 prev=123→current=125 即此类噪声）。
+    """
     if declared or not prev:
         return None
-    if same_series(prev, current):
+    if _same_series(prev, current, ignore_reasoning=True):
         return None
     return (f"消息前缀被改写但未声明 startsRequestSeries "
             f"(prev={len(prev)} 条, current={len(current or ())} 条)")

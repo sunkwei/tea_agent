@@ -13,7 +13,7 @@
      "message":"Error from provider (Console Go): Request is missing
                 x-opencode-session and cannot be routed efficiently."}}
 
-除了上述自动注入，本模块还支持在 ``config.yaml`` 里为**自建网关/反代**声明附加
+除了上述自动注入，本模块还支持在 ``provider.yaml`` 的 ``settings.api_headers`` 里为**自建网关/反代**声明附加
 请求头（按 host 匹配，避免把网关密钥泄露给其它 provider）::
 
     api_headers:

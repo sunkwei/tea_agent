@@ -121,14 +121,13 @@ register → exec（下发任务，session_id 控制上下文） → status（�
 - **动态内容尾部注入**：时间/token 预算/技能/记忆全部放消息尾部，不进 system prompt，保护最长最贵的前缀段
 - **可观测**：`cache_report.py` 输出 `prompt_cache_hit_tokens` 命中率，端到端可见
 
-### 7. 👁️ 视觉模型自动切换（v0.13.16+）
+### 7. 👁️ 视觉能力（按 supports_vision 判定；v0.13.16+）
 
-主模型不支持视觉？配置一个 `vision_model`，Agent 自动切换：
+> 独立 `vision_model` 角色已随 config.yaml 移除（2026-10）：视觉能力由模型自身的 `supports_vision` 属性判定。
 
-- **请求级切换**：检测请求消息含图（当前轮或历史轮）→ 自动使用视觉模型
-- **回合级兜底**：覆盖「上一轮发图、本轮纯文本追问」场景，主模型不再收到无法处理的 `image_url` 内容
+- **原生视觉**：会话含图片时，具备 `supports_vision` 的模型直接处理 `image_url` 内容
 - **`toolkit_vision_analyze`**：主模型「灵机一动」委托能力 — 遇到图片路径 / URL / data URL 主动调用视觉模型分析，返回文本结果继续推理
-- **无感恢复**：回合结束自动恢复主模型，零配置零打扰
+- **韧性回退**：首选视觉模型不可用（配额耗尽/服务故障）时自动改用其他 `supports_vision` 模型
 
 ### 8. ♻️ 服务韧性 — 无感重启 + 生成中插话（v0.16.x）
 
@@ -160,7 +159,7 @@ tea-agent-api
 # http://127.0.0.1:8282
 ```
 
-首次启动引导「选服务商 → 选模型 → 填 API Key」（写入 `~/.tea_agent/provider.yaml`）即可对话；**`config.yaml` 缺失也能启动**，身份三元组由 provider.yaml 兜底。
+首次启动引导「选服务商 → 选模型 → 填 API Key」（写入 `~/.tea_agent/provider.yaml`）即可对话；**`config.yaml` 已删除**，身份三元组（main/cheap）与运行参数全部来自 provider.yaml 的 `roles` / `settings` 段。
 
 ---
 
@@ -321,14 +320,13 @@ python build_nuitka.py            # 或编译为单文件可执行文件（无�
 
 ## 🔧 配置
 
-配置分两层：**密钥与模型目录归 `provider.yaml`，运行参数与角色绑定归 `config.yaml`**。
+配置**单文件中心化**：`~/.tea_agent/provider.yaml` 是唯一事实源 —— 密钥、模型目录、角色绑定、运行参数全在一处（2026-10 起 `config.yaml` 已彻底删除，不再读写任何独立 YAML 配置文件）。
 
 | 文件 | 角色 | 是否必需 |
 |------|------|---------|
-| `~/.tea_agent/provider.yaml` | **唯一事实源** —— 供应商端点 / API Key / 模型目录（上下文窗口、输出上限、vision、reasoning 等能力） | ✅ 必需 |
-| `~/.tea_agent/config.yaml` | 运行参数 + 角色绑定 —— `main_model` / `cheap_model` / `vision_model` 以 `provider` + `model` **引用** provider.yaml 条目 | 可选 |
+| `~/.tea_agent/provider.yaml` | **唯一事实源** —— `providers`（端点 / API Key / 模型目录：上下文窗口、输出上限、vision、reasoning 等能力）+ `roles`（main/cheap 角色绑定）+ `settings`（运行参数） | ✅ 必需 |
 
-**`config.yaml` 不再是启动前提**：文件缺失时 `load_config` 自动兜底 provider.yaml 第一个提供商的第一个模型，装完即可对话。首次启动（provider.yaml 无可用提供商）引导「选服务商 → 选模型 → 填 Key」，也可在 Web 的 🏭 供应商页面随时增删改（写回 provider.yaml）。密钥只落 provider.yaml，**config.yaml 永不内嵌密钥**。
+**角色未绑定也能启动**：`load_config` 自动兜底 provider.yaml 第一个提供商的第一个模型，装完即可对话。首次启动（provider.yaml 无可用提供商）引导「选服务商 → 选模型 → 填 Key」，也可在 Web 的 🏭 供应商页面随时增删改（写回 provider.yaml）。密钥只落 provider.yaml 条目。`--config` CLI 参数已废弃（仅保留签名兼容）。
 
 `~/.tea_agent/provider.yaml`：
 
@@ -348,27 +346,27 @@ providers:
         reasoning_effort: auto     # auto=自动推导、不下发该参数
 ```
 
-`~/.tea_agent/config.yaml`（可选，只写「与 provider 默认不同」的覆盖项）：
+同文件的 `roles` / `settings` 段（原 config.yaml 的全部信息，只写「与默认不同」的覆盖项）：
 
 ```yaml
-main_model:
-  provider: "DeepSeek"      # 引用 provider.yaml 的供应商名
-  model: "deepseek-chat"    # 引用其 models 下的模型 id
-  max_context_tokens: 0     # 0=默认 1M(1048576)，>0 显式指定窗口上限并启用渐进式 token 裁剪
-cheap_model:                # 独立配置，用于摘要/记忆等廉价任务
-  provider: "DeepSeek"
-  model: "deepseek-chat"
-vision_model:               # 视觉模型（可选）：会话含图片时自动切换
-  provider: "DeepSeek"
-  model: "deepseek-v4-flash-vision-exp"   # 示例：也支持 mimo-v2.5 等视觉模型
+roles:                      # 角色绑定（原 config.yaml 的 main_model/cheap_model）
+  main:
+    provider: "DeepSeek"    # 引用 providers 段的供应商名
+    model: "deepseek-chat"  # 引用其 models 下的模型 id
+    max_context_tokens: 0   # 0=默认 1M(1048576)，>0 显式指定窗口上限并启用渐进式 token 裁剪
+  cheap:                    # 廉价任务（摘要/记忆等）
+    provider: "DeepSeek"
+    model: "deepseek-chat"
+
+settings:                   # 运行时参数（原 config.yaml 顶层标量 + paths）
+  keep_turns: 5
 ```
 
-> 内嵌形态（`api_key` / `api_url` / `model_name` 直接写在 `config.yaml`）仍然兼容，但 provider.yaml 是密钥与能力的归属地；引用式是推荐形态。隔离环境可用 `TEA_CONFIG` / `TEA_PROVIDER_FILE` 指向临时文件。
-> 另：`~/.tea_agent/config*.yaml` 多个文件仍会被扫描为模型面板里的候选供应商（`config_xxx.yaml` → 档位名 `xxx`），用于在同一实例内切换配置档。
+> 视觉能力不再有独立 `vision_model` 角色，由模型自身的 `supports_vision` 判定。完整运行参数清单与默认值见 [docs/CONFIG_DEFAULTS.md](docs/CONFIG_DEFAULTS.md)。隔离环境可用 `TEA_PROVIDER_FILE` 指向临时 provider.yaml。
 
 - **上下文窗口控制**：`max_context_tokens` 作为"上下文已用"百分比的分母（窗口上限），超预算时按 5 级渐进裁剪（删旧历史 → 工具输出占位 → 清 thinking → 截长文 → 删旧轮）。未显式配置时默认 1M（1048576），**不做模型名推断**，避免模型名不匹配导致窗口上限误判。输入预算与 `max_tokens` 联动求解（窗口 − 输出请求 − 2% 安全余量），从源头防止"输入+输出 > 窗口"的 400 溢出；API 真返回 400 时自动修正窗口、激进压缩历史、钳制 max_tokens 后重试。
 - **上下文填充治理（2026-09）**：修复"多轮对话迅速打满窗口"。`provider.yaml` 的 `max_output_tokens` 自动填充时按窗口 25% 限幅（不再把 384K 输出预留算进预算，1M 窗口的输入预算从 446K 回到 580K）；L1 的 `reasoning_content` 以 `rc_keep_steps`（默认 8）分块，只保留最近一块全文、更早的块置空（字段保留，满足 DeepSeek V4 回传要求），单轮 200 步的思考链不再全量重放；L2 单条 `thinking` 限幅 `l2_thinking_max_chars`（默认 6000 字符）且总字符数达到 `l2_max_chars`（默认 120000）即触发 L3 摘要；L2 与 L1 重叠的轮次自动去重；源码文件回放上限 64KB（此前不截断）；`keep_turns` 默认回落 5 并让 `max_history` 真正生效（限制 L1 保留的最近用户轮数）。
-- **视觉模型自动切换**：配置 `vision_model` 后，会话输入含图片时自动使用视觉模型（回合结束恢复主模型）；另提供 `toolkit_vision_analyze` 工具供主模型委托图片分析
+- **视觉能力**：按模型 `supports_vision` 判定（无独立 `vision_model` 角色）；`toolkit_vision_analyze` 供主模型委托视觉模型分析图片，首选模型配额耗尽时自动回退
 - **自我进化闸门**：`evolution.gate = off | advisory | enforce`（环境变量 `TEA_EVOLVE_GATE`，阈值 `TEA_EVOLVE_GATE_THRESHOLD` 默认 0.0 即"必须严格提升才算 keep"）；`enforce` 下修改自身代码后自动跑 EvolutionBench，分数未提升即按 `.bak` 回滚 —— 把"测试通过"升级为"确实更好"
 - **工具暴露自缩减**：`TEA_TOOL_SHIELD=0` 关闭长期未使用工具自动屏蔽；`TEA_TOOL_SHIELD_IDLE_DAYS=N` 调整闲置阈值（默认 30 天，观测期未满不屏蔽）
 - **运行时调优**：Agent 可用 `toolkit_config` 自主调整参数
@@ -379,7 +377,7 @@ vision_model:               # 视觉模型（可选）：会话含图片时自�
 ## 🧪 测试
 
 ```bash
-pytest                    # 全部单元测试（2468 用例 / 125 文件，截至 2026-09-28）
+pytest                    # 全部单元测试（2600 用例 / 139 文件，2026-10-05 collect 实测）
 python tests/test_server_api.py --port 8282   # Server API 黑盒测试（8 套件 30+ 测试点）
 ```
 

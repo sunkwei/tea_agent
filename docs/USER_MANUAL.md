@@ -76,10 +76,7 @@ python -m tea_agent.server --api-key YOUR_SECRET_KEY
 # 接口需 Header: Authorization: Bearer YOUR_SECRET_KEY
 ```
 
-**指定配置文件**:
-```bash
-python -m tea_agent.server --config ~/.tea_agent/my_config.yaml --port 9090
-```
+**指定配置文件**: 已废弃 —— `--config` 仅保留签名兼容（config.yaml 已删除，身份与运行参数全部来自 provider.yaml）。
 
 ---
 
@@ -752,7 +749,7 @@ print(f"活跃: {stats['active']}, 等待: {stats['pending']}")
 
 ```python
 # full 模式（Server 使用）
-agent = Agent(mode="full", config_path="config.yaml")
+agent = Agent(mode="full")  # 身份/运行参数取自 provider.yaml（config.yaml 已删除）
 
 # lightweight 模式（轻量任务）
 agent = Agent(mode="lightweight")
@@ -917,7 +914,7 @@ pipeline.register_step("history_build", build_history, position=2)
 
 ### 8.1 配置文件结构
 
-配置分两层：**密钥与模型目录归 `~/.tea_agent/provider.yaml`（唯一事实源），运行参数与角色绑定归 `config.yaml`（可选）**。
+配置**单文件中心化**：`~/.tea_agent/provider.yaml` 是唯一事实源（密钥 / 模型目录 / 角色绑定 / 运行参数）。`config.yaml` 已删除，不再读写任何独立 YAML 配置文件。
 
 ```yaml
 # ~/.tea_agent/provider.yaml —— 唯一事实源：端点 / 密钥 / 模型能力
@@ -937,39 +934,37 @@ providers:
 ```
 
 ```yaml
-# ~/.tea_agent/config.yaml —— 可选：角色引用 + 运行参数覆盖
+# ~/.tea_agent/provider.yaml —— roles / settings 段（原 config.yaml 的全部信息）
+roles:
+  main:
+    provider: "deepseek"        # 引用 providers 段的供应商名
+    model: "deepseek-chat"      # 引用其 models 下的模型 id
+    temperature: 0.65
+    max_tokens: 131072
+  cheap:                        # 摘要/记忆等廉价任务
+    provider: "deepseek"
+    model: "deepseek-chat"
+    max_tokens: 8192
 
-main_model:
-  provider: "deepseek"        # 引用 provider.yaml 的供应商名
-  model: "deepseek-chat"      # 引用其 models 下的模型 id
-  temperature: 0.65
-  max_tokens: 131072
-
-cheap_model:                  # 摘要/记忆等廉价任务
-  provider: "deepseek"
-  model: "deepseek-chat"
-  max_tokens: 8192
-
-max_history: 10
-max_iterations: 100
-enable_thinking: true
-keep_turns: 5
-max_tool_output: 128000
-max_assistant_content: 128000
-memory_extraction_threshold: 2
+settings:                       # 运行时参数
+  max_history: 10
+  max_iterations: 100
+  enable_thinking: true
+  keep_turns: 5
+  max_tool_output: 128000
+  max_assistant_content: 128000
+  memory_extraction_threshold: 2
 ```
 
-`config.yaml` 可以完全缺失 —— 此时 `load_config` 自动兜底 provider.yaml 中第一个提供商的第一个模型。
-密钥只存在于 provider.yaml，**config.yaml 永不内嵌密钥**。内嵌完整模型块（`api_key` / `api_url` /
-`model_name`）的旧写法仍兼容，但引用式是推荐形态。
+角色未绑定时 `load_config` 自动兜底 provider.yaml 中第一个提供商的第一个模型。
+密钥只存在于 provider.yaml 的 `providers` 段，`roles` / `settings` 永不内嵌密钥。
+完整运行参数清单与默认值见 `docs/CONFIG_DEFAULTS.md`。
 
 ### 8.2 配置优先级
 
 ```
-1. 显式指定路径 (--config) / 环境变量 TEA_CONFIG
-2. $HOME/.tea_agent/config.yaml
-3. tea_agent/config.yaml（包内置回退）
-（provider.yaml 路径：TEA_PROVIDER_FILE > ~/.tea_agent/provider.yaml）
+provider.yaml 路径：TEA_PROVIDER_FILE > ~/.tea_agent/provider.yaml
+（--config / TEA_CONFIG 已废弃：config.yaml 已删除，仅保留签名兼容）
 ```
 
 ### 8.3 运行时热切换

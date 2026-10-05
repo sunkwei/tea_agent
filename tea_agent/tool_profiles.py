@@ -10,7 +10,7 @@
   - 档位在「会话启动时」按模型窗口一次性选定，整个会话保持稳定，
     避免工具列表中途收缩破坏 DeepSeek 前缀缓存（工具 schema 顺序跨进程稳定）。
   - 降档不减"最后保底"：exec/file/edit 永远在场（shell 是万能工具）。
-  - config.yaml 可显式覆盖：ModelConfig.tool_profile = auto|full|standard|core|minimal|nano
+  - provider.yaml roles.main 可显式覆盖：ModelConfig.tool_profile = auto|full|standard|core|minimal|nano
     auto=按 max_context_tokens 推导；显式档位优先。
 
 档位分层（嵌套：nano ⊂ minimal ⊂ core ⊂ standard ⊂ full）：

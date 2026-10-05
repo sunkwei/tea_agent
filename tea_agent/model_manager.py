@@ -15,7 +15,7 @@
 可被 CLI / 内部工具 / HTTP API 三方复用。不依赖 server 模块，无循环导入。
 
 持久化：自定义供应商存于 ~/.tea_agent/custom_providers.yaml（用户级），
-不写回源码、不污染 config.yaml；api_key 属于各配置文件的模型配置，
+不写回源码、不污染 provider.yaml；api_key 属于各配置文件的模型配置，
 不在此文件中重复存放。
 """
 
@@ -665,7 +665,7 @@ class ProviderService:
         max_context_tokens: int | None = None,
         options: dict | None = None,
     ) -> dict:
-        """按「供应商 → 模型」两步应用模型配置（main/cheap），落盘 config.yaml。
+        """按「供应商 → 模型」两步应用模型配置（main/cheap），落盘 provider.yaml（roles 段）。
 
         - api_key 留空时复用该角色现有 key
         - model 留空时使用提供商 default_model

@@ -641,7 +641,7 @@ def _apply_model_into(target, provider: dict, model: str, api_key: str, meta: di
         target.max_context_tokens = int(meta["context_window"])
     if meta.get("max_output_tokens"):
         # 能力上限 → 自动输出默认值时按窗口比例限幅，避免整块窗口被
-        # 输出预留吃光（显式 max_tokens 由 config.yaml 覆盖，仍优先）。
+        # 输出预留吃光（显式 max_tokens 由 roles.main 内嵌覆盖，仍优先）。
         from tea_agent.config import auto_max_tokens_cap
 
         target.max_tokens = min(

@@ -31,7 +31,7 @@ python -m tea_agent.server
 # 指定主机和端口
 python -m tea_agent.server --host 0.0.0.0 --port 8080
 
-# 指定配置文件
+# 指定配置文件（已废弃：config.yaml 已删除，--config 仅保留签名兼容）
 python -m tea_agent.server --config ~/.tea_agent/my-config.yaml
 
 # 启用 API Key 认证
@@ -675,14 +675,11 @@ Web UI 聊天（`POST /api/chat`）返回 SSE 事件流，每行 `data: <json>\n
 
 ### 7.1 配置文件位置
 
-配置分两层：
+配置**单文件中心化**：
 
-- `~/.tea_agent/provider.yaml` —— **唯一事实源**：供应商端点 / API Key / 模型能力目录。
-  可用环境变量 `TEA_PROVIDER_FILE` 指向其它路径。
-- `~/.tea_agent/config.yaml` —— **可选**：角色引用（`provider` + `model`）+ 运行参数覆盖。
-  缺失时自动兜底 provider.yaml 第一个提供商的第一个模型。
-
-启动时可以指定配置档：`--config ~/.tea_agent/my-config.yaml`
+- `~/.tea_agent/provider.yaml` —— **唯一事实源**：供应商端点 / API Key / 模型能力目录 + `roles`（角色绑定）+ `settings`（运行参数）。
+  可用环境变量 `TEA_PROVIDER_FILE` 指向其它路径。角色未绑定时自动兜底 provider.yaml 第一个提供商的第一个模型。
+- `config.yaml` 已删除（`--config` 参数已废弃，仅保留签名兼容）。
 
 ### 7.2 配置文件结构
 
@@ -703,30 +700,30 @@ providers:
 ```
 
 ```yaml
-# ~/.tea_agent/config.yaml —— 可选：角色引用 + 运行时参数
-main_model:
-  provider: "deepseek"      # 引用 provider.yaml 的供应商名
-  model: "deepseek-chat"    # 引用其 models 下的模型 id
-  temperature: 0.65
-  max_tokens: 131072
+# ~/.tea_agent/provider.yaml —— roles / settings 段（原 config.yaml）
+roles:
+  main:
+    provider: "deepseek"      # 引用 providers 段的供应商名
+    model: "deepseek-chat"    # 引用其 models 下的模型 id
+    temperature: 0.65
+    max_tokens: 131072
+  cheap:                      # 可选：摘要/记忆等廉价任务
+    provider: "deepseek"
+    model: "deepseek-chat"
+    max_tokens: 8192
 
-cheap_model:                # 可选：摘要/记忆等廉价任务
-  provider: "deepseek"
-  model: "deepseek-chat"
-  max_tokens: 8192
-
-# 运行时参数
-max_history: 10
-max_iterations: 100
-enable_thinking: true
-keep_turns: 5
-max_tool_output: 128000
-max_assistant_content: 128000
-memory_extraction_threshold: 2
-memory_dedup_threshold: 0.3
-chat_page_size: 50
-history_l2_max: 30
-history_l3_batch: 10
+settings:                     # 运行时参数
+  max_history: 10
+  max_iterations: 100
+  enable_thinking: true
+  keep_turns: 5
+  max_tool_output: 128000
+  max_assistant_content: 128000
+  memory_extraction_threshold: 2
+  memory_dedup_threshold: 0.3
+  chat_page_size: 50
+  history_l2_max: 30
+  history_l3_batch: 10
 ```
 
 ### 7.3 配置管理方式

@@ -60,7 +60,7 @@ class LiteSession:
             _req_to, _conn_to, _max_retries = 120.0, 30.0, 3
 
         # OpenCode Go/Zen 要求稳定的 x-opencode-session；子 Agent 与对话一一对应，
-        # 构造期即确定 id（无 topic id 时用随机 id）。另按 config.yaml 的 api_headers
+        # 构造期即确定 id（无 topic id 时用随机 id）。另按 provider.yaml settings.api_headers
         # 注入自建网关附加头。无任何头可注入时不传该参数，保持原调用形态。
         from tea_agent.api_headers import default_headers_for
 

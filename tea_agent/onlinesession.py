@@ -364,7 +364,7 @@ class OnlineToolSession(BaseChatSession):
         self._auto_detect_and_save_thinking_config()
 
     def _auto_detect_and_save_thinking_config(self):
-        """自动探测模型的 thinking 能力，并将优化值保存到 config.yaml。
+        """自动探测模型的 thinking 能力，并将优化值保存到 provider.yaml（settings 段）。
 
         检测策略：
         1. 模型名匹配（零成本，高置信度）
@@ -457,7 +457,7 @@ class OnlineToolSession(BaseChatSession):
         # OpenCode Go/Zen 要求每次会话带稳定的 x-opencode-session，缺失直接 400。
         # 一个 session 对象会服务多个 topic，故用「请求时动态解析」的钩子：
         # 优先当前 topic id（跨进程重启仍稳定 → prompt 缓存可复用）。
-        # 同时按 config.yaml 的 api_headers 注入自建网关所需的附加头。
+        # 同时按 provider.yaml settings.api_headers 注入自建网关所需的附加头。
         self._opencode_fallback_session = uuid.uuid4().hex
 
         def _oc_session_id() -> str:

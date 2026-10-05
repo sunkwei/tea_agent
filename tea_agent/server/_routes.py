@@ -64,7 +64,7 @@ def _build_routes() -> list:
         Route("/api/providers/{name:str}", rh.handle_provider_delete, methods=["DELETE"]),
         Route("/api/providers/{name:str}/models", rh.handle_provider_models),
         Route("/api/providers/{name:str}/apply", rh.handle_provider_apply, methods=["POST"]),
-        # ── 统一模型配置面板（~/.tea_agent/model_config.json 单一事实源）──
+        # ── 统一模型配置面板（~/.tea_agent/provider.yaml 单一事实源）──
         Route("/api/model-config", rh.handle_model_config_get),
         Route("/api/model-config/model", rh.handle_model_config_model_put, methods=["PUT"]),
         Route("/api/model-config/model", rh.handle_model_config_model_add, methods=["POST"]),

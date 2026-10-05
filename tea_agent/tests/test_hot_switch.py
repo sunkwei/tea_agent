@@ -1,7 +1,7 @@
 """热生效回归测试：apply 模型后 create_session 必须读到新配置。
 
 回归场景（commit 63dc6d2 修复）：
-apply_provider 写入磁盘 config.yaml 后，AgentModule 的 config_cache
+apply_provider 写入 provider.yaml（roles 段）后，AgentModule 的 config_cache
 仍缓存启动时的旧配置 → create_session 命中缓存 → 聊天会话始终用老模型。
 修复：handle_provider_apply 落盘后调用 AgentModule.invalidate_config_cache()。
 """
@@ -13,37 +13,49 @@ import pytest
 
 @pytest.fixture
 def hot_switch_env(tmp_path, monkeypatch):
-    """临时配置环境：旧模型 deepseek-chat，TEA_CONFIG 指向临时文件。
+    """临时 provider.yaml：旧模型 deepseek-chat（roles.main 绑定）。
 
-    同时重置 config.py 模块级全局（_active_config_path/_last_config_path）
-    与 config_cache，避免跨测试残留导致读到上一个测试的配置。
+    config.yaml 已删除 → 热切换的"磁盘配置"就是 provider.yaml 的 roles 段。
+    同时重置 config.py 模块级全局与 config_cache，避免跨测试残留。
     """
-    cfg = tmp_path / "hot_switch.yaml"
-    cfg.write_text(
-        "main_model:\n"
-        "  api_key: sk-test\n"
-        "  api_url: https://api.deepseek.com\n"
-        '  model_name: "deepseek-chat"\n',
+    import yaml
+
+    pf = tmp_path / "provider.yaml"
+    pf.write_text(
+        yaml.safe_dump({
+            "version": 1,
+            "providers": {
+                "DeepSeek": {
+                    "api_url": "https://api.deepseek.com",
+                    "api_key": "sk-test",
+                    "default_model": "deepseek-chat",
+                    "source": "builtin",
+                    "models": {
+                        "deepseek-chat": {"max_context_tokens": 131072,
+                                          "max_output_tokens": 8192},
+                        "deepseek-reasoner": {"max_context_tokens": 131072,
+                                              "max_output_tokens": 65536},
+                    },
+                },
+            },
+            "roles": {"main": {"provider": "DeepSeek", "model": "deepseek-chat"}},
+        }, allow_unicode=True, sort_keys=False),
         encoding="utf-8",
     )
-    monkeypatch.setenv("TEA_CONFIG", str(cfg))
-    # 隔离统一模型配置中心（apply 会回写 roles），避免污染真实 ~/.tea_agent
-    import tea_agent.model_config as mc_mod
+    monkeypatch.setenv("TEA_PROVIDER_FILE", str(pf))
+    import tea_agent.provider_store as ps_mod
     import tea_agent.model_manager as mm_mod
-    monkeypatch.setenv("TEA_MODEL_CONFIG", str(tmp_path / "model_config.json"))
-    monkeypatch.setattr(mc_mod, "_store", None, raising=False)
+    monkeypatch.setattr(ps_mod, "_store", None)
     monkeypatch.setattr(mm_mod, "_service", None, raising=False)
     import tea_agent.config as cfg_mod
     from tea_agent.server.modules.agent_module import AgentModule
     from tea_agent.server.modules.state import config_cache
 
     config_cache.clear()
-    cfg_mod._active_config_path = None
-    cfg_mod._last_config_path = None
-    # AgentModule._config_path 是类属性，create_app 时被设为 TEA_CONFIG 路径，
-    # 跨测试残留会导致 create_session 读到上一个测试的配置（已被 apply 改写）
+    monkeypatch.setattr(cfg_mod, "_config_cache", None, raising=False)
+    # AgentModule._config_path 跨测试残留会读到上一个测试的配置
     AgentModule._config_path = ""
-    return cfg
+    return pf
 
 
 def _session_model():
@@ -84,11 +96,11 @@ def test_apply_invalidates_config_cache(hot_switch_env, monkeypatch):
     m1 = _session_model()
     assert "deepseek-reasoner" in m1, f"FAIL: session still uses old model: {m1}"
 
-    # 磁盘配置已更新
+    # 磁盘配置已更新（provider.yaml roles 段）
     import yaml
 
     disk = yaml.safe_load(hot_switch_env.read_text(encoding="utf-8"))
-    assert disk["main_model"]["model_name"] == "deepseek-reasoner"
+    assert disk["roles"]["main"]["model"] == "deepseek-reasoner"
 
 
 def test_api_model_switch_persists_and_invalidates(hot_switch_env, monkeypatch):
@@ -115,11 +127,11 @@ def test_api_model_switch_persists_and_invalidates(hot_switch_env, monkeypatch):
     assert r.status_code == 200
     assert r.json().get("ok") is True
 
-    # 磁盘已落盘（修复前 switch_model 只改内存不写磁盘）
+    # 磁盘已落盘（provider.yaml roles 段）
     import yaml
 
     disk = yaml.safe_load(hot_switch_env.read_text(encoding="utf-8"))
-    assert disk["main_model"]["model_name"] == "deepseek-reasoner"
+    assert disk["roles"]["main"]["model"] == "deepseek-reasoner"
 
     # 新会话读新模型（修复前 config_cache 命中旧配置）
     assert "deepseek-reasoner" in _session_model()

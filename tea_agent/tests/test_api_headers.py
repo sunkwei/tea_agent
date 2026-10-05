@@ -305,9 +305,6 @@ class TestOnlineSessionIntegration:
             cheap_api_key="sk-cheap",
             cheap_api_url=GO_URL,
             cheap_model="cheap-model",
-            vision_api_key="sk-vis",
-            vision_api_url=ZEN_URL,
-            vision_model="vision-model",
         )
         try:
             assert sess._http_clients, "未登记 httpx 客户端"

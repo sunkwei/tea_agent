@@ -87,7 +87,7 @@ async def handle_model_config_model_del(request):
 
 
 async def handle_model_config_sync(request):
-    """POST /api/model-config/sync — 在线模型列表写回 model_config.json。
+    """POST /api/model-config/sync — 在线模型列表写回 provider.yaml。
 
     Body: {provider, api_key?, refresh?} — 新模型按启发式默认入库，已有条目（用户编辑）不覆盖。
     """
@@ -115,7 +115,7 @@ async def handle_model_config_switch(request):
            temperature?, max_tokens?, top_p?, max_context_tokens?, options?}
     流程：
       1. apply_provider → 逐模型配置自动注入（最大输出/最大上下文/思考/视觉），
-         落盘 config.yaml + roles 回写 model_config.json；
+         落盘 roles 回写 provider.yaml（config.yaml 已删除）；
       2. role=main 且 continue_session → AgentModule.request_model_switch：
          空闲立即热切（主题历史保留）；对话进行中→挂起，本轮结束自动应用；
          无长驻 Agent→下一条消息自然生效。
@@ -286,11 +286,11 @@ async def handle_model_select(request):
       1. resolve provider.yaml → api_key/api_url/max_context/max_output/能力；
       2. 写回 active config 对应角色块（引用式，save_config 只落 provider+model 不内嵌密钥）；
       3. 缓存失效；role==main 时热切换（对话中挂起、空闲立即生效）；
-      4. roles 回写 model_config.json（面板"使用中"单一事实源）。
+      4. roles 回写 provider.yaml（面板"使用中"单一事实源）。
     """
     body = await request.json() if request.headers.get("content-length") else {}
     role = (body.get("role") or "main").strip()
-    if role not in ("main", "cheap", "vision"):
+    if role not in ("main", "cheap"):
         return JSONResponse({"ok": False, "error": f"invalid role '{role}'",
                              "code": "BAD_REQUEST"}, status_code=400)
     provider = (body.get("provider") or "").strip()
@@ -312,8 +312,7 @@ async def handle_model_select(request):
                                  "code": "NOT_FOUND"}, status_code=404)
         cfg_path = server.get_config_path() or ""
         cfg = load_config(cfg_path)
-        target = {"main": cfg.main_model, "cheap": cfg.cheap_model,
-                  "vision": cfg.vision_model}[role]
+        target = {"main": cfg.main_model, "cheap": cfg.cheap_model}[role]
         target.provider = resolved["provider"]
         target.ref_model = resolved["model"]
         target.api_key = resolved.get("api_key", "")
@@ -536,7 +535,7 @@ async def handle_provider_store_apply(request):
     body = await request.json() if request.headers.get("content-length") else {}
     model = (body.get("model") or "").strip()
     role = (body.get("role") or "main").strip()
-    if role not in ("main", "cheap", "vision"):
+    if role not in ("main", "cheap"):
         return JSONResponse({"ok": False, "error": f"invalid role '{role}'",
                              "code": "BAD_REQUEST"}, status_code=400)
     if not model:
@@ -551,8 +550,7 @@ async def handle_provider_store_apply(request):
         server = get_server()
         cfg_path = server.get_config_path() or ""
         cfg = load_config(cfg_path)
-        target = {"main": cfg.main_model, "cheap": cfg.cheap_model,
-                  "vision": cfg.vision_model}[role]
+        target = {"main": cfg.main_model, "cheap": cfg.cheap_model}[role]
         # 记录引用来源 → save_config 以引用式写回（provider + model），密钥不落 config
         target.provider = resolved["provider"]
         target.ref_model = resolved["model"]

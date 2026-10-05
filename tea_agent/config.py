@@ -1,10 +1,9 @@
 """
 配置管理模块 — 加载/保存/运行时修改 Agent 配置。
 
-配置来源（优先级）：
-1. 显式指定路径
-2. $HOME/.tea_agent/config.yaml
-3. tea_agent/config.yaml（包内置回退）
+配置来源：``~/.tea_agent/provider.yaml`` **唯一事实源**
+（``roles`` 段 = 主/便宜模型绑定；``settings`` 段 = 运行时参数），
+代码内默认值兜底。config.yaml 已删除，不再读写任何 YAML 配置文件。
 """
 
 from __future__ import annotations
@@ -17,6 +16,11 @@ from pathlib import Path
 from typing import Any, ClassVar
 
 logger = logging.getLogger("tea_agent.config")
+
+AUTO_MAX_TOKENS_WINDOW_RATIO = 0.25
+
+AUTO_MAX_TOKENS_FLOOR = 8192
+
 
 try:
     import yaml
@@ -35,7 +39,6 @@ __all__ = [
     "load_config",
     "save_config",
     "get_config",
-    "create_default_config",
     "ensure_config_dir",
     "set_active_config_path",
     "get_active_config_path",
@@ -244,7 +247,6 @@ class AgentConfig:
 
     main_model: ModelConfig = field(default_factory=ModelConfig)
     cheap_model: ModelConfig = field(default_factory=ModelConfig)
-    vision_model: ModelConfig = field(default_factory=ModelConfig)
     paths: PathsConfig = field(default_factory=PathsConfig)
     mode_params: dict[str, dict[str, Any]] = field(default_factory=dict)
 
@@ -261,22 +263,26 @@ class AgentConfig:
         "pragmatic": 0.2,  # 兼容旧名
     }
 
+    def vision_capable_model(self) -> ModelConfig | None:
+        """返回可用于图片输入的已配置模型（主模型优先，其次便宜模型）。
+
+        视觉能力由模型自身声明的 ``supports_vision`` 决定，不再有独立的
+        ``vision_model`` 角色槽位。无任何视觉模型时返回 None。
+        """
+        for m in (self.main_model, self.cheap_model):
+            if m is not None and m.is_configured and m.supports_vision:
+                return m
+        return None
+
     def get_effective_params(
         self, model_type: str = "main", mode: str = "mixed"
     ) -> dict[str, Any]:
         """获取最终生效的模型推理参数。mode_params 覆盖 model 默认值；
         未显式配置 temperature 时按任务阶段使用智能默认。
 
-        model_type 支持: "main" / "cheap" / "vision"。
-        "vision" 使用 vision_model 自己的配置（未配置时回退主模型）。
+        model_type 支持: "main" / "cheap"。
         """
-        if model_type == "vision":
-            # vision 模型必须使用自己的配置，不能继承主模型的参数
-            model_cfg = (
-                self.vision_model if self.vision_model.is_configured else self.main_model
-            )
-        else:
-            model_cfg = self.main_model if model_type == "main" else self.cheap_model
+        model_cfg = self.main_model if model_type == "main" else self.cheap_model
         params = {
             "temperature": model_cfg.temperature,
             "max_tokens": model_cfg.max_tokens,
@@ -522,184 +528,108 @@ def get_active_config_path() -> str | None:
 
 
 def load_config(config_path: str | None = None) -> AgentConfig:
-    """
-    加载配置。优先读取 $HOME/.tea_agent/config.yaml，不存在时回退到 tea_agent/config.yaml。
+    """加载配置。
+
+    config.yaml 已删除：身份三元组（main/cheap）与运行时参数**全部**来自
+    ``~/.tea_agent/provider.yaml``（各自的 ``roles`` / ``settings`` 段），
+    代码内默认值兜底。不再读取任何 YAML 配置文件。
 
     Args:
-        config_path: 配置文件路径，默认自动查找
+        config_path: 忽略（保留签名以兼容既有调用方）
 
     Returns:
         AgentConfig 实例
     """
-    global _last_config_path, _config_cache
+    global _config_cache
 
-    # 步骤1: 解析配置文件路径
-    yaml_path = resolve_config_path(config_path)
-
-    # 步骤2: 创建默认配置
     cfg = AgentConfig()
 
-    # 步骤3: 加载配置数据（config.yaml 可缺失 —— 身份三元组由 provider.yaml 提供）
-    data: dict = {}
-    if HAS_YAML and yaml_path and os.path.isfile(yaml_path):
-        try:
-            data = _load_yaml_data(yaml_path) or {}
-        except Exception:
-            logger.warning(f"配置文件读取失败，已回退默认值: {yaml_path}")
-            data = {}
+    # 步骤1: 读取 provider.yaml（唯一事实源）
+    store = None
+    stored: dict = {}
+    try:
+        from tea_agent.provider_store import get_provider_store
 
-    # 步骤3.5: main_model 缺失/全空 → provider.yaml 第一个提供商的第一个模型（引用式补位）
+        store = get_provider_store()
+        stored = store.load()
+    except Exception as e:  # pragma: no cover - 防御性
+        logger.debug("provider.yaml 加载跳过: %s", e)
+
+    # 步骤2: settings 段 → 运行时参数（顶层扁平 + paths 子块）
+    data: dict = {}
+    settings = stored.get("settings")
+    if isinstance(settings, dict):
+        data.update(settings)
+
+    # 步骤3: roles 段 → 引用式模型块（provider + model）
+    roles = stored.get("roles")
+    if isinstance(roles, dict):
+        for role_key, block_key in (("main", "main_model"), ("cheap", "cheap_model")):
+            r = roles.get(role_key)
+            if isinstance(r, dict) and str(r.get("provider") or "").strip():
+                data[block_key] = {
+                    "provider": r.get("provider"),
+                    "model": r.get("model"),
+                }
+
+    # 步骤3.5: main_model 缺失 → provider.yaml 第一个提供商的默认模型
     if not _main_block_usable(data):
         ref = _first_provider_ref()
         if ref:
             data["main_model"] = ref
             logger.info(
-                "main_model 兜底: config 未提供身份三元组，改用 provider.yaml %s/%s",
+                "main_model 兜底: 未配置角色绑定，改用 provider.yaml %s/%s",
                 ref["provider"], ref["model"],
             )
 
     if data:
         try:
-            # 解析模型配置
             _parse_model_configs(cfg, data)
-
-            # 解析模式参数
             _parse_mode_params(cfg, data)
-
-            # 解析路径配置
-            _parse_paths_config(cfg, data, yaml_path)
-
-            # 解析会话参数
+            _parse_paths_config(cfg, data, "")
             _parse_session_params(cfg, data)
-
-            # 解析Token优化参数
             _parse_token_params(cfg, data)
-
-            # 解析交互控制参数
             _parse_control_params(cfg, data)
         except Exception:
-            # 单字段坏值不应静默丢弃整个配置：记录日志，保留已解析的部分
             import traceback
-            logger.warning(f"配置文件解析部分失败，已回退默认值: {yaml_path}\n{traceback.format_exc(limit=2)}")
+            logger.warning(f"provider.yaml settings 解析部分失败，已回退默认值\n{traceback.format_exc(limit=2)}")
 
-    # paths 解析兜底：无 config.yaml（或解析中途失败）时 _parse_paths_config 不会 resolve，
-    # 留空会让 ensure_config_dir / toolkit_dir_abs 等拿到空串 —— 按默认目录补解析
+    # paths 解析兜底：无 settings.paths 时按 ~/.tea_agent 补解析
     if not cfg.paths.data_dir_abs:
-        cfg.paths.resolve(
-            os.path.dirname(os.path.abspath(yaml_path)) if yaml_path
-            else str(Path.home() / ".tea_agent")
-        )
+        cfg.paths.resolve(str(Path.home() / ".tea_agent"))
 
     # 步骤4: 更新全局缓存
-    _update_config_cache(cfg, yaml_path)
+    _update_config_cache(cfg, None)
 
     return cfg
 
 
 def resolve_config_path(config_path: str | None = None) -> str | None:
-    """解析配置文件路径（公共函数，供 agent/server 复用）。
+    """解析配置文件路径（兼容保留；config.yaml 已删除）。
 
-    优先级: config_path > _last_config_path > ~/.tea_agent/config.yaml > 内置默认
-
-    Args:
-        config_path: 指定的配置文件路径
-
-    Returns:
-        实际使用的配置文件路径，找不到返回 None
+    config.yaml 不再存在：本函数恒返回 None，身份三元组与运行时参数
+    一律由 provider.yaml 提供。保留符号供 agent/server 等历史调用点使用。
     """
-    global _last_config_path, _active_config_path
-
-    with _config_lock:
-        if config_path is None:
-            config_path = _last_config_path or _active_config_path
-        else:
-            _last_config_path = config_path
-            _active_config_path = config_path
-
-    if config_path:
-        return config_path
-
-    # 测试/隔离环境：TEA_CONFIG 指向的配置文件（server/agent_module 同语义）
-    tea_cfg = os.environ.get("TEA_CONFIG", "").strip()
-    if tea_cfg and os.path.isfile(tea_cfg):
-        return tea_cfg
-
-    # 优先级1: $HOME/.tea_agent/config.yaml
-    default_path = str(Path.home() / ".tea_agent" / "config.yaml")
-    if os.path.isfile(default_path):
-        return default_path
-
-    # 优先级2: tea_agent/config.yaml (相对于本文件所在目录)
-    fallback_path = str(Path(__file__).parent / "config.yaml")
-    if os.path.isfile(fallback_path):
-        return fallback_path
-
     return None
 
 
-def _load_yaml_data(yaml_path: str) -> dict | None:
-    """加载YAML配置文件数据。
+def _update_config_cache(cfg: AgentConfig, yaml_path: str | None) -> None:
+    """更新全局配置缓存。
 
     Args:
-        yaml_path: YAML文件路径
-
-    Returns:
-        解析后的字典数据，如果加载失败返回None
+        cfg: AgentConfig实例
+        yaml_path: 配置文件路径（config.yaml 已删除，恒为 None）
     """
-    if not HAS_YAML or not os.path.isfile(yaml_path):
-        return None
+    global _config_cache, _active_config_path
 
-    try:
-        with open(yaml_path, encoding="utf-8") as f:
-            return yaml.safe_load(f) or {}
-    except Exception:
-        return None
-
-
-# provider.yaml 的 max_output_tokens 是"模型能力上限"，不是每次请求都应该
-# 预留的输出量。直接把能力上限写进 ModelConfig.max_tokens 会让 solve_token_budget
-# 把整块窗口预留给输出（实测 1M 窗口 / 384K 输出 → 输入预算只剩 446K，上下文
-# 迅速"打满"）。自动填充时按窗口比例限幅，显式配置 max_tokens 仍然优先。
-AUTO_MAX_TOKENS_WINDOW_RATIO = 0.25
-AUTO_MAX_TOKENS_FLOOR = 8192
-
-
-def auto_max_tokens_cap(max_context_tokens: int) -> int:
-    """自动填充 max_tokens 时的限幅上限（=窗口的 25%，下限 8192）。
-
-    Args:
-        max_context_tokens: 模型窗口（≤0 表示未知 → 返回下限）
-
-    Returns:
-        max_tokens 自动填充上限
-    """
-    try:
-        ctx = int(max_context_tokens or 0)
-    except (TypeError, ValueError):
-        ctx = 0
-    if ctx <= 0:
-        return AUTO_MAX_TOKENS_FLOOR
-    return max(AUTO_MAX_TOKENS_FLOOR, int(ctx * AUTO_MAX_TOKENS_WINDOW_RATIO))
-
-
-def _resolve_ref_model(provider: str, model: str) -> dict | None:
-    """从 provider.yaml 解析 p_name + m_name 组合（延迟 import 避免循环依赖）。
-
-    Args:
-        provider: 供应商名（p_name）
-        model: 模型 id（m_name）
-
-    Returns:
-        扁平元数据 {api_url, api_key, model, max_context_tokens,
-                    max_output_tokens, options, reasoning_effort}；失败返回 None
-    """
-    try:
-        from tea_agent.provider_store import get_provider_store
-
-        return get_provider_store().resolve(provider, model)
-    except Exception as e:
-        logger.debug("provider ref resolve skipped (%s/%s): %s", provider, model, e)
-        return None
+    with _config_lock:
+        _config_cache = cfg
+        if yaml_path:
+            src = os.path.abspath(yaml_path)
+            _active_config_path = src
+            _last_config_path = src
+            # 记录配置来源，供 get_config 检测路径切换并自动重载
+            cfg._config_source = src
 
 
 def _main_block_usable(data: dict) -> bool:
@@ -751,6 +681,44 @@ def _first_provider_ref() -> dict | None:
         return None
 
 
+def _resolve_ref_model(provider: str, model: str) -> dict | None:
+    """从 provider.yaml 解析 p_name + m_name 组合（延迟 import 避免循环依赖）。
+
+    Args:
+        provider: 供应商名（p_name）
+        model: 模型 id（m_name）
+
+    Returns:
+        扁平元数据 {api_url, api_key, model, max_context_tokens,
+                    max_output_tokens, options, reasoning_effort}；失败返回 None
+    """
+    try:
+        from tea_agent.provider_store import get_provider_store
+
+        return get_provider_store().resolve(provider, model)
+    except Exception as e:
+        logger.debug("provider ref resolve skipped (%s/%s): %s", provider, model, e)
+        return None
+
+
+def auto_max_tokens_cap(max_context_tokens: int) -> int:
+    """自动填充 max_tokens 时的限幅上限（=窗口的 25%，下限 8192）。
+
+    Args:
+        max_context_tokens: 模型窗口（≤0 表示未知 → 返回下限）
+
+    Returns:
+        max_tokens 自动填充上限
+    """
+    try:
+        ctx = int(max_context_tokens or 0)
+    except (TypeError, ValueError):
+        ctx = 0
+    if ctx <= 0:
+        return AUTO_MAX_TOKENS_FLOOR
+    return max(AUTO_MAX_TOKENS_FLOOR, int(ctx * AUTO_MAX_TOKENS_WINDOW_RATIO))
+
+
 def _parse_model_configs(cfg: AgentConfig, data: dict) -> None:
     """解析模型配置。
 
@@ -763,17 +731,12 @@ def _parse_model_configs(cfg: AgentConfig, data: dict) -> None:
         cfg: AgentConfig实例
         data: 配置数据字典
     """
-    for m_type in ["main_model", "cheap_model", "vision_model"]:
+    for m_type in ["main_model", "cheap_model"]:
         m_data = data.get(m_type, {})
         if not isinstance(m_data, dict):
             continue
 
-        if m_type == "main_model":
-            target = cfg.main_model
-        elif m_type == "cheap_model":
-            target = cfg.cheap_model
-        else:
-            target = cfg.vision_model
+        target = cfg.main_model if m_type == "main_model" else cfg.cheap_model
 
         # 引用式：provider/p_name + model/m_name/model_name
         p_name = str(m_data.get("provider") or m_data.get("p_name") or "").strip()
@@ -993,64 +956,6 @@ def _parse_control_params(cfg: AgentConfig, data: dict) -> None:
     )
 
 
-def _update_config_cache(cfg: AgentConfig, yaml_path: str | None) -> None:
-    """更新全局配置缓存。
-
-    Args:
-        cfg: AgentConfig实例
-        yaml_path: 配置文件路径
-    """
-    global _config_cache, _active_config_path
-
-    with _config_lock:
-        _config_cache = cfg
-        if yaml_path:
-            src = os.path.abspath(yaml_path)
-            _active_config_path = src
-            _last_config_path = src
-            # 记录配置来源，供 get_config 检测路径切换并自动重载
-            cfg._config_source = src
-
-
-def ensure_config_dir() -> Path:
-    """确保数据目录存在（从 config 读取，回退 ~/.tea_agent），返回路径"""
-    try:
-        cfg = get_config()
-        cfg_dir = Path(cfg.paths.data_dir_abs)
-    except Exception:
-        cfg_dir = Path.home() / ".tea_agent"
-    cfg_dir.mkdir(parents=True, exist_ok=True)
-    return cfg_dir
-
-
-def save_config(cfg: AgentConfig, config_path: str | None = None) -> str:
-    """
-    保存配置到 YAML 文件。
-
-    Args:
-        cfg: AgentConfig 实例
-        config_path: 保存路径，默认 $HOME/.tea_agent/config.yaml
-
-    Returns:
-        实际保存的文件路径
-    """
-    global _last_config_path
-
-    # 步骤1: 解析保存路径
-    yaml_path = _resolve_save_path(config_path)
-
-    # 步骤2: 确保配置目录存在
-    ensure_config_dir()
-
-    # 步骤3: 准备配置数据
-    data = _prepare_config_data(cfg)
-
-    # 步骤4: 写入YAML文件
-    _write_yaml_file(yaml_path, data)
-
-    return yaml_path
-
-
 def _resolve_save_path(config_path: str | None) -> str:
     """解析配置文件保存路径。
 
@@ -1069,36 +974,72 @@ def _resolve_save_path(config_path: str | None) -> str:
     )
 
 
-def _prepare_config_data(cfg: AgentConfig) -> dict:
-    """准备配置数据字典。
+def ensure_config_dir() -> Path:
+    """确保数据目录存在（从 config 读取，回退 ~/.tea_agent），返回路径"""
+    try:
+        cfg = get_config()
+        cfg_dir = Path(cfg.paths.data_dir_abs)
+    except Exception:
+        cfg_dir = Path.home() / ".tea_agent"
+    cfg_dir.mkdir(parents=True, exist_ok=True)
+    return cfg_dir
+
+
+def save_config(cfg: AgentConfig, config_path: str | None = None) -> str:
+    """保存配置 → 写入 provider.yaml（roles + settings 段）。
+
+    config.yaml 已删除：不再产生任何 YAML 配置文件。角色绑定（main/cheap）
+    与运行时参数分别在 provider.yaml 的 ``roles`` / ``settings`` 段。
 
     Args:
-        cfg: AgentConfig实例
+        cfg: AgentConfig 实例
+        config_path: 忽略（保留签名以兼容既有调用方）
 
     Returns:
-        配置数据字典
+        写入的目标文件路径（provider.yaml）；失败返回空串
     """
-    data = {}
+    try:
+        from tea_agent.provider_store import get_provider_store
 
-    # 准备模型配置
-    _prepare_model_data(cfg, data)
+        store = get_provider_store()
+        for role_key, m in (("main", cfg.main_model), ("cheap", cfg.cheap_model)):
+            if m is None:
+                continue
+            provider, ref = m.provider, m.ref_model
+            # 内嵌式配置（如 Web /api/model 热切换）无显式绑定 → 按 api_url 反查补齐；
+            # 另：model_name 才是"当前实际模型"，ref_model 陈旧时以它为准
+            #（switch_model 只改 model_name，不清旧 ref_model）
+            if not provider and m.api_url:
+                provider = store.provider_name_for_url(m.api_url)
+            if m.model_name and ref != m.model_name:
+                ref = m.model_name
+            if provider and ref:
+                m.provider, m.ref_model = provider, ref
+                store.set_role(role_key, provider, ref, api_url=m.api_url)
+        store.update_settings(_prepare_settings_data(cfg))
+        with _config_lock:
+            _config_cache = cfg
+            cfg._config_source = str(store.file_path)
+        return str(store.file_path)
+    except Exception as e:
+        logger.warning("保存运行时配置到 provider.yaml 失败: %s", e)
+        return ""
 
-    # 准备模式参数
-    if cfg.mode_params:
-        data["mode_params"] = cfg.mode_params
 
-    # 准备路径配置
-    _prepare_paths_data(cfg, data)
+def _prepare_settings_data(cfg: AgentConfig) -> dict:
+    """导出运行时参数（原 config.yaml 顶层标量 + paths + interruption）。
 
-    # 准备会话参数
+    Args:
+        cfg: AgentConfig 实例
+
+    Returns:
+        可直接并入 provider.yaml ``settings`` 段的字典（不含 providers/roles）
+    """
+    data: dict = {}
     _prepare_session_data(cfg, data)
-
-    # 准备Token优化参数
     _prepare_token_data(cfg, data)
-
-    # 准备交互控制参数
     _prepare_control_data(cfg, data)
-
+    _prepare_paths_data(cfg, data)
     return data
 
 
@@ -1114,13 +1055,8 @@ def _prepare_model_data(cfg: AgentConfig, data: dict) -> None:
         cfg: AgentConfig实例
         data: 配置数据字典（会被修改）
     """
-    for m_type in ["main_model", "cheap_model", "vision_model"]:
-        if m_type == "main_model":
-            target = cfg.main_model
-        elif m_type == "cheap_model":
-            target = cfg.cheap_model
-        else:
-            target = cfg.vision_model
+    for m_type in ["main_model", "cheap_model"]:
+        target = cfg.main_model if m_type == "main_model" else cfg.cheap_model
         if target.is_reference:
             m_data = _prepare_ref_model_data(target)
             if m_data is not None:
@@ -1269,176 +1205,6 @@ def _prepare_control_data(cfg: AgentConfig, data: dict) -> None:
     data["l2_thinking_max_chars"] = cfg.l2_thinking_max_chars
     data["l2_max_chars"] = cfg.l2_max_chars
     data["interruption"] = cfg.interruption
-
-
-def _write_yaml_file(yaml_path: str, data: dict) -> None:
-    """写入YAML配置文件。
-
-    Args:
-        yaml_path: 文件路径
-        data: 要写入的数据
-    """
-    with open(yaml_path, "w", encoding="utf-8") as f:
-        yaml.dump(
-            data, f, default_flow_style=False, allow_unicode=True, sort_keys=False
-        )
-
-
-def create_default_config(config_path: str | None = None) -> str:
-    """
-    创建默认配置文件模板。
-
-    Args:
-        config_path: 保存路径，默认 $HOME/.tea_agent/config.yaml
-
-    Returns:
-        实际创建的文件路径
-    """
-    # 步骤1: 解析保存路径
-    yaml_path = config_path or str(Path.home() / ".tea_agent" / "config.yaml")
-
-    # 步骤2: 确保配置目录存在
-    ensure_config_dir()
-
-    # 步骤3: 生成配置模板
-    template = _generate_config_template()
-
-    # 步骤4: 写入模板文件
-    _write_template_file(yaml_path, template)
-
-    return yaml_path
-
-
-def _generate_config_template() -> str:
-    """生成配置文件模板内容。
-
-    Returns:
-        配置文件模板字符串
-    """
-    return (
-        "# Tea Agent 配置文件\n\n"
-        "# 主模型配置（用于核心对话、代码生成等）\n"
-        "main_model:\n"
-        '  api_key: ""\n'
-        '  api_url: ""\n'
-        '  model_name: ""\n'
-        "  temperature: 0.7      # 温度 0~2，越高越随机发散\n"
-        "  max_tokens: 4096      # 最大输出 token 数\n"
-        "  top_p: 0.9            # 核采样阈值\n"
-        "  max_context_tokens: 0 # 模型上下文窗口（0=未配置时统一默认 1048576/1M，见 auto_compact.get_max_context_tokens；建议显式配置真实值）\n"
-        '  tool_profile: auto # 工具暴露档位 auto=按max_context_tokens推导 / full / standard / core / minimal / nano（上下文受限模型自动精简工具集，见 tea_agent.tool_profiles）\n'
-        "  token_budget:         # 模型级 token 预算策略（可选，借鉴 Codex model-owned defaults）\n"
-        "    reminder_threshold: 0.15          # 剩余低于 15% 时提醒模型主动总结\n"
-        "    fallback_buffer_tokens: 20000     # 压缩前预留的缓冲 token\n"
-        "  options:  # 可选参数，如 {extra_body: {thinking: {type: enabled}}}\n"
-        "    key: value\n\n"
-        "# 便宜模型配置（用于摘要生成、信息压缩等场景，建议低 temperature）\n"
-        "cheap_model:\n"
-        '  api_key: ""\n'
-        '  api_url: ""\n'
-        '  model_name: ""\n'
-        "  temperature: 0.3      # 摘要/反思需要确定性，建议 0.2~0.5\n"
-        "  max_tokens: 1024      # 摘要通常较短\n"
-        "  top_p: 0.9\n"
-        "  options: {}\n\n"
-        "# 视觉模型配置（可选）— 会话输入含图片时自动切换到此模型，无图片时使用主模型。\n"
-        "# 示例（小米 MiMo 视觉模型）:\n"
-        "# vision_model:\n"
-        "#   api_key: YOUR_API_KEY\n"
-        "#   api_url: https://token-plan-cn.xiaomimimo.com/v1\n"
-        "#   model_name: mimo-v2.5\n"
-        "#   max_tokens: 128000\n"
-        "#   options:\n"
-        "#     supports_vision: true\n"
-        "#     supports_reasoning: true\n"
-        "# 示例（DeepSeek 视觉模型 deepseek-v4-flash-vision-exp）:\n"
-        "# 参考: https://api-docs.deepseek.com/zh-cn/guides/vision\n"
-        "# vision_model:\n"
-        "#   api_key: YOUR_API_KEY\n"
-        "#   api_url: https://api.deepseek.com\n"
-        "#   model_name: deepseek-v4-flash-vision-exp\n"
-        "#   options:\n"
-        "#     supports_vision: true\n"
-        "#     supports_reasoning: true\n"
-        "#     detail: high      # 图片细节级别: low/high/original/auto\n"
-        "vision_model:\n"
-        '  api_key: ""\n'
-        '  api_url: ""\n'
-        '  model_name: ""\n'
-        "  options:\n"
-        "    supports_vision: true\n\n"
-        "# ──────────────────── 模式参数覆盖 ────────────────────\n"
-        "# 不同人格模式下可覆盖 temperature/top_p，未配置则使用模型默认值。\n"
-        "mode_params:\n"
-        "  pragmatic:             # 严谨模式 — 代码/排bug，需要精确\n"
-        "    temperature: 0.3\n"
-        "    top_p: 0.9\n"
-        "  creative:              # 创意模式 — 头脑风暴，需要发散\n"
-        "    temperature: 0.8\n"
-        "    top_p: 0.95\n"
-        "  mixed:                 # 混合模式 — 均衡\n"
-        "    temperature: 0.6\n"
-        "    top_p: 0.9\n\n"
-        "# ──────────────────── 路径配置 ────────────────────\n"
-        "# 所有路径支持相对路径（相对于本 config.yaml 所在目录）或绝对路径（以 / 开头）。\n"
-        "# 支持多 agent 隔离：每个 agent 使用独立的 config.yaml，指向独立的数据库和目录。\n"
-        "paths:\n"
-        '  data_dir: ""          # 数据根目录，默认 ~/.tea_agent\n'
-        '  db_path: ""           # 数据库文件，默认 chat_history.db（落在启动目录 .tea_agent_run/）\n'
-        '  toolkit_dir: ""       # 自定义工具目录，默认 data_dir/toolkit\n'
-        '  kb_dir: ""            # 知识库目录，默认 data_dir/kb\n'
-        '  # skills_dir: ""     # <已废弃>\n'
-        "# ──────────────────── 会话参数 ────────────────────\n"
-        "# 最大历史消息数（保留的对话历史条数）\n"
-        "max_history: 10\n\n"
-        "# 最大工具调用迭代次数（单次对话中最多允许的工具调用循环数）\n"
-        "max_iterations: 200\n\n"
-        "# 是否启用 thinking 功能（模型思考过程展示）\n"
-        "enable_thinking: true\n\n"
-        "# 思考强度 0.0-1.0（0=最弱/最省token，1=最强/最深思考）\n"
-        "thinking_strength: 0.7\n\n"
-        "# 推理努力程度: auto=自动推导不发送 / none/minimal/low/medium/high/xhigh/max\n"
-        "# auto = 根据 thinking_strength 自动映射\n"
-        "reasoning_effort: auto\n\n"
-        "# ──────────────────── Token 优化参数 ────────────────────\n"
-        "# 保留最近 N 轮完整对话，更早的对话自动摘要（使用 cheap_model）\n"
-        "keep_turns: 5\n\n"
-        "# 工具输出截断字符数（超过此长度的工具结果会被截断）\n"
-        "max_tool_output: 131072  # 128KB\n\n"
-        "# 助手回复截断字符数（超过此长度的助手回复会被截断）\n"
-        "max_assistant_content: 131072  # 128KB\n\n"
-        "# ──────────────────── 交互与控制参数 ────────────────────\n"
-        "# 触发自动记忆提取的最少未摘要消息数\n"
-        "memory_extraction_threshold: 2\n\n"
-        "# 记忆去重相似度阈值，超过此值视为重复并合并(0~1)\n"
-        "memory_dedup_threshold: 0.3\n\n"
-        "# 单页加载的最大对话轮数（超过则省略更早的对话）\n"
-        "chat_page_size: 50\n\n"
-        "# 2026-05-20 gen by Tea Agent, L2/L3分层压缩参数\n"
-        "# L2 最大保留轮数（用户+助手对，不含工具轮次）\n"
-        "history_l2_max: 30\n\n"
-        "# L3 摘要批处理：每攒够 N 条L2溢出，触发便宜模型摘要合并\n"
-        "history_l3_batch: 10\n\n"
-        "# ── 上下文填充治理（2026-09 新增：多轮对话迅速打满窗口的修复）──\n"
-        "# L2 单条 thinking 字符上限（本轮所有工具步 reasoning_content 拼接；0=不限）\n"
-        "l2_thinking_max_chars: 6000\n\n"
-        "# L2 总字符上限（user+thinking+assistant 之和），达到即触发 L3 摘要\n"
-        "l2_max_chars: 120000\n\n"
-        "# L1 reasoning_content 分块限步：每 N 步一块，只保留最近一块全文，\n"
-        "# 更早的块置空（字段保留，满足 V4 回传要求）；0=关闭（全量回传）\n"
-        "rc_keep_steps: 8\n"
-    )
-
-
-def _write_template_file(yaml_path: str, template: str) -> None:
-    """写入模板文件。
-
-    Args:
-        yaml_path: 文件路径
-        template: 模板内容
-    """
-    with open(yaml_path, "w", encoding="utf-8") as f:
-        f.write(template)
 
 
 # 全局单例缓存

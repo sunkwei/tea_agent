@@ -285,25 +285,6 @@ class TestTokenBudgetConfig:
         assert m.get_token_budget("reminder_threshold") == 0.2
         assert m.get_token_budget("missing", 42) == 42
 
-    def test_parse_from_yaml(self, tmp_path):
-        yaml_file = tmp_path / "config.yaml"
-        yaml_file.write_text(
-            "main_model:\n"
-            "  api_key: test-key\n"
-            "  api_url: https://api.test.com/v1\n"
-            "  model_name: deepseek-v3\n"
-            "  max_context_tokens: 1048576\n"
-            "  token_budget:\n"
-            "    reminder_threshold: 0.15\n"
-            "    fallback_buffer_tokens: 20000\n",
-            encoding="utf-8",
-        )
-        cfg = load_config(str(yaml_file))
-        assert cfg.main_model.max_context_tokens == 1048576
-        assert cfg.main_model.token_budget.get("reminder_threshold") == 0.15
-        assert cfg.main_model.token_budget.get("fallback_buffer_tokens") == 20000
-
-
 # ═══ 集成：history_builder 注入 ════════════════════════
 
 class TestHistoryBuilderIntegration:

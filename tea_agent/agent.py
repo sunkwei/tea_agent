@@ -150,18 +150,10 @@ class Agent:
         if self._config_fname and not config_path:
             config_path = str(Path.home() / ".tea_agent" / self._config_fname)
 
+        # config.yaml 已删除：路径参数不再指向任何真实文件，一律交给
+        # load_config 从 provider.yaml 构建（显式路径不再报错）。
         actual_path = resolve_config_path(config_path)
-        # 显式指定的配置文件不存在 → 仍报错（意图落空）；默认路径缺失不再致命 ——
-        # config.yaml 不再是前提，身份三元组由 provider.yaml 提供（load_config 内自动兜底）
-        if config_path and not (actual_path and os.path.isfile(actual_path)):
-            raise FileNotFoundError(
-                f"未找到配置文件: {actual_path or '无'}。\n"
-                f"请检查 --config 指向的路径，或省略该参数改用默认配置\n"
-                f"（~/.tea_agent/provider.yaml 是密钥与模型能力的唯一事实源，config.yaml 可选）"
-            )
-        has_file = bool(actual_path and os.path.isfile(actual_path))
-
-        cfg = load_config(actual_path if has_file else None)
+        cfg = load_config(actual_path)
 
         main_m = cfg.main_model
         if not main_m.is_configured:
@@ -171,7 +163,7 @@ class Agent:
                 f"  api_url: {'✓' if main_m.api_url else '✗'}\n"
                 f"  model:   {'✓' if main_m.model_name else '✗'}\n"
                 f"  请运行 python -m tea_agent.setup_wizard --provider 或在 Web 供应商页完成配置\n"
-                f"  config:  {actual_path or '(无 config.yaml，身份三元组取自 provider.yaml)'}"
+                f"  config:  {actual_path or '(身份三元组取自 provider.yaml，config.yaml 已移除)'}"
             )
 
         self._config_path = actual_path
@@ -286,22 +278,20 @@ class Agent:
     def _build_online_session(self) -> OnlineToolSession:
         """构造 OnlineToolSession 实例（lightweight/full 共用）。
 
-        视觉模型策略：配置了 vision_model 且会话输入含图片时自动切换；
-        无图片时始终使用主模型。supports_vision 在「主模型支持」或
-        「已配置视觉模型」任一成立时开启，保证图片消息可被编码发送。
+        视觉能力由主模型自身的 supports_vision 决定（不再有独立 vision_model
+        角色与自动切换）。主模型不支持视觉时，仍可经 toolkit_vision_analyze
+        委托给具备视觉能力的已配置模型分析图片。
         """
         cfg = self._cfg
         main_m = cfg.main_model
         cheap_m = cfg.cheap_model
-        vision_m = cfg.vision_model
 
         _options = getattr(main_m, "options", {}) or {}
-        main_supports_vision = (
+        supports_vision = bool(
             _options.get("supports_vision", False)
             if isinstance(_options, dict)
             else False
         )
-        supports_vision = main_supports_vision or vision_m.is_configured
         supports_reasoning = (
             _options.get("supports_reasoning", True)
             if isinstance(_options, dict)
@@ -327,9 +317,6 @@ class Agent:
             cheap_api_key=cast(str, cheap_m.api_key),
             cheap_api_url=cast(str, cheap_m.api_url),
             cheap_model=cast(str, cheap_m.model_name),
-            vision_api_key=cast(str, vision_m.api_key),
-            vision_api_url=cast(str, vision_m.api_url),
-            vision_model=cast(str, vision_m.model_name),
             enable_thinking=self._enable_thinking or cfg.enable_thinking,
             thinking_strength=cfg.thinking_strength,
             reasoning_effort=cfg.reasoning_effort,
@@ -991,7 +978,7 @@ class Agent:
 # ────────────────────────────────────────────────────────────═══
 
 
-def TeaAgent(
+def TeaAgent(  # noqa: N802 — 公开 API 名，沿用 TeaAgent 驼峰约定
     config_path: str | None = None,
     callback: Callable[[dict], None] | None = None,
     use_tools: bool = False,

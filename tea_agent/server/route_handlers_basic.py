@@ -354,12 +354,12 @@ OPENAPI_SPEC = {
                 "properties": {
                     "api_key": {"type": "string"},
                     "model": {"type": "string", "description": "defaults to provider default_model"},
-                    "role": {"type": "string", "enum": ["main", "cheap", "vision"], "default": "main"},
+                    "role": {"type": "string", "enum": ["main", "cheap"], "default": "main"},
                     "temperature": {"type": "number"},
                     "max_tokens": {"type": "integer"},
                     "top_p": {"type": "number"},
                 }}}}},
-            "responses": {"200": {"description": "Applied to config.yaml (main hot-swaps)"},
+            "responses": {"200": {"description": "Applied to provider.yaml roles (main hot-swaps)"},
                           "404": {"description": "Provider not found"}}}},
         "/api/model/test": {"post": {
             "summary": "Test connection (endpoint + key + model)", "tags": ["Model Management"],
@@ -374,7 +374,7 @@ OPENAPI_SPEC = {
             "responses": {"200": {"description": "Connection test result (latency_ms)"},
                           "400": {"description": "Missing params"}}}},
         "/api/model-config": {"get": {
-            "summary": "Unified model config panel (model_config.json single source)",
+            "summary": "Unified model config panel (provider.yaml single source)",
             "tags": ["Model Config Panel"],
             "responses": {"200": {"description":
                 "providers→models→per-model config + roles + active + pending_switch"}}}},
@@ -400,7 +400,7 @@ OPENAPI_SPEC = {
                        "responses": {"200": {"description": "Deleted"},
                                      "404": {"description": "Not found"}}}},
         "/api/model-config/sync": {"post": {
-            "summary": "Sync live /v1/models into model_config.json (new only, keep user edits)",
+            "summary": "Sync live /v1/models into provider.yaml (new only, keep user edits)",
             "tags": ["Model Config Panel"],
             "responses": {"200": {"description": "added/kept/total"}}}},
         "/api/model-config/switch": {"post": {
@@ -410,7 +410,7 @@ OPENAPI_SPEC = {
                 "type": "object", "required": ["provider", "model"],
                 "properties": {
                     "provider": {"type": "string"}, "model": {"type": "string"},
-                    "role": {"type": "string", "enum": ["main", "cheap", "vision"], "default": "main"},
+                    "role": {"type": "string", "enum": ["main", "cheap"], "default": "main"},
                     "api_key": {"type": "string"},
                     "continue_session": {"type": "boolean", "default": True},
                     "temperature": {"type": "number"}, "max_tokens": {"type": "integer"},

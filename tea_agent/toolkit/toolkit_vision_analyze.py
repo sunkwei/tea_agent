@@ -3,13 +3,13 @@
 toolkit_vision_analyze — 视觉模型委托分析工具（"灵机一动"能力）。
 
 场景：会话进行中，主模型（不支持视觉）遇到图片路径/URL/data URL 时，
-主动调用本工具，委托已配置的 vision_model（或支持视觉的主模型）分析图片，
+主动调用本工具，委托具备视觉能力（supports_vision）的已配置模型分析图片，
 将视觉模型的文本结果返回给主模型继续推理。
 
 输入：
     image: 图片路径（本地文件）或 URL（http/https）或 data URL（data:image/...;base64,...）
     prompt: 分析指令（可选，默认「请描述这张图片的内容」）
-    max_tokens: 最大输出 token 数（默认 1024）
+    max_tokens: 最大输出 token 数（默认 128000）
 
 返回：
     {'ok': True, 'text': '视觉模型的分析文本', 'model': '模型名'}
@@ -35,7 +35,7 @@ def _client_for(model_cfg):
     client = _client_cache.get(key)
     if client is None:
         # OpenCode Go/Zen 需要 x-opencode-session + 自有 UA，否则 400 MissingSessionID；
-        # config.yaml 的 api_headers 也可为自建网关补充附加头。
+        # provider.yaml settings.api_headers 也可为自建网关补充附加头。
         # 无头可注入时保持原始调用形态（不传 default_headers）。
         _headers = default_headers_for(model_cfg.api_url)
         _kwargs = {"api_key": model_cfg.api_key, "base_url": model_cfg.api_url}
@@ -58,23 +58,28 @@ def _client_for(model_cfg):
     return client
 
 
+def _vision_candidates() -> list:
+    """返回已配置且支持视觉的模型（主模型优先，其次便宜模型）。"""
+    from tea_agent.config import get_config
+
+    cfg = get_config()
+    out = []
+    for m in (getattr(cfg, "main_model", None), getattr(cfg, "cheap_model", None)):
+        if m is not None and m.is_configured and m.supports_vision:
+            out.append(m)
+    return out
+
+
 def _get_vision_client():
-    """从配置获取视觉模型（优先 vision_model，回退支持视觉的主模型）。
+    """从配置获取可用于视觉分析的模型（supports_vision 的已配置模型）。
 
     Returns:
         (client, model_name, model_options) 或 (None, None, None)
     """
-    from tea_agent.config import get_config
-
-    cfg = get_config()
-    vm = getattr(cfg, "vision_model", None)
-    if vm is not None and vm.is_configured:
-        model_cfg = vm
-    elif cfg.main_model.supports_vision and cfg.main_model.is_configured:
-        model_cfg = cfg.main_model
-    else:
+    cands = _vision_candidates()
+    if not cands:
         return None, None, None
-
+    model_cfg = cands[0]
     return _client_for(model_cfg), model_cfg.model_name, model_cfg.options or {}
 
 
@@ -119,7 +124,7 @@ def _build_image_block(data_url: str, detail: str = "") -> dict:
     return block
 
 
-def toolkit_vision_analyze(image: str, prompt: str = "请描述这张图片的内容", max_tokens: int = 1024, detail: str = "") -> dict:
+def toolkit_vision_analyze(image: str, prompt: str = "请描述这张图片的内容", max_tokens: int = 128000, detail: str = "") -> dict:
     """调用已配置的视觉模型分析图片，返回文本结果。
 
     Args:
@@ -127,7 +132,7 @@ def toolkit_vision_analyze(image: str, prompt: str = "请描述这张图片的�
         prompt: 分析指令
         max_tokens: 最大输出 token 数
         detail: 图片细节级别（DeepSeek/OpenAI 视觉 API）: low/high/original/auto。
-            空字符串时回退 vision_model.options.detail；再缺省不传（服务端默认）。
+            空字符串时回退该模型 options.detail；再缺省不传（服务端默认）。
 
     Returns:
         {'ok': True, 'text': str, 'model': str} 或 {'ok': False, 'error': str}
@@ -138,7 +143,7 @@ def toolkit_vision_analyze(image: str, prompt: str = "请描述这张图片的�
     if client is None:
         return {
             "ok": False,
-            "error": "未配置视觉模型：请在配置中设置 vision_model（支持视觉），或使用 supports_vision 的主模型",
+            "error": "无可用视觉模型：请将主模型或便宜模型配置为支持视觉（options.supports_vision: true）",
         }
 
     data_url = _to_data_url(image)
@@ -190,16 +195,14 @@ def toolkit_vision_analyze(image: str, prompt: str = "请描述这张图片的�
     if result.get("ok"):
         return result
 
-    # 韧性回退：首选视觉模型不可用（配额耗尽/服务故障）时，改用支持视觉的主模型。
-    # 动机（实测）：vision_model 所在 provider 月度配额用尽后，工具此前直接失败，
-    # 而主模型本可完成同一任务 —— 单点故障不该废掉整条「截图→多模态分析」能力。
-    from tea_agent.config import get_config
-
-    mm = getattr(get_config(), "main_model", None)
-    fb_name = getattr(mm, "model_name", "") if mm is not None else ""
-    if (mm is not None and getattr(mm, "supports_vision", False)
-            and getattr(mm, "is_configured", False) and fb_name and fb_name != model_name):
-        fb = _attempt(_client_for(mm), fb_name, getattr(mm, "options", None) or {})
+    # 韧性回退：首选模型不可用（配额耗尽/服务故障）时，改用其他支持视觉的已配置模型。
+    # 动机（实测）：首选 provider 月度配额用尽后，工具此前直接失败，
+    # 而另一模型本可完成同一任务 —— 单点故障不该废掉整条「截图→多模态分析」能力。
+    for cand in _vision_candidates()[1:]:
+        fb_name = getattr(cand, "model_name", "") or ""
+        if not fb_name or fb_name == model_name:
+            continue
+        fb = _attempt(_client_for(cand), fb_name, getattr(cand, "options", None) or {})
         if fb.get("ok"):
             fb["fallback_from"] = model_name
             logger.info(f"视觉分析回退成功: {model_name} → {fb_name}")
@@ -217,7 +220,7 @@ def meta_toolkit_vision_analyze() -> dict:
         "function": {
             "name": "toolkit_vision_analyze",
             "description": (
-                "调用已配置的视觉模型（vision_model）分析图片并返回文本结果。"
+                "调用具备视觉能力的已配置模型分析图片并返回文本结果。"
                 "适用于：当前模型不支持视觉时，对话中出现图片路径/URL/data URL，"
                 "或需要理解截图、图表、照片内容。支持本地文件路径、http(s) URL、"
                 "data:image/...;base64 三种图片输入。"
@@ -236,12 +239,12 @@ def meta_toolkit_vision_analyze() -> dict:
                     },
                     "max_tokens": {
                         "type": "integer",
-                        "description": "最大输出 token 数，默认 1024",
-                        "default": 1024,
+                        "description": "最大输出 token 数，默认 128000（推理型视觉模型会先消耗预算于 reasoning，切勿设小）",
+                        "default": 128000,
                     },
                     "detail": {
                         "type": "string",
-                        "description": "图片细节级别（DeepSeek/OpenAI 视觉 API）: low/high/original/auto。默认空=用 vision_model.options.detail 或服务端默认",
+                        "description": "图片细节级别（DeepSeek/OpenAI 视觉 API）: low/high/original/auto。默认空=用该模型 options.detail 或服务端默认",
                         "default": "",
                     },
                 },

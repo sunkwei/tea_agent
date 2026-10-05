@@ -7,7 +7,7 @@
    supports_vision=False（旧 upsert 过滤会把 False/0.0 当空值丢弃）；
 4. provider_store.upsert_model：0.0/False 可写入，未显式提供的键不被 blank 覆盖。
 
-隔离：TEA_CONFIG + TEA_MODEL_CONFIG + TEA_PROVIDER_FILE → tmp_path，
+隔离：TEA_CONFIG + TEA_PROVIDER_FILE + TEA_PROVIDER_FILE → tmp_path，
 绝不触碰真实用户配置。
 """
 
@@ -33,7 +33,7 @@ def env(tmp_path, monkeypatch):
         encoding="utf-8",
     )
     monkeypatch.setenv("TEA_CONFIG", str(cfg))
-    monkeypatch.setenv("TEA_MODEL_CONFIG", str(tmp_path / "model_config.json"))
+    monkeypatch.setenv("TEA_PROVIDER_FILE", str(tmp_path / "provider.yaml"))
     provider_file = tmp_path / "provider.yaml"
     provider_file.write_text(yaml.safe_dump({
         "version": 1,
@@ -66,16 +66,25 @@ def env(tmp_path, monkeypatch):
             },
         },
     }, allow_unicode=True, sort_keys=False), encoding="utf-8")
+    # config.yaml 已删除 → 角色绑定由 provider.yaml roles 提供
+    data = yaml.safe_load(provider_file.read_text(encoding="utf-8"))
+    data["roles"] = {
+        "main": {"provider": "DeepSeek", "model": "deepseek-chat"},
+        "cheap": {"provider": "DeepSeek", "model": "deepseek-flash"},
+    }
+    provider_file.write_text(
+        yaml.safe_dump(data, allow_unicode=True, sort_keys=False), encoding="utf-8")
+
     monkeypatch.setenv("TEA_PROVIDER_FILE", str(provider_file))
 
     import tea_agent.config as cfg_mod
     import tea_agent.model_config as mc_mod
     import tea_agent.model_manager as mm_mod
-    import tea_agent.provider_store as ps_mod
     from tea_agent.server.modules import state
     from tea_agent.server.modules.agent_module import AgentModule
 
-    monkeypatch.setattr(mc_mod, "_store", None)
+    import tea_agent.provider_store as ps_mod
+    monkeypatch.setattr(ps_mod, "_store", None)
     monkeypatch.setattr(mm_mod, "_service", None)
     monkeypatch.setattr(ps_mod, "_store", None)
     state.config_cache.clear()
@@ -122,29 +131,27 @@ def test_apply_without_url_key_keeps_identity(env):
     assert r.status_code == 200, r.text
     assert r.json().get("ok") is True, r.json()
 
-    disk = yaml.safe_load(cfg.read_text(encoding="utf-8"))
-    main = disk["main_model"]
-    # 身份三元组保持（兑底当前值，不清空不改动）
-    assert main["api_url"] == "https://api.deepseek.com"
-    assert main["api_key"] == "sk-main-1234567890"
-    assert main["model_name"] == "deepseek-chat"
+    disk = yaml.safe_load(_pf.read_text(encoding="utf-8"))
+    assert disk["roles"]["main"]["model"] == "deepseek-chat"
+    assert disk["roles"]["cheap"]["model"] == "deepseek-flash"
+    assert disk["roles"]["main"]["api_url"] == "https://api.deepseek.com"
+    main = disk["providers"]["DeepSeek"]["models"]["deepseek-chat"]
     # 主模型参数生效
     assert float(main["temperature"]) == 0.3
-    assert int(main["max_tokens"]) == 5555
+    assert int(main["max_output_tokens"]) == 5555
     assert float(main["top_p"]) == 0.8
     assert int(main["max_context_tokens"]) == 100000
-    assert main["options"]["reasoning_effort"] == "high"
-    assert main["options"]["supports_vision"] is True
-    # cheap 参数（后端兑底 cheap url/name 后 switch_model 才应用 cheap 分支）
-    cheap = disk["cheap_model"]
-    assert cheap["model_name"] == "deepseek-flash"
-    assert cheap["api_key"] == "sk-cheap-1234567890"
-    assert cheap["api_url"] == "https://api.deepseek.com"
+    assert main["reasoning_effort"] == "high"
+    assert main["supports_vision"] is True
+    # cheap 参数（落盘为 provider.yaml 逐模型条目）
+    cheap = disk["providers"]["DeepSeek"]["models"]["deepseek-flash"]
+    assert int(cheap["max_context_tokens"]) == 32768
+    assert cheap["supports_vision"] is False
     assert float(cheap["temperature"]) == 0.1
-    assert int(cheap["max_tokens"]) == 2222
+    assert int(cheap["max_output_tokens"]) == 2222
     assert float(cheap["top_p"]) == 0.6
     assert int(cheap["max_context_tokens"]) == 32768
-    assert cheap["options"]["reasoning_effort"] == "low"
+    assert cheap["reasoning_effort"] == "low"
 
 
 def test_apply_writes_back_provider_yaml(env):

@@ -596,8 +596,13 @@ def run_server(host="127.0.0.1", port=8282,
 
     actual_config = config_path or os.environ.get("TEA_CONFIG", "")
     if not actual_config:
-        default_cfg = os.path.join(os.path.expanduser("~"), ".tea_agent", "config.yaml")
-        actual_config = default_cfg if os.path.isfile(default_cfg) else "(built-in default)"
+        # config.yaml 已删除：身份/参数来自 provider.yaml
+        try:
+            from tea_agent.provider_store import get_provider_store
+
+            actual_config = str(get_provider_store().file_path)
+        except Exception:
+            actual_config = "(built-in default)"
 
     app = create_app(api_key=api_key, config_path=config_path)
 
@@ -678,12 +683,11 @@ def main():
     parser.add_argument("--browser", action="store_true")
     args = parser.parse_args()
 
-    config_path = args.config or os.path.join(
-        os.path.expanduser("~"), ".tea_agent", "config.yaml")
-    if args.config and not os.path.isfile(config_path):
-        # 用户显式指定路径但不存在 → 报错，不启动向导
-        print(f"Error: Config file not found: {config_path}")
-        sys.exit(1)
+    # config.yaml 已删除：--config 仅保留签名兼容，不再解析配置文件
+    config_path = args.config or ""
+    if args.config:
+        print("Warning: --config is deprecated (config.yaml removed); "
+              "use ~/.tea_agent/provider.yaml instead.")
 
     # ── 首启判定：以 provider.yaml 为唯一事实源（config.yaml 不再是启动前提）──
     # 存在且非空 → 直接启动（默认用第一个提供商的第一个模型）；

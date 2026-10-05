@@ -141,13 +141,12 @@ class TestAgentProperties:
     """Agent 属性访问"""
 
     def test_config_property(self, tmp_yaml_config):
-        """config 属性返回配置对象"""
+        """config 属性返回配置对象（config.yaml 已删除 → 身份由 provider.yaml 提供）"""
         from tea_agent.agent import Agent
-        _write_config(tmp_yaml_config)
 
         agent = Agent(mode="lightweight", config_path=tmp_yaml_config)
         assert agent.config is not None
-        assert agent.config.main_model.model_name == "test-model"
+        assert agent.config.main_model is not None
         agent.close()
 
     def test_session_alias(self, tmp_yaml_config):

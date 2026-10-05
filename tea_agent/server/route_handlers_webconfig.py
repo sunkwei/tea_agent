@@ -346,35 +346,6 @@ async def handle_web_upload_config(request):
     except Exception as e:
                     logger.warning(f"Auto-switch config after upload exception: {e}")
 
-    config_link = configs_dir / "config.yaml"
-    try:
-        if config_link.exists() or config_link.is_symlink():
-            if config_link.is_symlink():
-                config_link.unlink()
-            else:
-                from datetime import datetime
-                stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-                backup_path = configs_dir / f"config_{stamp}.yaml"
-                import shutil
-                shutil.move(str(config_link), str(backup_path))
-                logger.info(f"Existing config.yaml backed up to {backup_path}")
-        try:
-            if os.name == "nt":
-                try:
-                    os.symlink(str(dest_path), str(config_link))
-                    logger.info(f"Symlink created: {config_link} → {dest_path}")
-                except (OSError, PermissionError):
-                    import shutil
-                    shutil.copy2(str(dest_path), str(config_link))
-                    logger.info(f"Symlink failed, copied file to {config_link}")
-            else:
-                os.symlink(str(dest_path), str(config_link))
-                logger.info(f"Symlink created: {config_link} → {dest_path}")
-        except Exception as e:
-            logger.warning(f"Create config.yaml symlink failed: {e}")
-    except Exception as e:
-        logger.warning(f"Config.yaml symlink handling error: {e}")
-
     return JSONResponse({
         "ok": True,
         "filename": dest_path.name,

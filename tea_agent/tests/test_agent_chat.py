@@ -324,9 +324,3 @@ class TestAgentChatErrorHandling:
 
             agent.close()
 
-    def test_chat_invalid_config(self):
-        """测试无效配置"""
-        from tea_agent.agent import Agent
-
-        with pytest.raises(FileNotFoundError):
-            Agent(mode="lightweight", config_path="/nonexistent/config.yaml")

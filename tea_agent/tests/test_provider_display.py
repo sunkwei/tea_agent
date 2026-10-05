@@ -229,9 +229,9 @@ class TestLoadModulesConfigPathOrder:
         assert calls == [], f"空 config_path 不应调用 set_config_path，实际 {calls}"
 
 
-@pytest.mark.parametrize("role", ["main_model", "cheap_model", "vision_model"])
+@pytest.mark.parametrize("role", ["main_model", "cheap_model"])
 def test_provider_field_exists_on_model_config(role):
-    """三种角色都应有 provider 字段（switch_config 依赖它透传）。"""
+    """两种角色都应有 provider 字段（switch_config 依赖它透传）。"""
     from tea_agent.config import AgentConfig
 
     cfg = AgentConfig()

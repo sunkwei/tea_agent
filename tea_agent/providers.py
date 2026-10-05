@@ -579,10 +579,12 @@ def switch_provider(
     cheap_api_key: str = "",
     cheap_model: str = "",
 ) -> dict:
-    """切换配置到指定 Provider（写 config.yaml）。
+    """切换配置到指定 Provider（写 provider.yaml roles 段）。
+
+    config.yaml 已删除：config_path 仅保留签名兼容，不再用于读写。
 
     Args:
-        config_path: 配置文件路径
+        config_path: 忽略（历史签名兼容）
         provider_name: 主 Provider 名称
         api_key: 主 API Key
         model: 主模型 id（留空用 default_model）
@@ -629,6 +631,9 @@ def _apply_model_into(target, provider: dict, model: str, api_key: str, meta: di
     target.api_key = api_key
     target.api_url = provider["api_url"]
     target.model_name = model
+    # 引用式绑定：save_config 据此写入 provider.yaml roles 段
+    target.provider = str(provider.get("name") or "")
+    target.ref_model = model
     # 写真布尔值，避免 "false" 字符串在 supports_vision 判定里恒真
     target.options["supports_vision"] = bool(meta.get("supports_vision", provider.get("supports_vision", False)))
     target.options["supports_reasoning"] = bool(meta.get("supports_thinking", provider.get("supports_thinking", False)))

@@ -1303,42 +1303,6 @@ function _countCnChars(str) {
   return n;
 }
 
-function _noteStreamChars(s, text) {
-  if (!text) return;
-  s.speedChars += text.length;
-  s.speedCn += _countCnChars(text);
-  const now = Date.now();
-  if (!s.speedT0) s.speedT0 = now;   // 首 token 才起算：排队/prefill 不属于解码
-  s.speedT1 = now;
-}
-
-function _updateLiveSpeed(s, force) {
-  const el = $('speed-live');
-  if (!el) return;
-  const now = Date.now();
-  if (!force) {
-    if (now - _lastLiveSpeedRender < 250) return;   // 节流：每 token 刷 DOM 会拖慢流式
-    _lastLiveSpeedRender = now;
-  }
-  const win = s.speedT0 ? (s.speedT1 - s.speedT0) / 1000 : 0;
-  const toks = s.speedCn / 1.5 + (s.speedChars - s.speedCn) / 4.0;
-  // 样本太少时速率毫无统计意义（首包抖动就能翻倍），宁可空着
-  if (!s.speedT0 || win < 0.8 || toks < 12) {
-    if (force) { el.style.display = 'none'; el.textContent = ''; }
-    return;
-  }
-  const tps = toks / win;
-  if (!isFinite(tps) || tps <= 0) return;
-  el.textContent = '⏱ ~' + tps.toFixed(1) + ' tok/s';
-  el.title = '实时估算：按字符启发式换算，与回合结束后的实测值（⚡）口径不同';
-  el.style.display = '';
-}
-
-function _hideLiveSpeed() {
-  const el = $('speed-live');
-  if (el) { el.style.display = 'none'; el.textContent = ''; }
-}
-
 // ── Helper: 创建流式消息容器和状态对象 ──
 function _createStreamState() {
   const agentDiv = document.createElement('div');
@@ -1363,10 +1327,6 @@ function _createStreamState() {
     toolDoneCount: 0,
     activeToolItem: null,
     // 实时速率估算计数（字符/中文字数/首末 token 时刻）
-    speedChars: 0,
-    speedCn: 0,
-    speedT0: 0,
-    speedT1: 0,
   };
 }
 
@@ -1517,8 +1477,6 @@ window.sendMessage = async function() {
             case 'token':
               removeLoading();
               s.fullText += data.text;
-              _noteStreamChars(s, data.text);
-              _updateLiveSpeed(s);
               s.bubbleText.innerHTML = esc(decodeEntities(s.fullText));
               if (_liveTpsTick(data.text)) _paintLiveTps();
               break;
@@ -1723,8 +1681,6 @@ window.sendMessage = async function() {
 
             case 'done':
               removeLoading();
-              _updateLiveSpeed(s, true);   // 收尾：按最终字符数定格一次
-              _hideLiveSpeed();            // 实测值（⚡）随后接管，估算（⏱ ~）退场
               // 记录 token 用量（延迟显示，等流结束后才更新 UI）
               if (data.usage) _pendingUsage = data.usage;
               // 更新 topic_id（首次消息后更新）
@@ -1795,7 +1751,6 @@ window.sendMessage = async function() {
 
             case 'queued':
               removeLoading();
-              _hideLiveSpeed();
               isStreaming = false;
               // 恢复发送按钮
               var sb = document.getElementById('send-btn');
@@ -1812,7 +1767,6 @@ window.sendMessage = async function() {
 
             case 'error':
               removeLoading();
-              _hideLiveSpeed();
               s.bubbleText.innerHTML = '<span style="color:var(--red)">错误: ' + esc(data.error) + '</span>';
               break;
           }
@@ -1824,7 +1778,6 @@ window.sendMessage = async function() {
   } catch(e) {
     if (e.name === 'AbortError') {
       removeLoading();
-      _hideLiveSpeed();
       const bt = $('bubble-text');
       if (bt && !bt.innerHTML.trim()) bt.innerHTML = '(已中断)';
       // ⭐ 安全网：后台线程仍在运行，启动轮询获取最终 AI 回复
@@ -1833,7 +1786,6 @@ window.sendMessage = async function() {
         _checkBackgroundAndPoll(currentTopicId);
       }
     } else if (myGen === _streamGeneration && currentTopicId) {
-      _hideLiveSpeed();
       // 非主动取消的流中断（网络闪断 / server 正在重启）→ 进入重连续读：
       // 由后台缓冲区补齐已产出内容；服务端重启后会把在途回合快照重建为缓冲区，
       // 因此「已产出的内容」不会丢失。
@@ -2224,16 +2176,11 @@ function _ensureBufferStreamState() {
       toolCallCount: 0,
       toolDoneCount: 0,
       activeToolItem: null,
-      speedChars: 0,
-      speedCn: 0,
-      speedT0: 0,
-      speedT1: 0,
     };
   }
   return _bufferStreamState;
 }
 
-let _lastLiveSpeedRender = 0;   // 实时速率 DOM 刷新节流时间戳
 
 /* 节流刷新任务面板：Agent 工具调用完成时更新 TODO 勾选状态（1s 内最多一次） */
 let _lastTaskRefreshTs = 0;

@@ -1,6 +1,6 @@
 """统一模型配置面板 API（/api/model-config*）集成测试。
 
-隔离：TEA_CONFIG + TEA_MODEL_CONFIG → tmp_path，绝不触碰真实用户配置。
+隔离：TEA_CONFIG + TEA_PROVIDER_FILE → tmp_path，绝不触碰真实用户配置。
 覆盖：
   1. 面板全量视图（providers→models→逐模型配置 + roles + active 掩码）
   2. 模型配置保存（PUT）/新增（POST）/删除（DELETE）+ 校验 400
@@ -11,39 +11,34 @@
 
 from __future__ import annotations
 
+import os
+
 import pytest
 
 
 @pytest.fixture
 def env(tmp_path, monkeypatch):
-    cfg = tmp_path / "config.yaml"
-    cfg.write_text(
-        "main_model:\n"
-        "  api_key: sk-test1234567890\n"
-        "  api_url: https://api.deepseek.com\n"
-        '  model_name: "deepseek-chat"\n',
-        encoding="utf-8",
-    )
-    monkeypatch.setenv("TEA_CONFIG", str(cfg))
-    monkeypatch.setenv("TEA_MODEL_CONFIG", str(tmp_path / "model_config.json"))
+    """config.yaml 已删除：身份/能力/roles 全部来自 provider.yaml。"""
+    cfg = tmp_path / "provider.yaml"
+    monkeypatch.setenv("TEA_PROVIDER_FILE", str(cfg))
 
     import tea_agent.config as cfg_mod
     import tea_agent.model_config as mc_mod
     import tea_agent.model_manager as mm_mod
-    import tea_agent.provider_store as ps_mod
     from tea_agent.server.modules import state
     from tea_agent.server.modules.agent_module import AgentModule
 
-    monkeypatch.setattr(mc_mod, "_store", None)
+    import tea_agent.provider_store as ps_mod
+    monkeypatch.setattr(ps_mod, "_store", None)
     monkeypatch.setattr(mm_mod, "_service", None)
     monkeypatch.setattr(ps_mod, "_store", None)
-    # provider.yaml 隔离：能力唯一来源（apply/switch 从 provider_store 读模型属性）
-    provider_file = tmp_path / "provider.yaml"
-    monkeypatch.setenv("TEA_PROVIDER_FILE", str(provider_file))
+    # provider.yaml 隔离：能力/角色唯一来源（apply/switch 从 provider_store 读属性）
     import yaml
 
-    provider_file.write_text(yaml.safe_dump({
+    cfg.write_text(yaml.safe_dump({
         "version": 1,
+        "roles": {"main": {"provider": "DeepSeek", "model": "deepseek-chat"}},
+        "settings": {"keep_turns": 5},
         "providers": {
             "DeepSeek": {
                 "api_url": "https://api.deepseek.com",
@@ -73,8 +68,6 @@ def env(tmp_path, monkeypatch):
             },
         },
     }, allow_unicode=True, sort_keys=False), encoding="utf-8")
-    # profile 扫描隔离：空目录 → 无 config_*.yaml → 回退预置注册表（面板测试断言稳定）
-    monkeypatch.setattr(mc_mod, "CONFIG_DIR", tmp_path / "agent")
     state.config_cache.clear()
     state.active_sessions.clear()
     state.background_sessions.clear()
@@ -100,7 +93,7 @@ def test_panel_full_view(env):
     r = client.get("/api/model-config")
     assert r.status_code == 200
     d = r.json()
-    assert d["ok"] and d["total_providers"] >= 10 and d["file"]
+    assert d["ok"] and d["total_providers"] >= 1 and d["file"]
     ds = next(p for p in d["providers"] if p["name"] == "DeepSeek")
     assert ds["source"] == "builtin" and ds["api_url"] == "https://api.deepseek.com"
     m = next(x for x in ds["models"] if x["id"] == "deepseek-chat")
@@ -136,7 +129,7 @@ def test_put_model_config_validation(env):
     client, _cfg, _state, _am = env
     r = client.put("/api/model-config/model", json={
         "provider": "DeepSeek", "model": "whatever",
-        "config": {"temperature": 1}})          # 未知字段
+        "config": {"bogus_field": 1}})          # 未知字段
     assert r.status_code == 400
     assert r.json()["ok"] is False
     # 校验失败不得产生副作用条目
@@ -196,12 +189,15 @@ def test_switch_persists_and_binds_role(env):
     assert r.status_code == 200
     d = r.json()
     assert d["ok"] and d["model"] == "deepseek-reasoner"
-    # 1) config.yaml 落盘
-    disk = yaml.safe_load(cfg.read_text(encoding="utf-8"))
-    assert disk["main_model"]["model_name"] == "deepseek-reasoner"
+    # 1) provider.yaml roles 落盘（config.yaml 已删除）
+    from pathlib import Path
+
+    disk = yaml.safe_load(
+        Path(os.environ["TEA_PROVIDER_FILE"]).read_text(encoding="utf-8"))
+    assert disk["roles"]["main"]["model"] == "deepseek-reasoner"
     # 2) 逐模型配置注入 options（reasoner 支持思考）
-    assert disk["main_model"]["options"]["supports_reasoning"] is True
-    # 3) roles 绑定写回 model_config.json（面板单一事实源）
+    assert disk["providers"]["DeepSeek"]["models"]["deepseek-reasoner"]["supports_reasoning"] is True
+    # 3) roles 绑定写回 provider.yaml（面板单一事实源）
     mc = client.get("/api/model-config").json()
     assert mc["roles"]["main"]["model"] == "deepseek-reasoner"
     # 4) 会话续用：无长驻 Agent/空闲 → applied 或 next_message

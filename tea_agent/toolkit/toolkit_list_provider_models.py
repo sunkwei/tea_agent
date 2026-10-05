@@ -5,10 +5,10 @@ import urllib.request as urllib_req
 
 def toolkit_list_provider_models(provider: str = "all", api_url: str = None, api_key: str = None):
     """
-    查询当前配置中各角色模型（main_model / cheap_model / vision_model）的可用模型列表。
+    查询当前配置中各角色模型（main_model / cheap_model）的可用模型列表。
 
     支持两种模式：
-    1. 从 config 读取：provider 传 main_model/cheap_model/vision_model/all
+    1. 从 config 读取：provider 传 main_model/cheap_model/all
     2. 直接指定端点：传入 api_url + api_key 查询任意 OpenAI 兼容 API
     """
     # 外部直接指定模式
@@ -22,9 +22,9 @@ def toolkit_list_provider_models(provider: str = "all", api_url: str = None, api
     except Exception as e:
         return {"error": f"加载配置失败: {e}", "hint": "请稍后重试"}
 
-    # 收集要查询的 provider（角色集合与 AgentConfig 对齐：main/cheap/vision）
+    # 收集要查询的 provider（角色集合与 AgentConfig 对齐：main/cheap）
     providers = {}
-    model_sections = ["main_model", "cheap_model", "vision_model"]
+    model_sections = ["main_model", "cheap_model"]
 
     if provider == "all":
         for key in model_sections:
@@ -35,7 +35,7 @@ def toolkit_list_provider_models(provider: str = "all", api_url: str = None, api
             return {"error": f"配置中未找到 {provider}"}
         providers[provider] = getattr(cfg, provider)
     else:
-        return {"error": f"未知 provider: {provider}, 可选: all, main_model, cheap_model, vision_model"}
+        return {"error": f"未知 provider: {provider}, 可选: all, main_model, cheap_model"}
 
     results = {}
     for name, prov in providers.items():
@@ -116,13 +116,13 @@ def meta_toolkit_list_provider_models() -> dict:
         "type": "function",
         "function": {
             "name": "toolkit_list_provider_models",
-            "description": "查询当前配置中各角色模型（main_model/cheap_model/vision_model）的可用模型列表：读取该角色的 api_url + api_key 调用 /v1/models；也支持直接传入 api_url 和 api_key 查询任意 OpenAI 兼容端点。",
+            "description": "查询当前配置中各角色模型（main_model/cheap_model）的可用模型列表：读取该角色的 api_url + api_key 调用 /v1/models；也支持直接传入 api_url 和 api_key 查询任意 OpenAI 兼容端点。",
             "parameters": {
                 "type": "object",
                 "properties": {
                     "provider": {
                         "type": "string",
-                        "description": "配置中的角色键名: main_model, cheap_model, vision_model, 或 'all' 查询全部。默认 all",
+                        "description": "配置中的角色键名: main_model, cheap_model, 或 'all' 查询全部。默认 all",
                         "default": "all",
                     },
                     "api_url": {

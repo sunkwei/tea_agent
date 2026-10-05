@@ -1,231 +1,129 @@
-"""统一模型配置中心（tea_agent.model_config）单元测试。
+"""model_config 兼容层测试（provider.yaml 唯一事实源）。
 
-覆盖：bootstrap 生成 / 逐模型配置 CRUD 与校验 / 注册表增量同步 /
-自定义供应商清理 / 实时模型列表写回 / 角色绑定 / 持久化 roundtrip / 启发式默认。
+历史：本模块曾把供应商/逐模型能力/角色绑定持久化到 model_config.json，
+与 provider.yaml 等形成多份互相覆盖的事实源。现已收敛到 provider.yaml，
+本模块只做 API 名转发，**不再读写任何 JSON 文件**。
 
-测试隔离：TEA_MODEL_CONFIG 环境变量 + 单例重置，绝不触碰用户真实 ~/.tea_agent。
+本文件钉住该契约：转发不落盘、scan_config_profiles 已停用、roles 存 provider.yaml。
+隔离：TEA_PROVIDER_FILE + tmp 目录，绝不触碰真实 ~/.tea_agent。
 """
 
 from __future__ import annotations
 
 import pytest
 
-from tea_agent import model_config as mc
 from tea_agent.model_config import (
     ModelConfigError,
-    ModelConfigStore,
+    clean_model_config,
     get_model_config_store,
     guess_model_config,
+    scan_config_profiles,
 )
 
 
 @pytest.fixture
 def store(tmp_path, monkeypatch):
-    """指向 tmp_path 的隔离单例。"""
-    f = tmp_path / "model_config.json"
-    monkeypatch.setenv("TEA_MODEL_CONFIG", str(f))
-    # profile 扫描隔离：空目录（无 config_*.yaml）→ store 回退预置注册表，断言稳定
-    monkeypatch.setattr(mc, "CONFIG_DIR", tmp_path / "agent")
-    monkeypatch.setattr(mc, "_store", None)
+    """隔离的 ProviderStore 转发单例（无 JSON 文件）。"""
+    import tea_agent.provider_store as ps
+
+    f = tmp_path / "provider.yaml"
+    monkeypatch.setenv("TEA_PROVIDER_FILE", str(f))
+    monkeypatch.setattr(ps, "_store", None, raising=False)
     s = get_model_config_store()
-    assert s.file_path == f
     yield s
-    monkeypatch.setattr(mc, "_store", None)
-    monkeypatch.delenv("TEA_MODEL_CONFIG", raising=False)
+    monkeypatch.setattr(ps, "_store", None, raising=False)
+    monkeypatch.delenv("TEA_PROVIDER_FILE", raising=False)
 
 
-# ── bootstrap ─────────────────────────────────────────────
+# ── 转发契约 ──────────────────────────────────────────────
 
-def test_bootstrap_creates_file_with_registry(store, tmp_path):
-    data = store.load()
-    path = tmp_path / "model_config.json"
-    assert path.exists()
-    assert data["version"] == mc.SCHEMA_VERSION
-    assert len(data["providers"]) >= 10
-    assert "DeepSeek" in data["providers"] and "OpenAI" in data["providers"]
-    ds_models = data["providers"]["DeepSeek"]["models"]
-    assert "deepseek-chat" in ds_models
-    # 四个必备能力字段齐全
-    for key in ("max_context_tokens", "max_output_tokens", "supports_thinking",
-                "supports_vision"):
-        assert key in ds_models["deepseek-chat"], key
+def test_get_model_config_store_returns_provider_store():
+    """兼容名 get_model_config_store 返回 ProviderStore（不存在第二个存储）。"""
+    from tea_agent.provider_store import ProviderStore
+
+    assert isinstance(get_model_config_store(), ProviderStore)
 
 
-def test_bootstrap_is_idempotent_and_persisted(store, tmp_path):
-    store.upsert_model("DeepSeek", "unit-test-model", {"max_context_tokens": 65536})
-    path = tmp_path / "model_config.json"
-    # 新建实例（同路径）应读到已持久化的编辑
-    s2 = ModelConfigStore(path)
-    cfg = s2.get_model_config("DeepSeek", "unit-test-model")
-    assert cfg["max_context_tokens"] == 65536
-    assert cfg["source"] == "saved"
+def test_no_json_file_is_written(store, tmp_path):
+    """任何写操作都不得生成 model_config.json（单一事实源契约）。"""
+    store.upsert_model("DeepSeek", "m-x", {"max_context_tokens": 65536})
+    store.set_role("main", "DeepSeek", "m-x", api_url="https://api.deepseek.com")
+    assert not (tmp_path / "model_config.json").exists()
+    assert store.file_path.name == "provider.yaml"
+    assert store.file_path.exists()
 
 
-# ── 逐模型配置 CRUD ───────────────────────────────────────
+def test_model_config_roundtrip_persists(store):
+    """逐模型配置经 provider.yaml 持久化（新实例可读回）。"""
+    from tea_agent.provider_store import ProviderStore
 
-def test_upsert_partial_update_merges(store):
-    store.upsert_model("DeepSeek", "m-a", {"max_context_tokens": 200_000,
-                                           "supports_thinking": True})
-    entry = store.upsert_model("DeepSeek", "m-a", {"max_output_tokens": 16_000})
-    cfg = entry["config"]
-    assert cfg["max_context_tokens"] == 200_000      # 保留
-    assert cfg["supports_thinking"] is True          # 保留
-    assert cfg["max_output_tokens"] == 16_000        # 更新
+    store.upsert_model("DeepSeek", "m-rt", {"max_context_tokens": 32_768})
+    cfg = ProviderStore(store.file_path).get_model_config("DeepSeek", "m-rt")
+    assert cfg["max_context_tokens"] == 32_768
 
 
-def test_upsert_rejects_unknown_field(store):
-    with pytest.raises(ModelConfigError, match="unknown config field"):
-        store.upsert_model("DeepSeek", "m-b", {"temperature": 0.5})
-
-
-def test_upsert_rejects_out_of_range(store):
-    with pytest.raises(ModelConfigError, match="out of range"):
-        store.upsert_model("DeepSeek", "m-c", {"max_context_tokens": 10})
-
-
-def test_upsert_unknown_provider_injects_from_registry(store):
-    # provider 名与内置注册表一致（大小写不敏感）→ 自动补齐条目
-    entry = store.upsert_model("deepseek", "deepseek-reasoner", {"max_output_tokens": 64_000})
-    assert entry["config"]["max_output_tokens"] == 64_000
-
-
-def test_upsert_truly_unknown_provider_fails(store):
-    with pytest.raises(ModelConfigError) as ei:
-        store.upsert_model("NoSuchProvider-xyz", "m", {"max_output_tokens": 100})
-    assert ei.value.code == "NOT_FOUND"
-
-
-def test_delete_model(store):
-    store.upsert_model("DeepSeek", "to-del", {"max_output_tokens": 1234})
-    assert store.delete_model("DeepSeek", "to-del") is True
-    assert store.delete_model("DeepSeek", "to-del") is False
-    # 删内置注册表中声明的模型 → 允许（store 层面移除条目）
-    with pytest.raises(ModelConfigError):
-        store.delete_model("NoSuchProvider-xyz", "anything")
-
-
-def test_update_model_config_on_new_model(store):
-    # update_model_config：provider 有、模型从无 → 按默认创建后套用 patch
-    entry = store.update_model_config("OpenAI", "gpt-9-ultra",
-                                      {"max_context_tokens": 500_000, "note": "新加"})
-    assert entry["config"]["max_context_tokens"] == 500_000
-    assert entry["config"]["note"] == "新加"
-
-
-# ── 注册表增量同步 ────────────────────────────────────────
-
-def test_registry_increment_sync(store, tmp_path, monkeypatch):
-    import copy
-
-    store.load()  # 确保 bootstrap 完成
-    fake = {
-        "ZzzFake": {"api_url": "https://fake.example.com/v1",
-                    "default_model": "fm-1",
-                    "models": ["fm-1", "fm-2"],
-                    "supports_vision": True},
-    }
-    real = copy.deepcopy(mc.__dict__.get("_PROVIDERS_CACHE", None))  # 防呆：无缓存属性则忽略
-    import tea_agent.providers as prov
-    monkeypatch.setitem(prov.PROVIDERS, "ZzzFake", fake["ZzzFake"])
-    # 用户先编辑一个既有模型的配置，增量同步不得覆盖
-    store.upsert_model("DeepSeek", "deepseek-chat", {"max_context_tokens": 999_999})
-    data = store.load(force=True)
-    assert "ZzzFake" in data["providers"]
-    assert set(data["providers"]["ZzzFake"]["models"]) == {"fm-1", "fm-2"}
-    assert data["providers"]["ZzzFake"]["supports_vision"] is True
-    assert data["providers"]["DeepSeek"]["models"]["deepseek-chat"]["max_context_tokens"] \
-        == 999_999
-    # 新模型按 provider 能力播种
-    assert data["providers"]["ZzzFake"]["models"]["fm-2"]["supports_vision"] is True
-
-
-def test_removed_custom_provider_purged(store, tmp_path, monkeypatch):
+def test_roles_persist_to_provider_yaml(store):
+    """角色绑定存 provider.yaml 的 roles 段，而非独立 JSON。"""
     import yaml
 
-    custom_dir = tmp_path / "tea_home"
-    custom_dir.mkdir()
-    monkeypatch.setattr(mc, "CONFIG_DIR", custom_dir)
-    f = custom_dir / "custom_providers.yaml"
-    f.write_text(yaml.safe_dump({"version": 1, "providers": {
-        "GhostGW": {"api_url": "https://ghost.example/v1", "default_model": "gm"}}}),
-        encoding="utf-8")
-    data = store.load(force=True)
-    assert "GhostGW" in data["providers"]
-    store.set_role("cheap", "GhostGW", "gm")
-    assert store.roles().get("cheap", {}).get("provider") == "GhostGW"
-    f.unlink()  # 模拟删除自定义供应商
-    data = store.load(force=True)
-    assert "GhostGW" not in data["providers"]
-    assert "cheap" not in store.roles()
+    store.set_role("cheap", "DeepSeek", "m-cheap")
+    raw = yaml.safe_load(store.file_path.read_text(encoding="utf-8"))
+    assert raw["roles"]["cheap"]["model"] == "m-cheap"
+    assert store.roles()["cheap"]["model"] == "m-cheap"
 
 
-# ── 实时模型列表写回 ──────────────────────────────────────
+def test_set_role_rejects_vision_role(store):
+    """vision 角色已随独立视觉模型槽位一并移除。"""
+    from tea_agent.provider_store import ProviderStoreError
 
-def test_sync_live_models_preserves_user_edits(store):
-    store.upsert_model("DeepSeek", "deepseek-chat", {"max_context_tokens": 777_777})
-    r = store.sync_live_models("DeepSeek",
-                               ["deepseek-chat", "brand-new-live", "deepseek-reasoner"])
-    assert "brand-new-live" in r["added"]
-    assert "deepseek-chat" in r["kept"]
-    assert r["total"] >= len(r["added"]) + len(r["kept"])
-    # 用户编辑未被覆盖
-    assert store.get_model_config("DeepSeek", "deepseek-chat")["max_context_tokens"] == 777_777
-    # 新模型未在 provider.yaml 收录 → 属性中性（0=未知），代码不再内置猜测
-    got = store.get_model_config("DeepSeek", "brand-new-live")
-    assert got["max_context_tokens"] == 0 and got["max_output_tokens"] == 0
+    with pytest.raises(ProviderStoreError):
+        store.set_role("vision", "DeepSeek", "m-v")
 
-
-# ── 角色绑定 ──────────────────────────────────────────────
-
-def test_set_role_validates(store):
-    store.set_role("main", "DeepSeek", "deepseek-chat", api_url="https://api.deepseek.com")
-    r = store.roles()["main"]
-    assert r["provider"] == "DeepSeek" and r["model"] == "deepseek-chat"
-    with pytest.raises(ModelConfigError):
-        store.set_role("bad-role", "DeepSeek", "m")
-    with pytest.raises(ModelConfigError):
-        store.set_role("main", "DeepSeek", "")
-
-
-# ── panel 视图 ────────────────────────────────────────────
 
 def test_panel_shape(store):
-    store.upsert_model("OpenAI", "gpt-4o", {"max_output_tokens": 4096})
-    p = store.panel()
-    assert p["ok"] is True and p["version"] == mc.SCHEMA_VERSION
-    assert p["total_providers"] == len(p["providers"])
-    names = {x["name"] for x in p["providers"]}
-    assert {"DeepSeek", "OpenAI"} <= names
-    for prov in p["providers"]:
-        assert {"name", "source", "api_url", "models", "model_count"} <= set(prov)
-        for m in prov["models"]:
-            assert {"id", "config", "is_default"} <= set(m)
-            cfg = m["config"]
-            for key in ("max_context_tokens", "max_output_tokens",
-                        "supports_thinking", "supports_vision"):
-                assert key in cfg
-    assert "active" in p and "roles" in p
+    """面板视图：providers 含逐模型配置 + roles/active。"""
+    store.upsert_model("DeepSeek", "m-p", {"supports_vision": True})
+    panel = store.panel()
+    assert panel["ok"] is True
+    assert panel["file"].endswith("provider.yaml")
+    assert isinstance(panel["providers"], list)
+    assert "roles" in panel and "active" in panel
 
 
-# ── 启发式 ────────────────────────────────────────────────
+# ── 已停用能力 ────────────────────────────────────────────
 
-def test_guess_neutral_no_builtin_attrs():
-    """不再内置/猜测模型属性：未在 provider.yaml 收录 → 0=未知（2026-09-06 起）。"""
-    for mid in ("deepseek-reasoner", "gpt-4o", "gemini-2.5-pro",
-                "qwen3-32b", "moonshot-v1-32k", "llama-suffix-1m"):
-        cfg = guess_model_config(mid)
-        assert cfg["max_context_tokens"] == 0
-        assert cfg["max_output_tokens"] == 0
-    # provider_caps（provider.yaml 声明的提供商能力）仍可继承
-    cfg = guess_model_config("x-model", {"supports_thinking": True, "supports_vision": True})
-    assert cfg["supports_thinking"] is True and cfg["supports_vision"] is True
-    assert cfg["max_context_tokens"] == 0  # 窗口需 provider.yaml 模型条目显式配置
+def test_scan_config_profiles_disabled():
+    """config*.yaml 不再是提供商来源：恒返回空。"""
+    assert scan_config_profiles() == {}
+    assert scan_config_profiles("/tmp") == {}
 
 
-# ── 备份 ──────────────────────────────────────────────────
+# ── 纯函数 ────────────────────────────────────────────────
 
-def test_bak_created_on_second_save(store, tmp_path):
-    store.upsert_model("DeepSeek", "m-x", {"max_output_tokens": 4321})
-    store.upsert_model("DeepSeek", "m-y", {"max_output_tokens": 4321})
-    baks = list(tmp_path.glob("model_config.json.bak.*"))
-    assert baks, "第二次保存应生成 .bak 备份"
+def test_guess_model_config_neutral_without_caps():
+    """无能力声明时给出中性默认（不做模型名启发）。"""
+    cfg = guess_model_config("some-unknown-model")
+    assert cfg["max_context_tokens"] == 0
+    assert cfg["supports_vision"] is False
+
+
+def test_guess_model_config_inherits_provider_caps():
+    """供应商级显式能力可补足模型能力。"""
+    cfg = guess_model_config("m", {"supports_vision": True, "supports_thinking": True})
+    assert cfg["supports_vision"] is True
+    assert cfg["supports_reasoning"] is True
+
+
+def test_clean_model_config_rejects_unknown_field():
+    with pytest.raises(ModelConfigError):
+        clean_model_config({"nope": 1})
+
+
+def test_clean_model_config_partial_keeps_only_given():
+    out = clean_model_config({"max_context_tokens": 1024}, partial=True)
+    assert out["max_context_tokens"] == 1024
+
+
+def test_clean_model_config_full_fills_blank():
+    out = clean_model_config({"max_context_tokens": 1024}, partial=False)
+    assert "supports_vision" in out and "note" in out

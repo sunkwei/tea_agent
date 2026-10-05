@@ -12,7 +12,7 @@ import threading
 
 logger = logging.getLogger("agent.background")
 
-# M3: 打断模式分析默认配置（可由 config.yaml interruption.* 覆盖）
+# M3: 打断模式分析默认配置（可由 provider.yaml settings.interruption.* 覆盖）
 _INTERRUPT_ANALYZE_INTERVAL_H = 1.0  # 分析周期（小时）
 _INTERRUPT_ANALYZE_MIN_COUNT = 2     # 同一工具打断 ≥ 2 次才沉淀
 _INTERRUPT_SKILL_MIN_COUNT = 3       # 同一工具打断 ≥ 3 次才生成行为指导 skill

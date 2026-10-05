@@ -268,51 +268,81 @@ class TestAgentConfig:
 
 
 class TestLoadSaveConfig:
-    """load_config / save_config 测试"""
+    """load_config / save_config 测试（provider.yaml 唯一事实源）。"""
 
-    def test_load_default_no_file(self, tmp_yaml_config):
-        """无配置文件时返回默认值"""
-        # 临时目录中无 config.yaml，应返回默认配置
-        with pytest.MonkeyPatch.context():
-            # 强制使用临时路径
-            from tea_agent.config import AgentConfig, load_config
-            cfg = load_config(config_path=tmp_yaml_config)  # 文件不存在时返回默认值
-            assert isinstance(cfg, AgentConfig)
-            assert cfg.max_iterations == 200
+    def _use_provider_file(self, tmp_path, monkeypatch, providers):
+        import yaml
 
-    def test_load_and_save_roundtrip(self, tmp_yaml_config):
-        """加载-保存-再加载 一致性"""
+        from tea_agent import provider_store as ps
+
+        path = tmp_path / "provider.yaml"
+        path.write_text(
+            yaml.safe_dump({"version": 1, "providers": providers},
+                           allow_unicode=True, sort_keys=False),
+            encoding="utf-8",
+        )
+        monkeypatch.setenv("TEA_PROVIDER_FILE", str(path))
+        monkeypatch.setattr(ps, "_store", None, raising=False)
+        return path
+
+    def _prov(self):
+        return {"P": {
+            "api_url": "https://api.example.com/v1",
+            "api_key": "sk-p",
+            "default_model": "m1",
+            "models": {"m1": {}},
+            "source": "builtin",
+        }}
+
+    def test_load_default_no_file(self, tmp_path, monkeypatch):
+        """provider.yaml 无提供商时返回代码默认值。"""
+        from tea_agent.config import AgentConfig, load_config
+
+        self._use_provider_file(tmp_path, monkeypatch, {})
+        cfg = load_config()
+        assert isinstance(cfg, AgentConfig)
+        assert cfg.max_iterations == 200
+
+    def test_save_load_roundtrip(self, tmp_path, monkeypatch):
+        """settings + roles 落 provider.yaml 后可完整回读。"""
         from tea_agent.config import AgentConfig, load_config, save_config
+
+        pf = self._use_provider_file(tmp_path, monkeypatch, self._prov())
 
         cfg1 = AgentConfig()
         cfg1.set("max_iterations", 123)
         cfg1.set("keep_turns", 7)
-        cfg1.main_model.api_key = "sk-test"
-        cfg1.main_model.api_url = "http://test/v1"
-        cfg1.main_model.model_name = "test-model"
+        cfg1.main_model.provider = "P"
+        cfg1.main_model.ref_model = "m1"
+        save_config(cfg1)
 
-        # 先确保 yaml 可用
-        save_config(cfg1, config_path=tmp_yaml_config)
+        # 落盘目标即 provider.yaml，且不含任何独立 config.yaml
+        assert not (tmp_path / "config.yaml").exists()
 
-        cfg2 = load_config(config_path=tmp_yaml_config)
+        cfg2 = load_config()
         assert cfg2.max_iterations == 123
         assert cfg2.keep_turns == 7
-        assert cfg2.main_model.api_key == "sk-test"
-        assert cfg2.main_model.model_name == "test-model"
+        assert cfg2.main_model.provider == "P"
+        assert cfg2.main_model.model_name == "m1"
+        assert cfg2.main_model.api_key == "sk-p"
+        assert pf.exists()
 
-    def test_create_default_config(self, tmp_yaml_config):
-        """创建默认配置文件"""
-        from tea_agent.config import create_default_config
-        path = create_default_config(config_path=tmp_yaml_config)
+    def test_save_config_creates_no_yaml_file(self, tmp_path, monkeypatch):
+        """save_config 不再产生任何 config*.yaml 文件。"""
+        from tea_agent.config import AgentConfig, save_config
 
-        assert os.path.exists(path)
-        with open(path, encoding="utf-8") as f:
-            content = f.read()
+        self._use_provider_file(tmp_path, monkeypatch, self._prov())
+        before = set(tmp_path.iterdir())
+        assert save_config(AgentConfig()) != ""
+        created = {f.name for f in set(tmp_path.iterdir()) - before}
+        assert not any(f.startswith("config") and f.endswith((".yaml", ".yml"))
+                       for f in created), created
 
-        assert "main_model:" in content
-        assert "cheap_model:" in content
-        assert "paths:" in content
-        assert "max_iterations: 200" in content
+    def test_create_default_config_removed(self):
+        """create_default_config 已随 config.yaml 一并删除。"""
+        import tea_agent.config as cm
+
+        assert not hasattr(cm, "create_default_config")
 
 
 def test_enable_thinking_parsing():

@@ -64,36 +64,13 @@ class ACPProtocolServer:
         if config_path:
             return config_path
 
+        # config.yaml 已删除：不再派生 config_acp.yaml。
+        # 身份三元组/运行时参数统一来自 provider.yaml；ACP 只需独立会话库，
+        # 用 TEA_DB_PATH 环境变量隔离（见 PathsConfig.resolve）。
         home_dir = Path.home()
-        acp_path = home_dir / ".tea_agent" / "config_acp.yaml"
-        default_path = home_dir / ".tea_agent" / "config.yaml"
-
-        if acp_path.is_file():
-            return str(acp_path)
-
-        if not default_path.is_file():
-            logging.getLogger("acp_server").warning(
-                "No config.yaml found at %s — using fallback", default_path,
-            )
-            return None
-
-        try:
-            shutil.copy2(str(default_path), str(acp_path))
-            import yaml as _yaml
-            with open(acp_path, encoding="utf-8") as f:
-                data = _yaml.safe_load(f) or {}
-            if "paths" not in data or not isinstance(data["paths"], dict):
-                data["paths"] = {}
-            data["paths"]["db_path"] = "chat_acp.db"
-            with open(acp_path, "w", encoding="utf-8") as f:
-                _yaml.dump(data, f, default_flow_style=False, allow_unicode=True, sort_keys=False)
-        except Exception as e:
-            logging.getLogger("acp_server").warning(
-                "Failed to create ACP config: %s", e,
-            )
-            return str(default_path)
-
-        return str(acp_path)
+        os.environ.setdefault(
+            "TEA_DB_PATH", str(home_dir / ".tea_agent" / "chat_acp.db"))
+        return None
 
     def _get_storage(self) -> Storage:
         """Lazy-init storage backend."""

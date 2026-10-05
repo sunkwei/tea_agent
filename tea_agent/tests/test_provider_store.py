@@ -49,21 +49,16 @@ def pstore(tmp_path: pathlib.Path, monkeypatch, agent_dir):
     import tea_agent.provider_store as ps
     monkeypatch.setattr(ps, "_store", None, raising=False)
     s = ps.get_provider_store(f, agent_dir=agent_dir)
+    # config*.yaml 不再派生提供商 → 显式种入 DeepSeek（若干用例曾依赖 config 扫描）
+    s.ensure_provider("DeepSeek", {
+        "api_url": "https://api.deepseek.com",
+        "api_key": DS_MAIN,
+        "default_model": "deepseek-v4-pro",
+        "source": "builtin",
+        "models": ["deepseek-v4-pro", "deepseek-v4-flash", "deepseek-chat"],
+    })
     yield s
     monkeypatch.setattr(ps, "_store", None, raising=False)
-
-
-# ── bootstrap / 迁移 ─────────────────────────────────────
-
-def test_bootstrap_config_profiles_only(pstore):
-    """bootstrap 只保留 config*.yaml 引用的供应商，不预置无 key 内置目录。"""
-    data = pstore.load()
-    provs = data["providers"]
-    assert "DeepSeek" in provs  # config.yaml/config_ds.yaml 引用
-    assert "OpenAI" not in provs  # 未配置的内置候选不再占位
-    # config_ds 的模型并入 DeepSeek（同 url）；key 保留主 config 的（同 url 多 key 保留一个）
-    assert "deepseek-chat" in provs["DeepSeek"]["models"]
-    assert provs["DeepSeek"]["api_key"] == DS_MAIN
 
 
 def test_prune_unconfigured_builtins(pstore):
@@ -129,46 +124,3 @@ def test_resolve_flat_metadata(pstore):
     assert "supports_vision" in r and "supports_reasoning" in r
 
 
-# ── config 引用式加载（TODO[3] 集成验证） ─────────────────
-
-def test_config_reference_load(tmp_path: pathlib.Path, monkeypatch, agent_dir):
-    import tea_agent.config as cfg_mod
-    import tea_agent.provider_store as ps_mod
-
-    pfile = tmp_path / "provider.yaml"
-    monkeypatch.setenv("TEA_PROVIDER_FILE", str(pfile))
-    monkeypatch.setattr(ps_mod, "_store", None, raising=False)
-    ps_mod.migrate_from_configs(config_dir=agent_dir, target=pfile)
-    store = ps_mod.get_provider_store(pfile, agent_dir=agent_dir)
-
-    # 引用式 config：main=provider+model
-    ref_cfg = tmp_path / "config_ref.yaml"
-    ref_cfg.write_text(
-        "main_model:\n"
-        "  provider: DeepSeek\n"
-        "  model: deepseek-v4-flash\n"
-        "cheap_model:\n"
-        "  provider: DeepSeek\n"
-        "  model: deepseek-chat\n",
-        encoding="utf-8")
-    monkeypatch.setattr(cfg_mod, "_active_config_path", None, raising=False)
-    monkeypatch.setattr(cfg_mod, "_last_config_path", None, raising=False)
-
-    import tea_agent.config as C
-    orig = C._resolve_ref_model
-    C._resolve_ref_model = lambda p, m: store.resolve(p, m)
-    try:
-        cfg = C.load_config(str(ref_cfg))
-        assert cfg.main_model.model_name == "deepseek-v4-flash"
-        assert cfg.main_model.api_url == "https://api.deepseek.com"
-        assert cfg.main_model.api_key == DS_MAIN
-        assert cfg.main_model.provider == "DeepSeek"
-        assert cfg.main_model.ref_model == "deepseek-v4-flash"
-        # 保存回写为引用式（不展开密钥）
-        out = tmp_path / "config_out.yaml"
-        C.save_config(cfg, str(out))
-        text = out.read_text(encoding="utf-8")
-        assert "provider: DeepSeek" in text and "model: deepseek-v4-flash" in text
-        assert DS_MAIN not in text  # 密钥不落 config
-    finally:
-        C._resolve_ref_model = orig

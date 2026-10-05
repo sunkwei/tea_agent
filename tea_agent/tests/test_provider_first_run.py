@@ -37,12 +37,18 @@ def _isolate_config(monkeypatch, yaml_path: str | None = None) -> None:
     monkeypatch.setattr(config_mod, "resolve_config_path", lambda p=None: yaml_path)
 
 
-def _use_provider_file(monkeypatch, tmp_path: Path, providers: dict) -> Path:
-    """写 provider.yaml 并让单例单例指向它（env 驱动自动重建）。"""
+def _use_provider_file(monkeypatch, tmp_path: Path, providers: dict,
+                       roles: dict | None = None,
+                       settings: dict | None = None) -> Path:
+    """写 provider.yaml（含可选 roles/settings 段）并让单例指向它。"""
+    data: dict = {"version": 1, "providers": providers}
+    if roles:
+        data["roles"] = roles
+    if settings:
+        data["settings"] = settings
     path = tmp_path / "provider.yaml"
     path.write_text(
-        yaml.safe_dump({"version": 1, "providers": providers},
-                       allow_unicode=True, sort_keys=False),
+        yaml.safe_dump(data, allow_unicode=True, sort_keys=False),
         encoding="utf-8",
     )
     monkeypatch.setenv("TEA_PROVIDER_FILE", str(path))
@@ -108,50 +114,35 @@ def test_first_model_rule_falls_back_to_first_model_key(monkeypatch, tmp_path):
     assert cfg.main_model.ref_model == "first-model"
 
 
-def test_config_main_model_respected_not_overridden(monkeypatch, tmp_path):
-    """config.yaml 提供了有效 main_model → 尊重原值，兜底不覆盖。"""
-    cfg_file = tmp_path / "config.yaml"
-    cfg_file.write_text(
-        yaml.safe_dump({
-            "main_model": {
-                "api_url": "https://from-config/v1",
-                "api_key": "sk-from-config",
-                "model_name": "config-model",
-            },
-        }, allow_unicode=True),
-        encoding="utf-8",
+def test_roles_main_respected_not_overridden(monkeypatch, tmp_path):
+    """provider.yaml roles.main 存在 → 用该绑定，不被「第一个提供商」兜底覆盖。"""
+    _isolate_config(monkeypatch, yaml_path=None)
+    _use_provider_file(
+        monkeypatch, tmp_path,
+        {"P": _prov(["pm"], default="pm", key="sk-p"),
+         "Q": _prov(["qm"], default="qm", key="sk-q")},
+        roles={"main": {"provider": "Q", "model": "qm"}},
     )
-    _isolate_config(monkeypatch, yaml_path=str(cfg_file))
-    _use_provider_file(monkeypatch, tmp_path, {
-        "P": _prov(["pm"], default="pm", key="sk-provider"),
-    })
 
     cfg = config_mod.load_config()
 
-    assert cfg.main_model.model_name == "config-model"
-    assert cfg.main_model.api_key == "sk-from-config"
+    assert cfg.main_model.provider == "Q"
+    assert cfg.main_model.model_name == "qm"
+    assert cfg.main_model.api_key == "sk-q"
 
 
-def test_empty_main_block_falls_back(monkeypatch, tmp_path):
-    """config.yaml 的 main_model 块存在但身份字段全空串 → 视为未配置，兜底接管。"""
-    cfg_file = tmp_path / "config.yaml"
-    cfg_file.write_text(
-        yaml.safe_dump({
-            "main_model": {"api_url": "", "api_key": "", "model_name": ""},
-            "keep_turns": 7,
-        }, allow_unicode=True),
-        encoding="utf-8",
-    )
-    _isolate_config(monkeypatch, yaml_path=str(cfg_file))
-    _use_provider_file(monkeypatch, tmp_path, {
-        "P": _prov(["pm"], default="pm", key="sk-provider"),
-    })
+def test_empty_roles_falls_back_and_settings_applied(monkeypatch, tmp_path):
+    """roles.main 缺失 → 兜底第一个提供商；settings 段的运行时参数生效。"""
+    _isolate_config(monkeypatch, yaml_path=None)
+    _use_provider_file(monkeypatch, tmp_path,
+                       {"P": _prov(["pm"], default="pm")},
+                       settings={"keep_turns": 7})
 
     cfg = config_mod.load_config()
 
     assert cfg.main_model.is_configured
     assert cfg.main_model.model_name == "pm"
-    assert cfg.keep_turns == 7, "非身份配置段仍从 config.yaml 读取"
+    assert cfg.keep_turns == 7, "settings 段应被读取"
 
 
 def test_provider_empty_main_not_configured(monkeypatch, tmp_path):
@@ -317,12 +308,15 @@ def test_agent_load_config_all_empty_raises_value_error(monkeypatch, tmp_path):
         agent._load_config(None)
 
 
-def test_agent_load_config_explicit_missing_file_still_raises():
-    """显式指定的配置文件不存在 → 仍 FileNotFoundError（意图落空必须报错）。"""
+def test_agent_load_config_explicit_path_ignored(monkeypatch, tmp_path):
+    """config.yaml 已删除：显式路径不再报错，一律由 provider.yaml 构建。"""
+    _isolate_config(monkeypatch, yaml_path=None)
+    _use_provider_file(monkeypatch, tmp_path, {"P": _prov(["pm"], default="pm")})
     agent = _bare_agent()
 
-    with pytest.raises(FileNotFoundError):
-        agent._load_config("/nonexistent/config.yaml")
+    cfg = agent._load_config("/nonexistent/config.yaml")
+
+    assert cfg.main_model.model_name == "pm"
 
 
 # ── 5. server.main 启动判定 ────────────────────────────────
@@ -369,9 +363,10 @@ def test_server_main_missing_provider_nontty_starts_with_warning(monkeypatch):
     assert len(calls) == 1, "非交互环境不得因缺 provider.yaml 而拒绝启动"
 
 
-def test_server_main_explicit_missing_config_exits(monkeypatch):
-    """--config 指向不存在文件 → exit(1)，不启动 run_server。"""
-    with pytest.raises(SystemExit) as exc:
-        _run_server_main(monkeypatch, ["--config", "/no/such/config.yaml"], needs=False)
+def test_server_main_deprecated_config_flag_still_starts(monkeypatch, capsys):
+    """--config 已废弃（config.yaml 删除）→ 仅告警，不退出，照常启动。"""
+    calls, _ = _run_server_main(
+        monkeypatch, ["--config", "/no/such/config.yaml"], needs=False)
 
-    assert exc.value.code == 1
+    assert len(calls) == 1, "废弃的 --config 不应阻断启动"
+    assert "deprecated" in capsys.readouterr().out.lower()

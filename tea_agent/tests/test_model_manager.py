@@ -26,11 +26,11 @@ def svc(tmp_path, monkeypatch):
     import tea_agent.model_config as mc_mod
 
     monkeypatch.setenv("TEA_MODEL_CONFIG", str(tmp_path / "model_config.json"))
-    monkeypatch.setattr(mc_mod, "_store", None)
+    import tea_agent.provider_store as ps_mod
+    monkeypatch.setattr(ps_mod, "_store", None)
     # profile 扫描隔离：空目录（无 config_*.yaml）→ store 回退预置注册表
     monkeypatch.setattr(mc_mod, "CONFIG_DIR", tmp_path / "agent")
     # 隔离 provider.yaml（模型属性唯一事实源）：提供 DeepSeek 目录能力供 catalog 回填
-    import tea_agent.provider_store as ps_mod
     import yaml
 
     pfile = tmp_path / "provider.yaml"
@@ -445,16 +445,6 @@ def test_apply_provider_reuses_existing_key(svc, monkeypatch):
     result = svc.apply_provider("DeepSeek", api_key="", role="main")
     assert result["ok"] is True
     assert saved["api_key"] == "sk-existing-key-123"
-
-
-def test_apply_provider_vision_role(svc, monkeypatch):
-    cfg = mm._default_cfg()
-    monkeypatch.setattr(mm, "load_config", lambda path: cfg)
-    monkeypatch.setattr(mm, "save_config", lambda c, p: None)
-    result = svc.apply_provider("DeepSeek", api_key="sk-x", role="vision")
-    assert result["role"] == "vision"
-    assert cfg.vision_model.model_name == "deepseek-chat"
-    assert cfg.vision_model.api_url == "https://api.deepseek.com"
 
 
 # ── 连接测试 ─────────────────────────────────────────────────

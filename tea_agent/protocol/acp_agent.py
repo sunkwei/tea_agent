@@ -199,65 +199,23 @@ class AcpAgent:
     def _ensure_acp_config(config_path: str | None = None) -> str | None:
         """Ensure the ACP-specific config file exists.
 
-        If ``config_path`` is explicitly provided, use it as-is (user override).
-        Otherwise, use ``~/.tea_agent/config_acp.yaml``.  If that file does not
-        exist, copy from ``~/.tea_agent/config.yaml`` and set ``db_path`` to
-        ``chat_acp.db`` so ACP sessions are stored independently.
+        ``config.yaml`` 已删除：不再有可派生的配置文件。ACP 与主进程共用
+        provider.yaml（唯一事实源），仅通过 ``TEA_DB_PATH`` 环境变量把会话库
+        隔离为 ``chat_acp.db``。
 
         Returns:
-            The resolved config path, or ``None`` if no config is available.
+            config_path（用户显式指定时原样返回），否则 None
         """
         if config_path:
             return config_path
 
+        # config.yaml 已删除：不再派生 config_acp.yaml。
+        # 身份三元组/运行时参数统一来自 provider.yaml；ACP 只需独立会话库，
+        # 用 TEA_DB_PATH 环境变量隔离（见 PathsConfig.resolve）。
         home_dir = Path.home()
-        acp_path = home_dir / ".tea_agent" / "config_acp.yaml"
-        default_path = home_dir / ".tea_agent" / "config.yaml"
-
-        if acp_path.is_file():
-            return str(acp_path)
-
-        # Need to create config_acp.yaml from default
-        if not default_path.is_file():
-            logger.warning(
-                "No config.yaml found at %s — ACP will use fallback config",
-                default_path,
-            )
-            return None
-
-        try:
-            shutil.copy2(str(default_path), str(acp_path))
-            logger.info("Copied %s → %s", default_path, acp_path)
-
-            # Modify db_path in the new config
-            import yaml as _yaml
-
-            with open(acp_path, encoding="utf-8") as f:
-                data = _yaml.safe_load(f) or {}
-
-            if "paths" not in data or not isinstance(data["paths"], dict):
-                data["paths"] = {}
-            data["paths"]["db_path"] = "chat_acp.db"
-
-            with open(acp_path, "w", encoding="utf-8") as f:
-                _yaml.dump(
-                    data,
-                    f,
-                    default_flow_style=False,
-                    allow_unicode=True,
-                    sort_keys=False,
-                )
-            logger.info(
-                "ACP config customized: db_path → chat_acp.db"
-            )
-        except Exception as e:
-            logger.warning(
-                "Failed to create ACP config: %s — will use default path",
-                e,
-            )
-            return str(default_path)
-
-        return str(acp_path)
+        os.environ.setdefault(
+            "TEA_DB_PATH", str(home_dir / ".tea_agent" / "chat_acp.db"))
+        return None
 
     # ── public API ─────────────────────────────────────────────────────────
 

@@ -52,7 +52,7 @@ def test_analyze_no_vision_model():
         from tea_agent.toolkit.toolkit_vision_analyze import toolkit_vision_analyze
         result = toolkit_vision_analyze(image="/tmp/x.png")
         assert result["ok"] is False
-        assert "未配置视觉模型" in result["error"]
+        assert "无可用视觉模型" in result["error"]
 
 
 def test_analyze_success():
@@ -186,14 +186,14 @@ def test_analyze_detail_invalid_omitted():
 # ── 韧性回退（首选视觉模型不可用时改用主模型）──
 
 
-def _cfg_with_main(model_name: str, supports_vision: bool = True):
-    """构造带 main_model 的配置 mock。"""
-    cfg = MagicMock()
-    cfg.main_model.supports_vision = supports_vision
-    cfg.main_model.is_configured = True
-    cfg.main_model.model_name = model_name
-    cfg.main_model.options = {}
-    return cfg
+def _cands(*names):
+    """构造 _vision_candidates 返回值（已配置且支持视觉的模型列表）。"""
+    from types import SimpleNamespace
+
+    return [
+        SimpleNamespace(model_name=n, options={}, is_configured=True, supports_vision=True)
+        for n in names
+    ]
 
 
 def test_fallback_to_main_model_when_vision_fails():
@@ -213,8 +213,8 @@ def test_fallback_to_main_model_when_vision_fails():
                return_value=(primary, "primary-vision", {})):
         with patch("tea_agent.toolkit.toolkit_vision_analyze._client_for",
                    return_value=fallback):
-            with patch("tea_agent.config.get_config",
-                       return_value=_cfg_with_main("main-vision-model")):
+            with patch("tea_agent.toolkit.toolkit_vision_analyze._vision_candidates",
+                       return_value=_cands("primary-vision", "main-vision-model")):
                 from tea_agent.toolkit.toolkit_vision_analyze import toolkit_vision_analyze
                 result = toolkit_vision_analyze(image="data:image/png;base64,AAAA")
                 assert result["ok"] is True
@@ -241,8 +241,8 @@ def test_fallback_on_empty_output():
                return_value=(primary, "primary-vision", {})):
         with patch("tea_agent.toolkit.toolkit_vision_analyze._client_for",
                    return_value=fallback):
-            with patch("tea_agent.config.get_config",
-                       return_value=_cfg_with_main("main-vision-model")):
+            with patch("tea_agent.toolkit.toolkit_vision_analyze._vision_candidates",
+                       return_value=_cands("primary-vision", "main-vision-model")):
                 from tea_agent.toolkit.toolkit_vision_analyze import toolkit_vision_analyze
                 result = toolkit_vision_analyze(image="data:image/png;base64,AAAA")
                 assert result["ok"] is True
@@ -256,8 +256,8 @@ def test_no_fallback_when_same_model():
 
     with patch("tea_agent.toolkit.toolkit_vision_analyze._get_vision_client",
                return_value=(primary, "same-model", {})):
-        with patch("tea_agent.config.get_config",
-                   return_value=_cfg_with_main("same-model")):
+        with patch("tea_agent.toolkit.toolkit_vision_analyze._vision_candidates",
+                   return_value=_cands("same-model")):
             from tea_agent.toolkit.toolkit_vision_analyze import toolkit_vision_analyze
             result = toolkit_vision_analyze(image="data:image/png;base64,AAAA")
             assert result["ok"] is False
@@ -272,9 +272,9 @@ def test_no_fallback_when_main_lacks_vision():
 
     with patch("tea_agent.toolkit.toolkit_vision_analyze._get_vision_client",
                return_value=(primary, "primary-vision", {})):
-        with patch("tea_agent.config.get_config",
-                   return_value=_cfg_with_main("text-only", supports_vision=False)):
+        with patch("tea_agent.toolkit.toolkit_vision_analyze._vision_candidates",
+                   return_value=_cands("primary-vision")):
             from tea_agent.toolkit.toolkit_vision_analyze import toolkit_vision_analyze
             result = toolkit_vision_analyze(image="data:image/png;base64,AAAA")
             assert result["ok"] is False
-            assert "未配置视觉模型" not in result["error"]
+            assert "视觉模型调用失败" in result["error"]

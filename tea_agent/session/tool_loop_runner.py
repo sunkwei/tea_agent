@@ -327,7 +327,7 @@ def _apply_context_overflow_recovery(session, info: dict) -> None:
     自愈步骤（积极但全部隔离、不阻塞重试）：
 
     1. 修正窗口：session context + 内存 config（记录日志 + 提示用户把
-       修正持久化到 config.yaml——自动改用户文件过于激进，不做）；
+       修正持久化到 provider.yaml settings——自动改用户文件过于激进，不做）；
     2. 按修正后窗口重新求解 (input_budget, output_cap)；错误揭示的真实
        输入规模若大于求解预算 → 取其一半作为一次性紧急输入预算
        （已知溢出的输入直接腰斩，保证落回安全线）；
@@ -347,7 +347,7 @@ def _apply_context_overflow_recovery(session, info: dict) -> None:
                 logger.warning(
                     f"A8 溢出自愈: 模型真实窗口 {max_ctx_reported} < 配置的 "
                     f"max_context_tokens {configured}（误配/未配会使裁剪链失效），"
-                    f"本会话已自动修正，请同步更新 config.yaml"
+                    f"本会话已自动修正，请同步更新 provider.yaml settings"
                 )
             else:
                 logger.warning(

@@ -5,9 +5,6 @@ import time
 
 from tea_agent.config import REASONING_EFFORT_VALUES, clamp_reasoning_effort
 from tea_agent.session.context import SessionComponent
-from tea_agent.session.history_builder import (
-    messages_contain_images,
-)
 
 logger = logging.getLogger("session")
 
@@ -136,7 +133,7 @@ class APIComponent(SessionComponent):
         策略（从快到慢）：
         1. 模型名匹配：通过名称模式推测能力（无需 API 调用）
         2. API探测：如果名称匹配不可靠，发送 probe 请求确认
-        3. 保存结果：探测到的配置自动保存到 config.yaml
+        3. 保存结果：探测到的配置自动保存到 provider.yaml settings
 
         Args:
             is_cheap: True=检测便宜模型，False=检测主模型
@@ -352,31 +349,6 @@ class APIComponent(SessionComponent):
     ):
         target_client = client or self.ctx.client
         target_model = model or self.ctx.model
-
-        # 请求级视觉自动切换：请求消息含图片（当前轮或历史轮）→ 使用视觉模型。
-        # 兜底 chat_stream 的回合级切换，覆盖「上一轮发图、本轮纯文本追问」等场景，
-        # 避免主模型（无视觉能力）收到 image_url 内容导致 API 报错或图片被忽略。
-        if client is None and model is None and not is_cheap:
-            vision_client = getattr(self.ctx, "vision_client", None)
-            vision_model = getattr(self.ctx, "vision_model", "") or ""
-            if vision_client and vision_model and messages_contain_images(api_messages):
-                target_client = vision_client
-                target_model = vision_model
-                logger.info(f"👁️ 请求级视觉切换: {vision_model}")
-                # 视觉模型必须使用自己的推理参数（max_tokens/temperature/top_p），
-                # 不能继承主模型的配置。vision 未配置时 get_effective_params 回退主模型。
-                try:
-                    from tea_agent.config import get_config
-
-                    vp = get_config().get_effective_params(
-                        "vision", getattr(self.ctx, "_current_mode", "mixed")
-                    )
-                    if vp:
-                        temperature = vp.get("temperature", temperature)
-                        max_tokens = vp.get("max_tokens", max_tokens)
-                        top_p = vp.get("top_p", top_p)
-                except Exception:
-                    pass
 
         kwargs = {
             "model": target_model,

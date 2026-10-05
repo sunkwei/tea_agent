@@ -6,19 +6,20 @@
 结果写入 provider.yaml（密钥与模型能力的唯一事实源）。`config.yaml` **不再是启动前提**，
 缺失时由 `load_config` 兜底 provider.yaml 首个提供商的第一个模型。
 
-**兼容路径（legacy）**：``run_setup_wizard()`` 生成内嵌完整模型块的 config.yaml，
-保留给显式 `--config` 目标档位使用；新流程不再依赖它。
+``config.yaml`` 已**彻底删除**：身份三元组、逐模型能力与运行时参数全部落在
+``provider.yaml``（``roles`` / ``settings`` 段）。``run_setup_wizard()`` 保留为
+兼容别名，直接委托 ``run_provider_setup_wizard()``。
 
 特性：
 - 复用 providers.py 的 Provider 注册表（50+ 模型服务商）
 - 常用 Provider 快捷选择 + 自定义 URL 兜底
-- provider 引导可循环配置多家服务商；可选配置 cheap_model / vision_model 角色
+- provider 引导可循环配置多家服务商；可选配置 cheap_model 角色
 - 纯标准库，无第三方依赖
 
 独立运行::
 
     python -m tea_agent.setup_wizard --provider   # 写 provider.yaml（推荐）
-    python -m tea_agent.setup_wizard [--config PATH]   # 写 config.yaml（legacy）
+    python -m tea_agent.setup_wizard              # 同上（兼容入口）
 """
 
 from __future__ import annotations
@@ -27,11 +28,10 @@ import sys
 from collections.abc import Callable
 from pathlib import Path
 
-from tea_agent.config import AgentConfig, save_config
 from tea_agent.providers import get_provider
 
 __all__ = [
-    "run_setup_wizard",
+    "run_setup_wizard",   # 兼容别名 → run_provider_setup_wizard
     "run_provider_setup_wizard",
     "needs_provider_setup",
     "QUICK_PROVIDERS",
@@ -103,148 +103,16 @@ def _ask(prompt: str, default: str = "", required: bool = False,
         return raw
 
 
-def _collect_answers(input_fn: Callable[[str], str]) -> dict:
-    """交互式收集用户输入，返回答案字典。"""
-    print("第 1 步：选择主模型服务商\n")
-
-    options = QUICK_PROVIDERS + ["custom"]
-    for i, name in enumerate(options, 1):
-        if name == "custom":
-            print(f"  {i:>2}. ✍️  自定义（手动输入 URL / 模型名）")
-        else:
-            p = get_provider(name)
-            print(f"  {i:>2}. {name:<12} {p['description']}")
-    print()
-
-    # 选择服务商（编号）
-    while True:
-        raw = _ask(f"请选择 [1-{len(options)}]", default="1", input_fn=input_fn)
-        try:
-            idx = int(raw)
-            if 1 <= idx <= len(options):
-                break
-        except ValueError:
-            pass
-        print("  ⚠ 请输入有效的选项编号")
-    provider_name = options[idx - 1]
-
-    if provider_name == "custom":
-        api_url = _ask(
-            "模型 API URL",
-            required=True,
-            input_fn=input_fn,
-            validate=lambda u: (
-                None if u.startswith(("http://", "https://"))
-                else "URL 需以 http:// 或 https:// 开头"
-            ),
-        )
-        model_name = _ask("模型名称", required=True, input_fn=input_fn)
-        supports_vision = False
-    else:
-        provider = get_provider(provider_name)
-        api_url = provider["api_url"]
-        model_name = _ask("模型名称", default=provider["default_model"],
-                          input_fn=input_fn)
-        supports_vision = provider.get("supports_vision", False)
-
-    api_key = _ask("API Key", required=True, input_fn=input_fn)
-
-    # ── 便宜模型（可选，用于摘要/记忆等轻量任务） ──
-    print("\n第 2 步：便宜模型（可选，用于摘要/记忆等轻量任务，省 token）")
-    use_cheap = _ask("是否单独配置便宜模型？[y/N]", default="n", input_fn=input_fn)
-    cheap: dict = {}
-    if use_cheap.lower() in ("y", "yes", "是"):
-        cp_name = _ask("便宜模型服务商（回车=与主模型相同）",
-                       default="" if provider_name == "custom" else provider_name,
-                       input_fn=input_fn)
-        cp = get_provider(cp_name) if cp_name else (
-            None if provider_name == "custom" else get_provider(provider_name)
-        )
-        if cp:
-            cheap = {
-                "api_url": cp["api_url"],
-                "model_name": _ask("便宜模型名称", default=cp["default_model"],
-                                   input_fn=input_fn),
-            }
-        else:
-            cheap = {
-                "api_url": _ask("便宜模型 API URL", required=True, input_fn=input_fn),
-                "model_name": _ask("便宜模型名称", required=True, input_fn=input_fn),
-            }
-        cheap["api_key"] = _ask("便宜模型 API Key（回车复用主模型 Key）",
-                                default=api_key, input_fn=input_fn)
-        cheap["temperature"] = 0.3
-
-    # ── 视觉模型（可选） ──
-    print("\n第 3 步：视觉模型（可选，会话含图片时自动使用）")
-    use_vision = _ask("是否配置视觉模型？[y/N]", default="n", input_fn=input_fn)
-    vision: dict = {}
-    if use_vision.lower() in ("y", "yes", "是"):
-        vp_name = _ask("视觉模型服务商（回车=与主模型相同）",
-                       default="" if provider_name == "custom" else provider_name,
-                       input_fn=input_fn)
-        vp = get_provider(vp_name) if vp_name else (
-            None if provider_name == "custom" else get_provider(provider_name)
-        )
-        if vp:
-            vision = {
-                "api_url": vp["api_url"],
-                "model_name": _ask("视觉模型名称", default=vp["default_model"],
-                                   input_fn=input_fn),
-            }
-        else:
-            vision = {
-                "api_url": _ask("视觉模型 API URL", required=True, input_fn=input_fn),
-                "model_name": _ask("视觉模型名称", required=True, input_fn=input_fn),
-            }
-        vision["api_key"] = _ask("视觉模型 API Key（回车复用主模型 Key）",
-                                 default=api_key, input_fn=input_fn)
-
-    return {
-        "provider_name": provider_name,
-        "api_url": api_url,
-        "api_key": api_key,
-        "model_name": model_name,
-        "supports_vision": supports_vision,
-        "cheap": cheap,
-        "vision": vision,
-    }
 
 
-def _build_config(answers: dict) -> AgentConfig:
-    """根据向导答案构建 AgentConfig 实例。"""
-    cfg = AgentConfig()
-    cfg.main_model.api_url = answers["api_url"]
-    cfg.main_model.api_key = answers["api_key"]
-    cfg.main_model.model_name = answers["model_name"]
-    cfg.main_model.options["supports_vision"] = (
-        "true" if answers.get("supports_vision") else "false"
-    )
-    cfg.main_model.options["supports_reasoning"] = "false"
-
-    cheap = answers.get("cheap") or {}
-    if cheap.get("api_url") and cheap.get("model_name"):
-        cfg.cheap_model.api_url = cheap["api_url"]
-        cfg.cheap_model.model_name = cheap["model_name"]
-        cfg.cheap_model.api_key = cheap.get("api_key") or answers["api_key"]
-        cfg.cheap_model.temperature = float(cheap.get("temperature", 0.3))
-
-    vision = answers.get("vision") or {}
-    if vision.get("api_url") and vision.get("model_name"):
-        cfg.vision_model.api_url = vision["api_url"]
-        cfg.vision_model.model_name = vision["model_name"]
-        cfg.vision_model.api_key = vision.get("api_key") or answers["api_key"]
-        cfg.vision_model.options["supports_vision"] = "true"
-
-    return cfg
 
 
 def needs_provider_setup(store=None) -> bool:
     """是否需要首启提供商引导：provider.yaml 缺失（bootstrap 迁移后）providers 仍为空。
 
     判定语义：
-      - 文件不存在 → store.load() 触发 bootstrap（config*.yaml/custom_providers.yaml
-        迁移；无任何迁移源则创建空文件）
+      - 文件不存在 → store.load() 触发 bootstrap（仅迁移 custom_providers.yaml；
+        无迁移源则创建空文件）
       - 迁移后 providers 非空 → 老用户已有真实配置 → 不需要引导，直接启动
       - providers 为空（全新安装 / 被清空）→ 需要引导
 
@@ -389,43 +257,22 @@ def run_provider_setup_wizard(input_fn: Callable[[str], str] | None = None,
 
 def run_setup_wizard(config_path: str | None = None,
                      input_fn: Callable[[str], str] | None = None) -> str | None:
-    """运行首次配置向导（legacy：生成内嵌完整模型块的 config.yaml）。
+    """兼容别名：委托 ``run_provider_setup_wizard()``（写 provider.yaml）。
 
-    首启请优先用 ``run_provider_setup_wizard()``（写 provider.yaml）。本函数仅在
-    需要产出/覆盖某个具体 config.yaml 档位时使用。
+    config.yaml 已彻底删除，本函数不再生成任何配置文件。
 
     Args:
-        config_path: 目标配置文件路径，默认 ~/.tea_agent/config.yaml
-        input_fn: 输入函数（测试注入用）；None 时使用内置 input()
+        config_path: 忽略（历史签名兼容）
+        input_fn: 输入函数（测试注入用）
 
     Returns:
-        成功保存的配置文件路径；用户取消返回 None
+        成功时返回 provider.yaml 路径；用户取消返回 None
     """
-    if input_fn is None:
-        input_fn = input
+    from tea_agent.provider_store import get_provider_store
 
-    target = config_path or str(Path.home() / ".tea_agent" / "config.yaml")
-    print(BANNER)
-
-    try:
-        answers = _collect_answers(input_fn)
-    except WizardCancelled:
-        print("\n✋ 向导已取消，未生成配置文件。")
+    if not run_provider_setup_wizard(input_fn=input_fn):
         return None
-
-    cfg = _build_config(answers)
-    Path(target).parent.mkdir(parents=True, exist_ok=True)
-    saved = save_config(cfg, target)
-
-    print("\n✅ 配置已保存！")
-    print(f"   配置文件: {saved}")
-    print(f"   主模型:   {cfg.main_model.model_name} @ {cfg.main_model.api_url}")
-    if cfg.cheap_model.is_configured:
-        print(f"   便宜模型: {cfg.cheap_model.model_name}")
-    if cfg.vision_model.is_configured:
-        print(f"   视觉模型: {cfg.vision_model.model_name}")
-    print("\n💡 提示：可随时编辑该文件修改配置，或删除后重新运行向导。")
-    return saved
+    return str(get_provider_store().file_path)
 
 
 def main() -> None:
@@ -434,13 +281,11 @@ def main() -> None:
 
     parser = argparse.ArgumentParser(description="Tea Agent 配置向导")
     parser.add_argument("--config", type=str, default=None,
-                        help="目标配置文件路径（默认 ~/.tea_agent/config.yaml）")
+                        help="已废弃（config.yaml 已删除，仅保留签名兼容）")
     parser.add_argument("--provider", action="store_true",
-                        help="提供商引导（写 provider.yaml，身份三元组唯一事实源）")
+                        help="提供商引导（写 provider.yaml，唯一事实源）")
     args = parser.parse_args()
-    if args.provider:
-        sys.exit(0 if run_provider_setup_wizard() else 1)
-    saved = run_setup_wizard(args.config)
+    saved = run_setup_wizard()
     sys.exit(0 if saved else 1)
 
 

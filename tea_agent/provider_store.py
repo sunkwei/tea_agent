@@ -1,11 +1,8 @@
 """Provider Catalog — ~/.tea_agent/provider.yaml 唯一事实源
 
-Tea Agent 供应商→模型 目录的统一持久化层。将原先分散的
-  - providers.py 内置静态注册表
-  - ~/.tea_agent/custom_providers.yaml（自定义供应商）
-  - ~/.tea_agent/model_config.json（逐模型能力/roles）
-  - config*.yaml 内嵌完整模型块
-收敛为单一 YAML 文件；config*.yaml 仅以 p_name + m_name 引用本文件条目。
+Tea Agent 供应商→模型 目录的统一持久化层。所有供应商、逐模型能力与
+角色绑定（main/cheap）**只存本文件**，不再有 model_config.json 等第二份存储；
+config*.yaml 也不再是提供商来源（仅作运行期角色引用的可选载体）。
 
 provider.yaml schema (v1):
     version: 1
@@ -58,7 +55,7 @@ CONFIG_DIR = Path.home() / ".tea_agent"
 DEFAULT_PROVIDER_FILE = CONFIG_DIR / "provider.yaml"
 SCHEMA_VERSION = 1
 
-# 模型能力字段（与 model_config.json / ModelConfig.options 对齐）
+# 模型能力字段（与 config.ModelConfig.options 对齐）
 _INT_FIELDS = {"max_context_tokens", "max_output_tokens"}
 _BOOL_FIELDS = {"supports_vision", "supports_reasoning", "supports_tools"}
 # 采样默认值：配置对话框可改并写回（0.0 是有效值，不可当"空"过滤）
@@ -192,7 +189,7 @@ class ProviderStore:
     def __init__(self, path: str | Path | None = None,
                  agent_dir: str | Path | None = None):
         self._path = _resolve_path(path)
-        # config*.yaml 扫描目录（~/.tea_agent）；测试可注入 tmp 隔离
+        # 遗留迁移源所在目录（~/.tea_agent）；测试可注入 tmp 隔离
         self.agent_dir = Path(agent_dir) if agent_dir else None
         self._lock = threading.RLock()
         self._data: dict | None = None
@@ -327,9 +324,8 @@ class ProviderStore:
     def _bootstrap(self) -> dict:
         """首启 bootstrap：仅保留真实配置过的供应商，不预置无 key 内置目录。
 
-        数据源：custom_providers.yaml（带 key 的自定义）⊕ 既有 config*.yaml 引用的供应商。
-        内置静态目录仅作命名匹配（config api_url 命中内置端点 → 用内置 p_name）与
-        能力速查（guess_model_cfg 引用 model_config 速查表），绝不整体写入 provider.yaml。
+        数据源（仅在 provider.yaml 缺失时一次性迁移）：custom_providers.yaml。
+        内置静态目录仅作命名匹配与能力速查，绝不整体写入 provider.yaml。
         """
         data: dict[str, dict] = {}
         # 1) 旧 custom_providers.yaml（含 api_key 时一并并入）
@@ -342,27 +338,9 @@ class ProviderStore:
                         self._merge_provider(data, name, self._convert_custom(info), source="custom")
         except Exception as e:
             logger.debug("custom_providers.yaml merge skipped: %s", e)
-        # 2) 既有 config*.yaml 供应商信息（api_url/api_key/模型）——核心来源
-        self._merge_config_profiles(data)
-        # 3) 旧 model_config.json 逐模型能力（覆盖启发式默认）
-        try:
-            mc = self._cfg_dir() / "model_config.json"
-            if mc.exists():
-                import json
-
-                raw = json.loads(mc.read_text(encoding="utf-8")) or {}
-                for name, p in (raw.get("providers") or {}).items():
-                    target = self._find_provider(data, name) or self._find_by_url(data, p.get("api_url", ""))
-                    if target is None:
-                        continue
-                    for mid, mcfg in (p.get("models") or {}).items():
-                        entry = data[target]["models"].setdefault(mid, guess_model_cfg(mid))
-                        for k in MODEL_FIELDS:
-                            if k in mcfg and mcfg.get(k) is not None:
-                                entry[k] = mcfg[k]
-        except Exception as e:
-            logger.debug("model_config.json merge skipped: %s", e)
-        return {"version": SCHEMA_VERSION, "providers": data}
+        # config*.yaml 扫描与 model_config.json 合并均已停用：
+        # provider.yaml 是所有供应商/模型/角色信息的唯一事实源。
+        return {"version": SCHEMA_VERSION, "providers": data, "roles": {}}
 
     @staticmethod
     def _convert_custom(info: dict) -> dict:
@@ -397,152 +375,7 @@ class ProviderStore:
             p["models"][p["default_model"]] = guess_model_cfg(p["default_model"])
         return p
 
-    def _merge_config_profiles(self, data: dict[str, dict]) -> None:
-        """搜集 config*.yaml 的 main/cheap/vision 供应商信息并入目录。
-
-        同一 api_url 出现多个不同 api_key 时全部保留（config.yaml 主模型 key
-        优先排首 = 主 key）；模型合并去重；无法按 url 归属内置的（自定义网关）
-        以 profile 名为 p_name 新增。
-        """
-        base = self._cfg_dir()
-        try:
-            files = sorted(list(base.glob("config*.yaml")) + list(base.glob("config*.yml")))
-        except OSError:
-            return
-
-        def _push_key(store: dict[str, list[str]], url: str, key: str, primary: bool = False) -> None:
-            if not url or not key:
-                return
-            keys = store.setdefault(url, [])
-            if key in keys:
-                return
-            if primary:
-                keys.insert(0, key)
-            else:
-                keys.append(key)
-
-        # 第一遍：统计 url → 全部 key（有序；config.yaml 主模型 key 置首）
-        url_keys: dict[str, list[str]] = {}
-        for f in files:
-            try:
-                raw = yaml.safe_load(f.read_text(encoding="utf-8")) or {}
-            except Exception:
-                continue
-            if not isinstance(raw, dict):
-                continue
-            for role in ("main_model", "cheap_model", "vision_model"):
-                blk = raw.get(role)
-                if not isinstance(blk, dict):
-                    continue
-                url = str(blk.get("api_url") or "").strip().rstrip("/").lower()
-                key = str(blk.get("api_key") or "").strip()
-                if not url:
-                    continue
-                # 未显式区分 provider 时，任何 role 的 url+key 都纳入该 url 的 key 池
-                _push_key(url_keys, url, key, primary=(f.name == "config.yaml" and role == "main_model"))
-
-        # 第二遍：按文件合并
-        for f in files:
-            try:
-                raw = yaml.safe_load(f.read_text(encoding="utf-8")) or {}
-            except Exception:
-                continue
-            if not isinstance(raw, dict):
-                continue
-            stem = f.stem
-            profile_name = "default" if stem == "config" else (
-                stem[len("config_"):] if stem.startswith("config_") else stem
-            )
-            found = False
-            for role in ("main_model", "cheap_model", "vision_model"):
-                block = raw.get(role)
-                if not isinstance(block, dict):
-                    continue
-                url = str(block.get("api_url") or "").strip()
-                model = str(block.get("model_name") or "").strip()
-                key = str(block.get("api_key") or "").strip()
-                if not url:
-                    continue
-                pname = self._find_by_url(data, url) or self._builtin_name_for_url(url)
-                if pname is None:
-                    pname = profile_name
-                opts_block = block.get("options")
-                if not isinstance(opts_block, dict):
-                    opts_block = {}
-                p = data.setdefault(pname, {
-                    "api_url": url,
-                    "api_key": "",
-                    "default_model": model,
-                    "description": f"profile · {f.name}",
-                    "supports_vision": bool(opts_block.get("supports_vision", False)),
-                    "supports_thinking": bool(opts_block.get("supports_reasoning", False)),
-                    "source": "builtin" if pname in self._builtin_registry() else "config",
-                    "models": {},
-                })
-                p["api_url"] = url
-                # 多 key：全量写入该 url 的 key 池（已含主 key 置首）
-                all_keys = url_keys.get(url.rstrip("/").lower(), [])
-                if all_keys:
-                    p["api_keys"] = list(all_keys)
-                    p["api_key"] = all_keys[0]
-                elif key and not p.get("api_key"):
-                    p["api_key"] = key
-                if model:
-                    self._ensure_model_entry(data, pname, model, block)
-                found = True
-            if not found:
-                # 引用式 config（provider/model 字段）也尝试补全默认模型
-                self._ensure_ref_model(data, f)
-        return
-
-    def _ensure_ref_model(self, data: dict, f: Path) -> None:
-        """引用式 config：main_model: {provider, model} → provider.yaml 目录补齐模型。"""
-        try:
-            raw = yaml.safe_load(f.read_text(encoding="utf-8")) or {}
-        except Exception:
-            return
-        if not isinstance(raw, dict):
-            return
-        mb = raw.get("main_model")
-        if not isinstance(mb, dict):
-            return
-        pname = str(mb.get("provider") or "").strip()
-        model = str(mb.get("model") or mb.get("model_name") or "").strip()
-        if not pname or not model:
-            return
-        p = data.setdefault(pname, {
-            "api_url": str(mb.get("api_url") or ""),
-            "api_key": str(mb.get("api_key") or ""),
-            "default_model": model,
-            "description": f"profile · {f.name}",
-            "source": "custom", "models": {},
-        })
-        if model not in p["models"]:
-            p["models"][model] = guess_model_cfg(model)
-
     @staticmethod
-    def _ensure_model_entry(data: dict, pname: str, model: str, block: dict) -> None:
-        p = data.get(pname) or {}
-        m = p.setdefault("models", {}).setdefault(model, guess_model_cfg(model))
-        opts = block.get("options") if isinstance(block, dict) else None
-        if isinstance(opts, dict):
-            if opts.get("supports_vision") is not None:
-                m["supports_vision"] = bool(opts["supports_vision"])
-            if opts.get("supports_reasoning") is not None:
-                m["supports_reasoning"] = bool(opts["supports_reasoning"])
-        if block.get("max_tokens"):
-            try:
-                m["max_output_tokens"] = int(block["max_tokens"])
-            except (TypeError, ValueError) as e:
-                logger.debug("provider_store.py._ensure_model_entry: (TypeError, ValueError) 已忽略: %s", e)
-        if block.get("max_context_tokens"):
-            try:
-                m["max_context_tokens"] = int(block["max_context_tokens"])
-            except (TypeError, ValueError) as e:
-                logger.debug("provider_store.py._ensure_model_entry: (TypeError, ValueError) 已忽略: %s", e)
-        if block.get("reasoning_effort"):
-            m["reasoning_effort"] = str(block["reasoning_effort"])
-
     @staticmethod
     def _builtin_name_for_url(url: str) -> str | None:
         try:
@@ -634,6 +467,14 @@ class ProviderStore:
             })
         return out
 
+    def provider_name_for_url(self, api_url: str) -> str:
+        """按 api_url 反查供应商名（供内嵌式配置回写 roles 时补齐绑定）。
+
+        Returns:
+            命中的供应商名；未命中返回空串
+        """
+        return self._find_by_url(self.load().get("providers", {}), api_url or "") or ""
+
     def get_provider(self, name: str) -> dict | None:
         """按名取供应商原始数据（含真实 api_key，仅内部使用）。"""
         data = self.load().get("providers", {})
@@ -710,18 +551,21 @@ class ProviderStore:
             p = {"source": "custom", "models": {}}
             providers[key] = p
         p.update(_clean_provider(meta))
-        # models: 传入即整体替换（调用方负责合并），否则保留
+        # models: 传入 id 列表时**合并**（既有富条目优先保留，仅缺失项补启发式默认）；
+        # 传入 dict 条目时按条目覆盖。纯 id 列表整体替换会抹掉 provider.yaml 里
+        # 已配置的逐模型能力/窗口（ensure_provider 传的正是 get_provider 的 id 列表）。
         if isinstance(meta.get("models"), list):
-            models_new = {}
+            existing = p.get("models") if isinstance(p.get("models"), dict) else {}
+            models_new: dict = {}
             for m in meta["models"]:
                 if isinstance(m, str) and m.strip():
-                    models_new[m.strip()] = guess_model_cfg(m.strip())
+                    mid = m.strip()
+                    models_new[mid] = existing.get(mid) or guess_model_cfg(mid)
                 elif isinstance(m, dict) and m.get("id"):
                     mid = str(m["id"]).strip()
-                    if not mid:
-                        continue
-                    models_new[mid] = _clean_model_entry(m)
-            p["models"] = models_new or {p.get("default_model", ""): guess_model_cfg(p.get("default_model", ""))} if p.get("default_model") else {}
+                    if mid:
+                        models_new[mid] = _clean_model_entry(m)
+            p["models"] = models_new
         if p.get("default_model") and p["default_model"] not in p.setdefault("models", {}):
             p["models"][p["default_model"]] = guess_model_cfg(p["default_model"])
         self.save()
@@ -737,8 +581,18 @@ class ProviderStore:
         self.save()
         return True
 
-    def upsert_model(self, provider: str, model: str, config: dict | None = None) -> dict:
-        """新增/更新模型条目（config 缺省启发式默认，仅合并白名单字段）。"""
+    def upsert_model(self, provider: str, model: str, config: dict | None = None,
+                     strict: bool = False) -> dict:
+        """新增/更新模型条目（config 缺省启发式默认，仅合并白名单字段）。
+
+        strict=True 时拒绝含未知字段的 config（面板 PUT 用），避免用户以为
+        写进去了、实则被静默丢弃 —— 旧实现直接抛错，此处保留该契约。
+        """
+        if strict and config:
+            unknown = set(config) - MODEL_FIELDS
+            if unknown:
+                raise ProviderStoreError(
+                    f"unknown config field(s): {sorted(unknown)}", "BAD_REQUEST", 400)
         model = (model or "").strip()
         provider = (provider or "").strip()
         if not provider or not model:
@@ -963,16 +817,13 @@ class ProviderStore:
         return {"ok": True, "latency_ms": latency_ms, "model_reported": reported}
 
 
-
     # ── 清理：剔除未配置的内置占位 ───────────────────────────
 
     def prune_unconfigured(self, keep_models: bool = True) -> dict:
         """删除「无 api_key 且非 config/custom 来源」的内置占位条目。
 
-        用户诉求：provider.yaml 只保留真实配置过的供应商（来自 config*.yaml /
-        custom_providers.yaml / 手动填入过 key 的），不要把 providers.py 静态目录
-        里没有 key 的 27 家候选全部占位。config 文件引用的内置端点（如 DeepSeek）
-        因已并入 api_key 而保留；纯参考候选（OpenAI/Anthropic/... 无 key）被清除。
+        用户诉求：provider.yaml 只保留真实配置过的供应商（手动填入过 key 的），
+        不要把 providers.py 静态目录里没有 key 的候选全部占位。
 
         Args:
             keep_models: 是否同时清理仅存在于被删供应商下的孤儿模型（默认 True）
@@ -995,56 +846,127 @@ class ProviderStore:
             logger.info("pruned unconfigured builtin placeholders: %s", removed)
         return {"removed": removed}
 
-# ── 迁移入口（config*.yaml 供应商信息 → provider.yaml） ──────
+    # ── 运行时参数（settings 段）— 取代已删除的 config.yaml ────
 
-def migrate_from_configs(config_dir: str | Path | None = None,
-                         target: str | Path | None = None) -> dict:
-    """把既有 config*.yaml 的供应商信息（api_url/api_key/模型）写入 provider.yaml。
+    def get_settings(self) -> dict:
+        """运行时参数（agent 行为调参）。原 config.yaml 的顶层标量字段。
 
-    供「配置迁移」入口与首次 bootstrap 复用。重复执行幂等（同 url 多 key 保留一个，
-    以 config.yaml 主模型 key 优先；模型目录合并去重）。
+        config.yaml 已删除：运行时参数与 roles 一并存 provider.yaml，
+        使「一个用户级配置文件」成为唯一事实源。
+        """
+        return dict(self.load().get("settings") or {})
 
-    Args:
-        config_dir: config*.yaml 所在目录，默认 ~/.tea_agent
-        target: 目标 provider.yaml 路径，默认 ~/.tea_agent/provider.yaml
+    def update_settings(self, patch: dict) -> dict:
+        """合并写入运行时参数（只覆盖 patch 中出现的键）。"""
+        patch = {k: v for k, v in dict(patch or {}).items() if k != "paths"}
+        if not patch:
+            return self.get_settings()
+        data = self.load()
+        cur = data.get("settings")
+        if not isinstance(cur, dict):
+            cur = {}
+            data["settings"] = cur
+        cur.update(patch)
+        self.save()
+        return dict(cur)
 
-    Returns:
-        {"ok": True, "providers": N, "models": N, "profiles_scanned": N, "file": ...}
-    """
-    store = get_provider_store(target, agent_dir=config_dir)
-    base = Path(config_dir) if config_dir else store._cfg_dir()
-    store.load()  # 触发 bootstrap（含内置 + custom + config 迁移）
-    profiles = sorted(list(base.glob("config*.yaml")) + list(base.glob("config*.yml")))
-    # 重新扫描以统计（_bootstrap 已合并；此处确保 config 目录与 target 目录一致时幂等）
-    url_key: dict[str, str] = {}
-    for f in profiles:
-        try:
-            import yaml as _y
+    # ── 角色绑定（main/cheap）— provider.yaml roles 段 ────────
 
-            raw = _y.safe_load(f.read_text(encoding="utf-8")) or {}
-            mb = raw.get("main_model") if isinstance(raw.get("main_model"), dict) else {}
-            url = str(mb.get("api_url") or "").strip().rstrip("/").lower()
-            key = str(mb.get("api_key") or "").strip()
-            if url and key and (url not in url_key or f.name == "config.yaml"):
-                url_key[url] = key
-        except Exception:
-            continue
-    store.save()
-    # 迁移后自动清理无 key 内置占位：provider.yaml 只保留真实配置过的供应商
-    try:
-        pruned = store.prune_unconfigured()
-    except Exception as e:  # pragma: no cover - 防御性
-        pruned = {"removed": [], "error": str(e)}
-    return {
-        "ok": True,
-        "providers": len(store.load().get("providers", {})),
-        "models": sum(len(p.get("models") or {})
-                     for p in store.load().get("providers", {}).values()),
-        "profiles_scanned": len(profiles),
-        "distinct_keys": len(url_key),
-        "pruned": pruned.get("removed", []),
-        "file": str(store.file_path),
-    }
+    def roles(self) -> dict:
+        """当前角色绑定 {role: {provider, model, api_url}}。"""
+        return dict(self.load().get("roles", {}))
+
+    def set_role(self, role: str, provider: str, model: str, api_url: str = "") -> None:
+        """写入角色绑定（落 provider.yaml 的 roles 段）。"""
+        if role not in ("main", "cheap"):
+            raise ProviderStoreError(f"invalid role '{role}', use main|cheap", "BAD_REQUEST", 400)
+        if not (model or "").strip():
+            raise ProviderStoreError("model required", "BAD_REQUEST", 400)
+        data = self.load()
+        data.setdefault("roles", {})[role] = {
+            "provider": provider or "", "model": model.strip(),
+            "api_url": api_url or "", "updated_at": _now()}
+        self.save()
+
+    # ── 兼容 ModelConfigStore 的调用面（无独立文件） ──────────
+
+    def ensure_provider(self, name: str, meta: dict) -> dict:
+        """新增/更新供应商元信息（保留已存模型条目）。"""
+        return self.upsert_provider(name, meta)
+
+    def get_model_config(self, provider: str, model: str) -> dict:
+        """逐模型有效配置（含 source 标记，供面板显示）。"""
+        m = self.get_model(provider, model)
+        if m is None:
+            return {**_blank_model_cfg(), "source": "heuristic"}
+        return {**m, "source": "saved"}
+
+    def update_model_config(self, provider: str, model: str, patch: dict) -> dict:
+        """更新既有模型配置（面板「保存模型配置」入口）。
+
+        面板沿用历史字段名 ``supports_thinking``；provider.yaml 模型条目里同名
+        概念叫 ``supports_reasoning``，在此归一，接受两种写法。
+        未知字段直接拒绝（strict），避免"看似保存成功、实则被丢弃"。
+        """
+        patch = dict(patch or {})
+        if "supports_thinking" in patch and "supports_reasoning" not in patch:
+            patch = {"supports_reasoning": patch.pop("supports_thinking"), **patch}
+        return self.upsert_model(provider, model, patch, strict=True)
+
+    def sync_live_models(self, provider: str, model_ids: list[str]) -> dict:
+        """在线模型列表写回（仅新增，不动既有条目）。"""
+        return self.sync_models(provider, model_ids)
+
+    def panel(self, config_path: str = "") -> dict:
+        """模型管理面板全量视图：providers（含逐模型配置）+ roles + active。
+
+        models 行沿用历史契约（``{"id", "config": {...}, "is_default"}``），
+        供 Web 面板与既有调用方无改动消费；「当前使用中」由 active 段表达。
+        config 内 ``supports_thinking`` 映射自 provider.yaml 的
+        ``supports_reasoning``（同一能力的两处命名，面板沿用旧名）。
+        """
+        roles = self.roles()
+        data = self.load().get("providers", {})
+        providers = []
+        total = 0
+        for p in self.list_providers():
+            p = dict(p)
+            default_model = p.get("default_model", "")
+            raw_models = (data.get(p["name"]) or {}).get("models") or {}
+            rows = []
+            for entry in p.get("catalog", []):
+                mid = entry["id"]
+                raw = raw_models.get(mid) or {}
+                rows.append({
+                    "id": mid,
+                    "is_default": mid == default_model,
+                    "config": {
+                        "max_context_tokens": entry.get("max_context_tokens", 0),
+                        "max_output_tokens": entry.get("max_output_tokens", 0),
+                        "supports_thinking": entry.get("supports_reasoning", False),
+                        "supports_vision": entry.get("supports_vision", False),
+                        "supports_tools": entry.get("supports_tools", True),
+                        "note": entry.get("note", ""),
+                        "source": "saved" if mid in raw_models else "heuristic",
+                    },
+                })
+            total += len(rows)
+            p["models"] = rows
+            p["model_count"] = len(rows)
+            providers.append(p)
+        return {
+            "ok": True,
+            "version": SCHEMA_VERSION,
+            "file": str(self.file_path),
+            "updated_at": self.load().get("updated_at", ""),
+            "roles": roles,
+            # active.<role> 必须是 dict（面板/前端按 {provider, model, api_url} 读）
+            "active": {r: dict(v) if isinstance(v, dict) else {"model": v}
+                       for r, v in roles.items()},
+            "providers": providers,
+            "total_providers": len(providers),
+            "total_models": total,
+        }
 
 
 # ── 模块级单例 ──────────────────────────────────────────────

@@ -559,7 +559,12 @@ class TestM4InjectionConfig:
 
     @pytest.fixture(autouse=True)
     def _restore_config(self, monkeypatch):
+        # 钉住 config 单例：跨文件全局态（_last_config_path/_config_cache）可能
+        # 让 get_config() 重新加载，导致本用例对 interruption 的修改被丢弃。
+        import tea_agent.config as _C
+
         cfg = get_config()
+        monkeypatch.setattr(_C, "_config_cache", cfg)
         monkeypatch.setattr(cfg, "interruption", dict(cfg.interruption))
 
     def test_disabled_skips_injection(self, monkeypatch):
@@ -594,7 +599,12 @@ class TestM4AnchorConfig:
 
     @pytest.fixture(autouse=True)
     def _restore_config(self, monkeypatch):
+        # 钉住 config 单例：跨文件全局态（_last_config_path/_config_cache）可能
+        # 让 get_config() 重新加载，导致本用例对 interruption 的修改被丢弃。
+        import tea_agent.config as _C
+
         cfg = get_config()
+        monkeypatch.setattr(_C, "_config_cache", cfg)
         monkeypatch.setattr(cfg, "interruption", dict(cfg.interruption))
 
     def test_partial_reply_max_from_config(self):

@@ -699,7 +699,8 @@ class Vectorizer:
             return None
 
     def _load_config(self):
-        cfg_path = Path.home() / ".tea_agent" / "config.yaml"
+        """读取 provider.yaml（config.yaml 已删除，模型属性唯一事实源）。"""
+        cfg_path = Path.home() / ".tea_agent" / "provider.yaml"
         if cfg_path.exists():
             import yaml
             with open(cfg_path, encoding="utf-8") as f:

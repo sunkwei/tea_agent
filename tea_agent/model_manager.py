@@ -1,15 +1,14 @@
 """
 模型管理服务 — 提供商合并 / 模型查询 / 自定义供应商 CRUD / 配置应用。
 
-默认提供商源（面板）：扫描 ~/.tea_agent/config_*.yaml 派生的真实 profile
-（model_config.scan_config_profiles）⊕ 用户自定义供应商（custom_providers.yaml），
-内置 PROVIDERS（providers.py 静态注册表）仅作能力匹配参考与空环境兑底。
+默认提供商源（面板）：~/.tea_agent/provider.yaml 唯一事实源（ProviderStore）；
+内置 PROVIDERS（providers.py 静态注册表）仅作空环境兜底。
 本服务为 Web/API 层提供统一支撑：
 
   - list_providers():   内置+自定义提供商列表（含来源、能力、是否当前使用）
   - query_models():     实时 /v1/models + 静态 fallback（双层保证 UI 永远有数据）
   - add/update/delete_custom_provider(): 自定义供应商 CRUD（用户级持久化，升级不丢）
-  - apply_provider():   一键应用提供商到模型配置（main/cheap/vision）
+  - apply_provider():   一键应用提供商到模型配置（main/cheap）
   - test_connection():  最小请求验证「端点 + key + 模型」三重有效性
 
 分层原则：providers.py 保持纯静态注册表（职责单一）；本服务承担动态逻辑，
@@ -22,6 +21,7 @@
 
 from __future__ import annotations
 
+import contextlib
 import json
 import logging
 import re
@@ -40,7 +40,7 @@ logger = logging.getLogger("tea_agent.model_manager")
 # 供应商名称合法性：字母/数字/下划线/连字符，2~32 字符
 NAME_RE = re.compile(r"^[A-Za-z0-9_-]{2,32}$")
 
-ROLES = ("main", "cheap", "vision")
+ROLES = ("main", "cheap")
 
 _CUSTOM_DIR = Path.home() / ".tea_agent"
 _CUSTOM_FILE = _CUSTOM_DIR / "custom_providers.yaml"
@@ -140,10 +140,8 @@ class ProviderService:
         """读取自定义供应商（mtime 缓存，避免每次请求读盘）。"""
         fpath = self.custom_file
         mtime = 0.0
-        try:
+        with contextlib.suppress(OSError):
             mtime = fpath.stat().st_mtime
-        except OSError:
-            pass
         with self._lock:
             if self._custom_cache is not None and not force and mtime == self._custom_mtime:
                 return self._custom_cache
@@ -297,7 +295,6 @@ class ProviderService:
         active = {
             "main": getattr(cfg.main_model, "model_name", "") or None,
             "cheap": getattr(cfg.cheap_model, "model_name", "") or None,
-            "vision": getattr(cfg.vision_model, "model_name", "") or None,
         }
         providers = []
         for name, info in sorted(self._merged().items()):
@@ -322,50 +319,14 @@ class ProviderService:
         return {"providers": providers, "total": len(providers), "active": active}
 
     def get_provider(self, name: str) -> dict | None:
-        """合并后按名称查找（不区分大小写）；注册表未命中时回退 config profile。
-
-        profile 提供商（source="config"）由 ~/.tea_agent/config_*.yaml 派生：
-        api_url/models/model_meta/config_path 均来自真实配置文件；密钥不外传。
-        """
+        """合并后按名称查找（不区分大小写）。provider.yaml 为唯一事实源。"""
         name_lower = (name or "").strip().lower()
         for pname, info in self._merged().items():
             if pname.lower() == name_lower:
                 return {"name": pname, **info, "source": info.get("source", "builtin")}
-        try:
-            from tea_agent.model_config import scan_config_profiles
-
-            for pname, info in scan_config_profiles().items():
-                if pname.lower() == name_lower:
-                    return {"name": pname, **info, "source": "config"}
-        except Exception as e:  # pragma: no cover - 防御性
-            logger.debug("profile provider lookup skipped: %s", e)
         return None
 
-    # ── 统一模型配置中心（~/.tea_agent/model_config.json） ────
-
-    @staticmethod
-    def _profile_secret(config_path: str, model: str = "") -> str:
-        """从 profile 配置文件回读 api_key（仅内存使用，绝不写进 model_config.json）。
-
-        指定 model 时优先取 model_name 匹配的角色块；否则回退 main_model 的 key。
-        """
-        if not config_path:
-            return ""
-        try:
-            import yaml
-            from pathlib import Path as _Path
-
-            raw = yaml.safe_load(_Path(config_path).read_text(encoding="utf-8")) or {}
-            if model:
-                for role in ROLES:
-                    block = raw.get(f"{role}_model")
-                    if isinstance(block, dict) and str(block.get("model_name") or "") == model:
-                        return str(block.get("api_key") or "")
-            main = raw.get("main_model")
-            return str(main.get("api_key") or "") if isinstance(main, dict) else ""
-        except Exception as e:
-            logger.debug("profile secret read failed: %s", e)
-            return ""
+    # ── 模型配置中心（provider.yaml 唯一事实源） ──────────────
 
     @staticmethod
     def _store():
@@ -599,9 +560,6 @@ class ProviderService:
         # 目录 = provider.yaml 能力回填后的富条目（纯 id PROVIDERS 不再裸返回字符串）
         catalog = self._catalog(provider)
         static_models = catalog
-        # profile 提供商：未显式传 key 时用配置文件真实 key 查在线列表（不落盘）
-        if provider.get("source") == "config" and not api_key:
-            api_key = self._profile_secret(provider.get("config_path", ""), "")
         result = {
             "provider": provider["name"],
             "source": "static",
@@ -707,7 +665,7 @@ class ProviderService:
         max_context_tokens: int | None = None,
         options: dict | None = None,
     ) -> dict:
-        """按「供应商 → 模型」两步应用模型配置（main/cheap/vision），落盘 config.yaml。
+        """按「供应商 → 模型」两步应用模型配置（main/cheap），落盘 config.yaml。
 
         - api_key 留空时复用该角色现有 key
         - model 留空时使用提供商 default_model
@@ -724,18 +682,11 @@ class ProviderService:
         if not model:
             raise ProviderError("model required (no default_model on provider)", "BAD_REQUEST", 400)
 
-        # profile 提供商：逐模型解析 api_url（同一 profile 内不同角色可能不同网关）
         api_url = provider.get("api_url", "")
-        if provider.get("source") == "config":
-            mmeta = (provider.get("model_meta") or {}).get(model) or {}
-            api_url = mmeta.get("api_url") or api_url
 
         cfg_path = config_path or self._config_path or None
         cfg = load_config(cfg_path)
-        target = {"main": cfg.main_model, "cheap": cfg.cheap_model, "vision": cfg.vision_model}[role]
-        if not api_key and provider.get("source") == "config":
-            # 优先级：显式传参 > profile 文件对应角色块 key > 该角色现有 key
-            api_key = self._profile_secret(provider.get("config_path", ""), model)
+        target = {"main": cfg.main_model, "cheap": cfg.cheap_model}[role]
         if not api_key:
             api_key = getattr(target, "api_key", "") or ""
         # ── 统一模型配置中心：逐模型配置作默认值（显式传参优先；面板是唯一事实源）──
@@ -754,6 +705,9 @@ class ProviderService:
         target.api_key = api_key
         target.api_url = api_url
         target.model_name = model
+        # 引用式绑定：save_config 据此把 main/cheap 写入 provider.yaml roles 段
+        target.provider = provider["name"]
+        target.ref_model = model
         if temperature is not None:
             target.temperature = float(temperature)
         if top_p is not None:
@@ -781,16 +735,19 @@ class ProviderService:
             merged_options.update(options)
         # 能力标记：以模型目录条目（meta）为准，再与统一配置中心逐模型配置取并集；
         # 目录未命中该模型（如自定义简写串）时才回退提供商聚合值。
+        # 注：supports_reasoning 在 provider.yaml 模型条目里叫 supports_reasoning，
+        # 供应商级仍叫 supports_thinking；两处都得读，否则能力恒 False（实测踩过）。
+        model_thinking = bool(mcfg.get("supports_reasoning") or mcfg.get("supports_thinking"))
         if meta:
             merged_options["supports_vision"] = bool(
                 meta.get("supports_vision") or mcfg.get("supports_vision"))
             merged_options["supports_reasoning"] = bool(
-                meta.get("supports_thinking") or mcfg.get("supports_thinking"))
+                meta.get("supports_thinking") or model_thinking)
         else:
             merged_options["supports_vision"] = bool(
                 provider.get("supports_vision", False) or mcfg.get("supports_vision"))
             merged_options["supports_reasoning"] = bool(
-                provider.get("supports_thinking", False) or mcfg.get("supports_thinking"))
+                provider.get("supports_thinking", False) or model_thinking)
         target.options = merged_options
 
         save_config(cfg, cfg_path)
@@ -819,7 +776,7 @@ class ProviderService:
         """读取某角色现有的 api_key（掩码前）。"""
         cfg_path = config_path or self._config_path or None
         cfg = load_config(cfg_path)
-        target = {"main": cfg.main_model, "cheap": cfg.cheap_model, "vision": cfg.vision_model}[role]
+        target = {"main": cfg.main_model, "cheap": cfg.cheap_model}[role]
         return getattr(target, "api_key", "") or ""
 
     # ── 连接测试 ──────────────────────────────────────────────

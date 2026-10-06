@@ -1,0 +1,55 @@
+# tea_agent 最小运行依赖
+#
+# 口径：AST 实测 tea_agent/**/*.py（排除 tests/、demo/）的真实 import 语句。
+# 与 pyproject.toml 的差异见文末「已剔除」段。
+# 安装：pip install -r requirements.txt
+#       仍需 `pip install -e . --no-deps` 才能获得 tea_agent 包与入口脚本。
+
+# ── LLM / 网络 ──────────────────────────────────────
+openai>=1.0.0
+httpx>=0.25.0
+requests>=2.30.0
+
+# ── 配置 / 数据建模 ─────────────────────────────────
+PyYAML>=6.0
+pydantic>=2.0.0
+
+# ── 文档导出（toolkit_export_last_pdf）───────────────
+fpdf2>=2.8.0
+pygments>=2.10.0
+
+# ── 代码智能 lsp/ ───────────────────────────────────
+jedi>=0.19.0
+tree-sitter>=0.21.0
+
+# ── 搜索 / 网页抓取 ─────────────────────────────────
+beautifulsoup4>=4.12.0
+
+# ── 图像 / 桌面控制 ─────────────────────────────────
+Pillow>=10.0.0
+playwright>=1.40.0
+pyautogui>=0.9.0
+
+# ── Web 服务（默认入口 tea_agent = tea_agent.server:main）──
+starlette>=0.37.0
+uvicorn>=0.27.0
+python-multipart>=0.0.7
+
+# ====================================================================
+# 可选依赖（代码内以 try/except ImportError 保护；缺失仅该工具不可用）
+# 需要时取消注释，或 pip install "tea_agent[monitor]" 等 extra
+# ====================================================================
+# mcp>=1.0.0                     # MCP 客户端（toolkit_mcp）
+# psutil>=5.9.0                  # 进程监控（toolkit_exec 增强）
+# mss>=9.0.0                     # 截图（toolkit_screenshot）
+# tree-sitter-python>=0.21.0     # Python AST 加速（lsp）
+# python-telegram-bot>=20.0      # Telegram 适配器
+# qrcode>=7.0.0                  # 微信适配器
+# qrterm>=2.3.0                  # 微信适配器（终端二维码）
+
+# ====================================================================
+# 已剔除（pyproject 声明但全项目零 import，实测确认）
+# ====================================================================
+# markdown>=3.4.0    — 0 处 import，仅出现在注释/MIME 字符串
+# jieba>=0.42.0      — 0 处 import，memory.py 注释记载「已移除分词器」
+# rich>=13.0.0       — 0 处 import

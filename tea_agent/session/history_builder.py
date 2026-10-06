@@ -43,7 +43,7 @@ def estimate_tokens(text: str) -> int:
         return 0
 
     # 统计中文字符数
-    cn_chars = len(re.findall(r'[\u4e00-\u9fff\u3400-\u4dbf]', text))
+    cn_chars = len(re.findall(r"[\u4e00-\u9fff\u3400-\u4dbf]", text))
     total_chars = len(text)
     non_cn_chars = total_chars - cn_chars
 
@@ -121,8 +121,7 @@ def _image_resolver_of(context: Any):
     return _resolve
 
 
-def to_multimodal(msg: dict, supports_vision: bool, original: dict | None = None,
-                  image_resolver=None) -> dict:
+def to_multimodal(msg: dict, supports_vision: bool, original: dict | None = None, image_resolver=None) -> dict:
     """如果消息包含 images 字段，将 content 转换为多模态格式。
 
     Args:
@@ -164,7 +163,7 @@ def to_multimodal(msg: dict, supports_vision: bool, original: dict | None = None
                 ptype = p.get("type")
                 if ptype == "text":
                     t = p.get("text", "")
-                    if isinstance(t, list):          # 任意层嵌套递归展平
+                    if isinstance(t, list):  # 任意层嵌套递归展平
                         s2, i2 = _hb_flatten(t)
                         segs += s2
                         imgs += i2
@@ -176,6 +175,7 @@ def to_multimodal(msg: dict, supports_vision: bool, original: dict | None = None
                     if url:
                         imgs.append(url)
             return segs, imgs
+
         _segs, _imgs = _hb_flatten(text)
         text = "\n".join(_segs)
         _merged = list(images) + _imgs
@@ -233,19 +233,13 @@ def to_multimodal(msg: dict, supports_vision: bool, original: dict | None = None
                 logger.warning(f"图片编码失败 {img_path}: {e}")
                 continue
         ext = os.path.splitext(img_path)[1].lower()
-        mime_map = {
-            ".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg",
-            ".gif": "image/gif", ".webp": "image/webp", ".bmp": "image/bmp"
-        }
+        mime_map = {".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".gif": "image/gif", ".webp": "image/webp", ".bmp": "image/bmp"}
         mime = mime_map.get(ext, "image/png")
         url = f"data:{mime};base64,{b64}"
-        if url in _seen_url:      # 与回写 parts 中内联的同一张图重复 → 只发一次
+        if url in _seen_url:  # 与回写 parts 中内联的同一张图重复 → 只发一次
             continue
         _seen_url.add(url)
-        parts.append({
-            "type": "image_url",
-            "image_url": {"url": url}
-        })
+        parts.append({"type": "image_url", "image_url": {"url": url}})
     if original is not None:
         original["_b64_cache"] = b64_cache
     if not parts:
@@ -292,9 +286,7 @@ def _is_real_user(msg: dict) -> bool:
     if msg.get("role") != "user":
         return False
     c = msg.get("content")
-    if isinstance(c, str) and c.startswith(_SYNTH_USER_PREFIXES):
-        return False
-    return True
+    return not (isinstance(c, str) and c.startswith(_SYNTH_USER_PREFIXES))
 
 
 def strip_historical_images(messages: list[dict]) -> list[dict]:
@@ -361,8 +353,8 @@ def strip_historical_images(messages: list[dict]) -> list[dict]:
 
 def _key_words(text: str) -> set:
     """提取文本中的关键词（中文2字+、英文3字母+）"""
-    cn = re.findall(r'[\u4e00-\u9fff\u3400-\u4dbf\uf900-\ufaff]{2,}', text)
-    en = re.findall(r'[a-zA-Z_]{3,}', text.lower())
+    cn = re.findall(r"[\u4e00-\u9fff\u3400-\u4dbf\uf900-\ufaff]{2,}", text)
+    en = re.findall(r"[a-zA-Z_]{3,}", text.lower())
     return set(cn + en)
 
 
@@ -382,8 +374,7 @@ def _find_prune_cutoff(messages: list, tail_turns: int = 3) -> int:
     return 0
 
 
-def _solidify_history(messages: list, cutoff: int, threshold: int,
-                      max_text_len: int = 16384) -> int:
+def _solidify_history(messages: list, cutoff: int, threshold: int, max_text_len: int = 16384) -> int:
     """将滑出最近窗口的大消息持久化定型，确保历史前缀不再变化。
 
     缓存友好（DeepSeek 前缀缓存）：历史消息必须"定型"——一旦裁剪写入
@@ -411,15 +402,12 @@ def _solidify_history(messages: list, cutoff: int, threshold: int,
         role = msg.get("role")
         content = msg.get("content", "")
         if role == "tool":
-            if (isinstance(content, str) and not content.startswith("[工具结果已省略")
-                    and len(content) > threshold):
+            if isinstance(content, str) and not content.startswith("[工具结果已省略") and len(content) > threshold:
                 msg["content"] = f"[工具结果已省略: {len(content)} 字符]"
                 pruned += 1
-        elif role in ("user", "assistant"):
-            if (isinstance(content, str) and content
-                    and "[已截断" not in content and len(content) > max_text_len):
-                msg["content"] = content[:max_text_len] + f"\n... [已截断: 原长 {len(content)} 字符]"
-                pruned += 1
+        elif role in ("user", "assistant") and isinstance(content, str) and content and "[已截断" not in content and len(content) > max_text_len:
+            msg["content"] = content[:max_text_len] + f"\n... [已截断: 原长 {len(content)} 字符]"
+            pruned += 1
     if pruned:
         logger.debug(f"_solidify_history: 持久化定型 {pruned} 条消息 (cutoff={cutoff})")
     return pruned
@@ -428,23 +416,23 @@ def _solidify_history(messages: list, cutoff: int, threshold: int,
 def _extract_files_from_text(text: str) -> set:
     """从文本中提取文件路径和符号引用"""
     files = set()
-    for m in re.finditer(r'[\w.-]+/[\w.-]+(?:/[\w.-]+)*\.\w+', text):
+    for m in re.finditer(r"[\w.-]+/[\w.-]+(?:/[\w.-]+)*\.\w+", text):
         files.add(m.group())
-    symbols = set(re.findall(r'\b[a-zA-Z_]\w{2,}\b', text))
+    symbols = set(re.findall(r"\b[a-zA-Z_]\w{2,}\b", text))
     if symbols:
         # 符号索引是纯旁路增强：文件缺失/损坏（写入被中断、半截 JSON、带 BOM）
         # 一律静默降级为「没有索引」，绝不打断历史构建，也不该每次启动刷 ERROR。
         # 读法用 utf-8-sig 吞掉 BOM，与 os_info_injector 保持一致。
         try:
-            idx_path = os.path.join('.tea_agent_run', 'symbol_index.json')
+            idx_path = os.path.join(".tea_agent_run", "symbol_index.json")
             if os.path.exists(idx_path):
-                with open(idx_path, encoding='utf-8-sig', errors='replace') as _f:
+                with open(idx_path, encoding="utf-8-sig", errors="replace") as _f:
                     sym_index = json.load(_f)
                 if isinstance(sym_index, dict):
                     for sym in symbols:
                         for entry in sym_index.get(sym) or []:
                             if isinstance(entry, dict):
-                                fp = entry.get('path', '')
+                                fp = entry.get("path", "")
                                 if fp:
                                     files.add(fp)
         except Exception as e:
@@ -517,12 +505,9 @@ def solve_token_budget(
     headroom = int(max_ctx * min(max(headroom_ratio, 0.0), 1.0))
 
     if requested_max_tokens and requested_max_tokens > 0:
-        if requested_max_tokens > int(max_ctx * 0.8):
-            # 请求输出超过窗口 80% → 钳制到 50%（原值在数学上无法与任何
-            # 非平凡输入共存，继续原样发送必然 400）
-            out_cap = max(1024, int(max_ctx * 0.5))
-        else:
-            out_cap = int(requested_max_tokens)
+        # 请求输出超过窗口 80% → 钳制到 50%（原值在数学上无法与任何
+        # 非平凡输入共存，继续原样发送必然 400）
+        out_cap = max(1024, int(max_ctx * 0.5)) if requested_max_tokens > int(max_ctx * 0.8) else int(requested_max_tokens)
     else:
         # 未知 → 20% 基线（旧行为）
         out_cap = max(1024, int(max_ctx * 0.2))
@@ -571,9 +556,7 @@ def _get_output_cap(context: Any) -> int:
     B2：传入 headroom_ratio——输出与输入共同避让 (1-15%) 弹性区。
     """
     max_ctx = _resolve_max_ctx(context)
-    return solve_token_budget(
-        max_ctx, _get_effective_max_tokens(context), _get_headroom_ratio(context)
-    )[1]
+    return solve_token_budget(max_ctx, _get_effective_max_tokens(context), _get_headroom_ratio(context))[1]
 
 
 # ── 上下文填充治理（2026-09）：L1 reasoning_content / L2 重复 / 轮数上限 ──
@@ -667,12 +650,7 @@ def _blank_stale_reasoning(context: Any, messages: list[dict], keep_steps: int) 
         return 0
     # 只统计真实 L1 消息（带 _src_idx）：L2 注入的 assistant 占位消息也带
     # reasoning_content 字段，把它们计入会让块序号随 L2 选中集合漂移。
-    carriers = [
-        m for m in messages
-        if m.get("role") == "assistant"
-        and "reasoning_content" in m
-        and "_src_idx" in m
-    ]
+    carriers = [m for m in messages if m.get("role") == "assistant" and "reasoning_content" in m and "_src_idx" in m]
     total = len(carriers)
     if total <= keep_steps:
         return 0
@@ -686,10 +664,7 @@ def _blank_stale_reasoning(context: Any, messages: list[dict], keep_steps: int) 
             blanked += 1
             _writeback_reasoning(context, msg)
     if blanked:
-        logger.info(
-            f"🧠 reasoning_content 分块保留: 每块 {keep_steps} 步，"
-            f"保留最近一块（{total - boundary} 步），置空 {blanked} 条历史思考链"
-        )
+        logger.info(f"🧠 reasoning_content 分块保留: 每块 {keep_steps} 步，保留最近一块（{total - boundary} 步），置空 {blanked} 条历史思考链")
     return blanked
 
 
@@ -814,9 +789,7 @@ def _get_token_budget(context: Any) -> tuple[int, int]:
     杜绝"裁剪链完全跳过导致上下文无限增长溢出"（2026-08-13 生产事故根因）。
     """
     max_ctx = _resolve_max_ctx(context)
-    input_budget, _ = solve_token_budget(
-        max_ctx, _get_effective_max_tokens(context), _get_headroom_ratio(context)
-    )
+    input_budget, _ = solve_token_budget(max_ctx, _get_effective_max_tokens(context), _get_headroom_ratio(context))
     # 动态工具裁剪阈值：预算的 2%，最低 64K 字符（保证读取代码/文件内容完整）
     tool_prune_threshold = max(65536, int(input_budget * 0.02))
     return input_budget, tool_prune_threshold
@@ -871,10 +844,7 @@ def _snip_tier1(messages: list[dict], snip_threshold: int = 16384) -> list[dict]
         if len(content) <= snip_threshold:
             continue
         head = "\n".join(line[:200] for line in content.splitlines()[:5])
-        msg["content"] = (
-            f"{head}\n... [输出过长已省略: 原长 {len(content)} 字符，"
-            f"完整结果见会话日志]"
-        )
+        msg["content"] = f"{head}\n... [输出过长已省略: 原长 {len(content)} 字符，完整结果见会话日志]"
         pruned += 1
     if pruned:
         logger.debug(f"_snip_tier1: 截短 {pruned} 条工具输出 (> {snip_threshold} 字符)")
@@ -904,8 +874,7 @@ def _find_token_cutoff(messages: list, protect_tokens: int) -> int:
         if msg.get("role") == "system":
             continue
         content = msg.get("content", "")
-        if isinstance(content, str) and content.startswith(
-                ("[历史记录]", "[历史相关对话摘要]", "[系统记忆", "[动态上下文")):
+        if isinstance(content, str) and content.startswith(("[历史记录]", "[历史相关对话摘要]", "[系统记忆", "[动态上下文")):
             continue
         acc += estimate_messages_tokens([msg])
         if acc >= protect_tokens:
@@ -934,14 +903,13 @@ def _writeback_content(context: Any, msg: dict) -> None:
         return
     orig_content = _orig.get("content", "")
     if isinstance(orig_content, str) and (
-            "[已截断" in orig_content or "[工具结果已省略" in orig_content
-            or "[输出过长已省略" in orig_content or "[紧急截断" in orig_content):
+        "[已截断" in orig_content or "[工具结果已省略" in orig_content or "[输出过长已省略" in orig_content or "[紧急截断" in orig_content
+    ):
         return
     _orig["content"] = msg.get("content", orig_content)
 
 
-def _progressive_trim(messages: list[dict], budget: int, context: Any,
-                      tool_prune_threshold: int = 500) -> list[dict]:
+def _progressive_trim(messages: list[dict], budget: int, context: Any, tool_prune_threshold: int = 500) -> list[dict]:
     """渐进式裁剪消息以满足 token 预算。
 
     裁剪策略（按优先级从高到低）：
@@ -1028,10 +996,12 @@ def _progressive_trim(messages: list[dict], budget: int, context: Any,
                 if msg.get("role") not in ("assistant", "tool"):
                     continue
                 content = msg.get("content", "")
-                if (isinstance(content, str)
-                        and not content.startswith(("[工具结果已省略", "[已截断"))
-                        and "[已截断" not in content
-                        and len(content) > max_text_len):
+                if (
+                    isinstance(content, str)
+                    and not content.startswith(("[工具结果已省略", "[已截断"))
+                    and "[已截断" not in content
+                    and len(content) > max_text_len
+                ):
                     trimmed = content[:max_text_len] + f"\n... [已截断: 原长 {len(content)} 字符]"
                     est -= estimate_tokens(content) - estimate_tokens(trimmed)
                     msg["content"] = trimmed
@@ -1047,9 +1017,7 @@ def _progressive_trim(messages: list[dict], budget: int, context: Any,
             if msg.get("role") != "user":
                 continue
             content = msg.get("content", "")
-            if (isinstance(content, str)
-                    and "[已截断" not in content
-                    and len(content) > 65536):
+            if isinstance(content, str) and "[已截断" not in content and len(content) > 65536:
                 trimmed = content[:65536] + f"\n... [已截断: 原长 {len(content)} 字符]"
                 est -= estimate_tokens(content) - estimate_tokens(trimmed)
                 msg["content"] = trimmed
@@ -1065,8 +1033,7 @@ def _progressive_trim(messages: list[dict], budget: int, context: Any,
         protect_tokens = max(4096, int(budget * 0.25))
         cutoff = _find_token_cutoff(result, protect_tokens)
         if cutoff > 0:
-            new_result = [msg for msg in result[:cutoff]
-                         if msg.get("role") == "system"]
+            new_result = [msg for msg in result[:cutoff] if msg.get("role") == "system"]
             new_result.extend(result[cutoff:])
             est = estimate_messages_tokens(new_result)
             result = new_result
@@ -1118,11 +1085,7 @@ def filter_level2_by_relevance(level2: list, current_msg: str) -> list:
 
     scored = []
     for pair in level2:
-        k_pair = _key_words(
-            pair.get("user", "") + " "
-            + pair.get("thinking", "") + " "
-            + pair.get("assistant", "")
-        )
+        k_pair = _key_words(pair.get("user", "") + " " + pair.get("thinking", "") + " " + pair.get("assistant", ""))
         if not k_current or not k_pair:
             score = 0.5
         else:
@@ -1145,19 +1108,13 @@ def filter_level2_by_relevance(level2: list, current_msg: str) -> list:
         elif score >= 0.05:
             user_brief = pair.get("user", "")[:80]
             ai_brief = pair.get("assistant", "")[:120]
-            result.append({
-                "kind": "summary",
-                "content": f"User: {user_brief}... → Assistant: {ai_brief}..."
-            })
+            result.append({"kind": "summary", "content": f"User: {user_brief}... → Assistant: {ai_brief}..."})
 
     if not result and scored:
         _, best = max(scored, key=lambda x: x[0])
         result = [{"kind": "full", **best}]
 
-    logger.debug(
-        f"L2 filter: {len(level2)} in -> {len(result)} out "
-        f"(scores: {[round(s, 3) for s, _ in scored]})"
-    )
+    logger.debug(f"L2 filter: {len(level2)} in -> {len(result)} out (scores: {[round(s, 3) for s, _ in scored]})")
     return result
 
 
@@ -1186,19 +1143,13 @@ def _solidify_level2(context: Any) -> list[dict]:
             if context.messages[i].get("role") == "user":
                 cur_content = context.messages[i].get("content", "")
                 if isinstance(cur_content, list):
-                    current_user_msg = "".join(
-                        p.get("text", "") for p in cur_content if p.get("type") == "text"
-                    )
+                    current_user_msg = "".join(p.get("text", "") for p in cur_content if p.get("type") == "text")
                 else:
                     current_user_msg = str(cur_content)
                 break
-        context._level2_selected = filter_level2_by_relevance(
-            context._level2, current_user_msg
-        )
+        context._level2_selected = filter_level2_by_relevance(context._level2, current_user_msg)
         context._level2_dirty = False
-        logger.debug(
-            f"L2 定型: {len(context._level2)} in -> {len(context._level2_selected)} out"
-        )
+        logger.debug(f"L2 定型: {len(context._level2)} in -> {len(context._level2_selected)} out")
     return context._level2_selected
 
 
@@ -1222,17 +1173,18 @@ def _build_l0_enriched_system(context: Any, system_prompt: str) -> str:
     if not getattr(context, "_skill_rules_set", False):
         try:
             from tea_agent.session.prompts import SMALL_MODEL_CONSTRAINT, get_skill_validate_rules, is_small_model
-            _model_name = getattr(context, 'model', '') or ''
+
+            _model_name = getattr(context, "model", "") or ""
             if is_small_model(_model_name):
-                enriched = enriched.rstrip('\n') + '\n\n' + SMALL_MODEL_CONSTRAINT
+                enriched = enriched.rstrip("\n") + "\n\n" + SMALL_MODEL_CONSTRAINT
                 _rules = get_skill_validate_rules("output-format-constraint")
                 if _rules:
                     context._skill_validate_rules = _rules
             else:
-                for _msg in reversed(getattr(context, 'messages', []) or []):
-                    _c = _msg.get('content', '') or ''
-                    if isinstance(_c, str) and 'toolkit_skills' in _c and 'load' in _c:
-                        _m = __import__('re').search(r'name["\']?\s*[:=]\s*["\']([^"\']+)', _c)
+                for _msg in reversed(getattr(context, "messages", []) or []):
+                    _c = _msg.get("content", "") or ""
+                    if isinstance(_c, str) and "toolkit_skills" in _c and "load" in _c:
+                        _m = __import__("re").search(r'name["\']?\s*[:=]\s*["\']([^"\']+)', _c)
                         if _m:
                             _loaded_skill = _m.group(1)
                             _rules = get_skill_validate_rules(_loaded_skill)
@@ -1255,7 +1207,7 @@ def _build_l0_enriched_system(context: Any, system_prompt: str) -> str:
     # 3. 操作系统环境信息注入（属性注入模式）
     #    OS 信息由 pipeline 步骤检测 OS 变化后写入 context._injected_os_info_text
     #    取代了旧版注入虚假 user+assistant 消息轮次的做法
-    os_text = getattr(context, '_injected_os_info_text', '') or ''
+    os_text = getattr(context, "_injected_os_info_text", "") or ""
     if os_text:
         inject_parts.append(os_text)
 
@@ -1288,7 +1240,7 @@ def _build_l0_enriched_system(context: Any, system_prompt: str) -> str:
     # 在首次请求与后续请求之间不一致，同样会破坏前缀缓存命中）。
     if inject_parts:
         combined_inject = "\n\n---\n\n".join(inject_parts)
-        enriched = combined_inject + '\n\n' + enriched.rstrip('\n')
+        enriched = combined_inject + "\n\n" + enriched.rstrip("\n")
 
     return enriched
 
@@ -1318,6 +1270,7 @@ def _build_dynamic_context(context: Any) -> str:
     #    经过几轮对话后，评估各 skill 的必要性/充分性，决定是否注入 SKILL.md
     try:
         from tea_agent.skill_loader import evaluate_and_load as _skill_eval
+
         _skill_text = _skill_eval(context)
         if _skill_text:
             inject_parts.append(_skill_text)
@@ -1327,6 +1280,7 @@ def _build_dynamic_context(context: Any) -> str:
     # 2. 未完成任务检查
     try:
         from tea_agent.toolkit.toolkit_task_resume import toolkit_task_resume
+
         resume_info = toolkit_task_resume(action="check")
         if resume_info.get("has_pending"):
             parts = ["[未完成任务提醒]"]
@@ -1336,7 +1290,7 @@ def _build_dynamic_context(context: Any) -> str:
                 for t in todos[:5]:
                     parts.append(f"  - [{t['idx']}] {t['desc']}")
                 if len(todos) > 5:
-                    parts.append(f"  ... 还有 {len(todos)-5} 项")
+                    parts.append(f"  ... 还有 {len(todos) - 5} 项")
             if resume_info.get("pending_plans"):
                 plans = resume_info["pending_plans"]
                 parts.append(f"有 {len(plans)} 个未完成的 Plan:")
@@ -1354,7 +1308,7 @@ def _build_dynamic_context(context: Any) -> str:
     # 3. 长期记忆（S3: 统一在尾部动态上下文注入，L3 块不再携带）
     #    记忆随当前用户消息每轮变化，放在消息尾部（临时 user 消息，紧随最后一个
     #    user 之前）不影响前缀稳定性，同时保持对模型的高可见性。
-    memories_text = getattr(context, '_injected_memories_text', '') or ''
+    memories_text = getattr(context, "_injected_memories_text", "") or ""
     if memories_text:
         inject_parts.append(f"## 长期记忆\n{memories_text}")
 
@@ -1396,14 +1350,8 @@ def _dynamic_state_token() -> tuple:
         if agent is not None and hasattr(agent, "db"):
             topic_id = getattr(agent, "current_topic_id", None) or ""
             conn = agent.db.conn
-            _sql = (
-                "SELECT COUNT(*), COALESCE(SUM(done),0), COALESCE(SUM(LENGTH(desc)),0)"
-                " FROM todo_items"
-            )
-            if topic_id:
-                row = conn.execute(_sql + " WHERE topic_id=?", (topic_id,)).fetchone()
-            else:
-                row = conn.execute(_sql).fetchone()
+            _sql = "SELECT COUNT(*), COALESCE(SUM(done),0), COALESCE(SUM(LENGTH(desc)),0) FROM todo_items"
+            row = conn.execute(_sql + " WHERE topic_id=?", (topic_id,)).fetchone() if topic_id else conn.execute(_sql).fetchone()
             todo_fp = tuple(int(x) for x in (row or (0, 0, 0)))
     except Exception:
         todo_fp = (0, 0, 0)
@@ -1457,17 +1405,11 @@ def _build_level3_block(context: Any) -> list[dict]:
 
     # 兼容旧 _history_summary
     if not parts and context._history_summary:
-        result.append({
-            "role": "user",
-            "content": f"这是我们之前对话的摘要：\n{context._history_summary}"
-        })
+        result.append({"role": "user", "content": f"这是我们之前对话的摘要：\n{context._history_summary}"})
         return result
 
     if parts:
-        result.append({
-            "role": "user",
-            "content": "[系统记忆 — 以下为需要遵循的有效信息和规则]\n\n" + "\n\n---\n\n".join(parts)
-        })
+        result.append({"role": "user", "content": "[系统记忆 — 以下为需要遵循的有效信息和规则]\n\n" + "\n\n---\n\n".join(parts)})
         # NOTE: 不再添加假 assistant 回复，节省 token
 
     return result
@@ -1581,8 +1523,8 @@ def build_api_messages(context: Any, system_prompt: str) -> list[dict]:
     # Level 3 + Level 2: 摘要与相关历史
     # ═══════════════════════════════════════════════
     # 向后兼容：disable_summary 等效于 disable_l3=True && disable_l2=True
-    disable_l3 = getattr(context, 'disable_l3', False) or context.disable_summary
-    disable_l2 = getattr(context, 'disable_l2', False) or context.disable_summary
+    disable_l3 = getattr(context, "disable_l3", False) or context.disable_summary
+    disable_l2 = getattr(context, "disable_l2", False) or context.disable_summary
 
     # L1 窗口起点：跳过 system 头（部分测试/轻量场景无 system 头则从 0 开始），
     # 并按 max_history 限制最多保留的最近用户轮数（0=不额外限制）。
@@ -1591,16 +1533,10 @@ def build_api_messages(context: Any, system_prompt: str) -> list[dict]:
         start_idx = 0
     _max_history_turns = _get_max_history_turns(context)
     if _max_history_turns > 0:
-        _user_idx = [
-            i for i in range(start_idx, len(context.messages))
-            if context.messages[i].get("role") == "user"
-        ]
+        _user_idx = [i for i in range(start_idx, len(context.messages)) if context.messages[i].get("role") == "user"]
         if len(_user_idx) > _max_history_turns:
             start_idx = _user_idx[-_max_history_turns]
-            logger.info(
-                f"max_history={_max_history_turns}: L1 丢弃更早的 "
-                f"{len(_user_idx) - _max_history_turns} 轮（共 {len(_user_idx)} 轮）"
-            )
+            logger.info(f"max_history={_max_history_turns}: L1 丢弃更早的 {len(_user_idx) - _max_history_turns} 轮（共 {len(_user_idx)} 轮）")
 
     if not disable_l3:
         result.extend(_build_level3_block(context))
@@ -1618,17 +1554,11 @@ def build_api_messages(context: Any, system_prompt: str) -> list[dict]:
             for item in filtered:
                 kind = item.get("kind", "full")
                 if kind == "summary":
-                    result.append({
-                        "role": "user",
-                        "content": f"[历史相关对话摘要] {item['content']}"
-                    })
+                    result.append({"role": "user", "content": f"[历史相关对话摘要] {item['content']}"})
                 else:
                     user_text = item.get("user", "")
                     assistant_text = item.get("assistant", "")
-                    result.append({
-                        "role": "user",
-                        "content": f"[历史记录]\n用户: {user_text}"
-                    })
+                    result.append({"role": "user", "content": f"[历史记录]\n用户: {user_text}"})
                     _msg = {"role": "assistant", "content": assistant_text}
                     if context.supports_reasoning:
                         _msg["reasoning_content"] = ""
@@ -1659,10 +1589,7 @@ def build_api_messages(context: Any, system_prompt: str) -> list[dict]:
                 user_msg_indices.append(i)
         if len(user_msg_indices) > max_turns_limit:
             start_idx = user_msg_indices[-max_turns_limit]
-            logger.info(
-                f"disable_summary 启用: 丢弃早期历史，保留最近 {max_turns_limit} 轮 "
-                f"(共 {len(user_msg_indices)} 轮)"
-            )
+            logger.info(f"disable_summary 启用: 丢弃早期历史，保留最近 {max_turns_limit} 轮 (共 {len(user_msg_indices)} 轮)")
 
     for i in range(start_idx, len(context.messages)):
         msg = context.messages[i]
@@ -1685,12 +1612,9 @@ def build_api_messages(context: Any, system_prompt: str) -> list[dict]:
         # - 无 tool_calls 的普通 assistant：补空串被 API 忽略，无害（官方文档）；
         # - 含 tool_calls 的 assistant：若 RC 因历史数据残缺/链路丢失而缺失，补空串
         #   至少满足"字段存在"；完整 RC 的保留由源头保证（tool_loop_runner 无条件存储）。
-        if (msg_copy["role"] == "assistant"
-                and context.supports_reasoning
-                and "reasoning_content" not in msg_copy):
+        if msg_copy["role"] == "assistant" and context.supports_reasoning and "reasoning_content" not in msg_copy:
             msg_copy["reasoning_content"] = ""
-        msg_copy = to_multimodal(msg_copy, context.supports_vision, original=msg,
-                                 image_resolver=_image_resolver_of(context))
+        msg_copy = to_multimodal(msg_copy, context.supports_vision, original=msg, image_resolver=_image_resolver_of(context))
         msg_copy.pop("_b64_cache", None)
         if isinstance(msg_copy.get("content"), list) and not context.supports_vision:
             text_parts = []
@@ -1788,15 +1712,10 @@ def build_api_messages(context: Any, system_prompt: str) -> list[dict]:
                 # Tier 3: 先做本地裁剪（Tier1+2 累积），再置强制摘要标志
                 context._token_exhausted = True
                 result = _snip_tier1(result, DEFAULT_COMPACTION_SETTINGS.snip_threshold)
-                result = _progressive_trim(result, input_budget, context,
-                                           tool_prune_threshold=tool_prune_threshold)
-                logger.warning(
-                    f"💧 水位线 {waterline_name(tier)} (ratio={ratio:.0%}): "
-                    f"本地裁剪完成，置强制摘要标志，待增量 LLM 摘要"
-                )
+                result = _progressive_trim(result, input_budget, context, tool_prune_threshold=tool_prune_threshold)
+                logger.warning(f"💧 水位线 {waterline_name(tier)} (ratio={ratio:.0%}): 本地裁剪完成，置强制摘要标志，待增量 LLM 摘要")
             elif tier == 2:
-                result = _progressive_trim(result, input_budget, context,
-                                           tool_prune_threshold=tool_prune_threshold)
+                result = _progressive_trim(result, input_budget, context, tool_prune_threshold=tool_prune_threshold)
                 logger.info(f"💧 水位线 {waterline_name(tier)} (ratio={ratio:.0%}): 渐进式裁剪")
             elif tier == 1:
                 result = _snip_tier1(result, DEFAULT_COMPACTION_SETTINGS.snip_threshold)
@@ -1809,14 +1728,10 @@ def build_api_messages(context: Any, system_prompt: str) -> list[dict]:
             _ocap = int(getattr(context, "_output_cap", 0) or 0)
             if est_after + _ocap + _budget_margin(max_ctx) > max_ctx:
                 context._token_exhausted = True
-                logger.warning(
-                    f"🚨 裁剪后 输入 {est_after} + 输出 {_ocap} + 余量 仍超窗口 {max_ctx}，"
-                    f"置强制摘要标志，下一轮增量 LLM 摘要兜底"
-                )
+                logger.warning(f"🚨 裁剪后 输入 {est_after} + 输出 {_ocap} + 余量 仍超窗口 {max_ctx}，置强制摘要标志，下一轮增量 LLM 摘要兜底")
         elif est_check > input_budget:
             logger.info(f"token 预估: {est_check} (>预算 {input_budget}, 原始估算 {est})，启动渐进式裁剪")
-            result = _progressive_trim(result, input_budget, context,
-                                       tool_prune_threshold=tool_prune_threshold)
+            result = _progressive_trim(result, input_budget, context, tool_prune_threshold=tool_prune_threshold)
             est_after = estimate_messages_tokens(result)
             logger.info(f"裁剪后: {est_after} tokens (节省 {est - est_after})")
 
@@ -1887,12 +1802,11 @@ def build_api_messages(context: Any, system_prompt: str) -> list[dict]:
     # 此处仅告警以便定位根因，不修改消息（RC 无法凭空构造）。
     if context.supports_reasoning:
         for _i, _m in enumerate(result):
-            if _m.get("role") == "assistant" and _m.get("tool_calls"):
-                if "reasoning_content" not in _m:
-                    logger.warning(
-                        f"build_api_messages: 含 tool_calls 的 assistant 消息 "
-                        f"缺少 reasoning_content 字段 (index={_i}, tool={_m['tool_calls'][0].get('function', {}).get('name', '?') if _m['tool_calls'] else '?'})"
-                        f" — DeepSeek 思考模式将返回 400，请检查该轮 RC 采集"
-                    )
+            if _m.get("role") == "assistant" and _m.get("tool_calls") and "reasoning_content" not in _m:
+                logger.warning(
+                    f"build_api_messages: 含 tool_calls 的 assistant 消息 "
+                    f"缺少 reasoning_content 字段 (index={_i}, tool={_m['tool_calls'][0].get('function', {}).get('name', '?') if _m['tool_calls'] else '?'})"
+                    f" — DeepSeek 思考模式将返回 400，请检查该轮 RC 采集"
+                )
 
     return result

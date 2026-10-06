@@ -4,7 +4,6 @@
 """
 
 import contextlib
-import os
 from pathlib import Path
 
 from starlette.responses import HTMLResponse, JSONResponse, Response
@@ -51,13 +50,15 @@ async def handle_web_list_configs(request):
     result = server.list_config_files(check_valid=True)
     configs = result["configs"]
     any_valid = result["any_valid"]
-    return JSONResponse({
-        "configs": configs,
-        "count": len(configs),
-        "any_valid": any_valid,
-        "active_config_path": active_config_path,
-        "active_config_filename": active_config_filename,
-    })
+    return JSONResponse(
+        {
+            "configs": configs,
+            "count": len(configs),
+            "any_valid": any_valid,
+            "active_config_path": active_config_path,
+            "active_config_filename": active_config_filename,
+        }
+    )
 
 
 async def handle_web_create_config(request):
@@ -120,11 +121,13 @@ def _writeback_provider_yaml(server, wb: dict, agent) -> None:
     """
     try:
         from tea_agent.provider_store import get_provider_store
+
         ps = get_provider_store()
         if agent is not None:
             mc, cm = agent._cfg.main_model, agent._cfg.cheap_model
         else:
             from tea_agent.config import load_config
+
             c = load_config(server.get_config_path() or None)
             mc, cm = c.main_model, c.cheap_model
 
@@ -142,10 +145,12 @@ def _writeback_provider_yaml(server, wb: dict, agent) -> None:
 
         def _entry(prefix: str, opts_key: str) -> dict:
             e: dict = {}
-            for src, dst in (("max_context_tokens", "max_context_tokens"),
-                             ("max_tokens", "max_output_tokens"),
-                             ("temperature", "temperature"),
-                             ("top_p", "top_p")):
+            for src, dst in (
+                ("max_context_tokens", "max_context_tokens"),
+                ("max_tokens", "max_output_tokens"),
+                ("temperature", "temperature"),
+                ("top_p", "top_p"),
+            ):
                 v = wb.get(prefix + src)
                 if v is None:
                     continue
@@ -185,6 +190,7 @@ async def handle_web_model_switch(request):
         _mcfg, _ccfg = agent._cfg.main_model, agent._cfg.cheap_model
     else:
         from tea_agent.config import load_config as _load_cfg0
+
         _cfg0 = _load_cfg0(server.get_config_path() or None)
         _mcfg, _ccfg = _cfg0.main_model, _cfg0.cheap_model
 
@@ -200,6 +206,7 @@ async def handle_web_model_switch(request):
     def _float_or_none(key):
         v = body.get(key)
         return float(v) if v is not None and str(v).strip() else None
+
     def _int_or_none(key):
         v = body.get(key)
         return int(v) if v is not None and str(v).strip() else None
@@ -228,14 +235,21 @@ async def handle_web_model_switch(request):
 
     try:
         server.switch_model(
-            api_key, api_url, model_name,
-            cheap_api_key=cheap_api_key, cheap_api_url=cheap_api_url,
+            api_key,
+            api_url,
+            model_name,
+            cheap_api_key=cheap_api_key,
+            cheap_api_url=cheap_api_url,
             cheap_model_name=cheap_model_name,
-            temperature=temperature, max_tokens=max_tokens,
-            top_p=top_p, max_context_tokens=max_context_tokens,
+            temperature=temperature,
+            max_tokens=max_tokens,
+            top_p=top_p,
+            max_context_tokens=max_context_tokens,
             options=options,
-            cheap_temperature=cheap_temperature, cheap_max_tokens=cheap_max_tokens,
-            cheap_top_p=cheap_top_p, cheap_max_context_tokens=cheap_max_context_tokens,
+            cheap_temperature=cheap_temperature,
+            cheap_max_tokens=cheap_max_tokens,
+            cheap_top_p=cheap_top_p,
+            cheap_max_context_tokens=cheap_max_context_tokens,
             cheap_options=cheap_options,
         )
         # 落盘 + 失效配置缓存：switch_model 只改长驻 Agent 内存，
@@ -253,22 +267,27 @@ async def handle_web_model_switch(request):
             logger.warning("persist/invalidate after model switch failed: %s", e)
         # 参数写回 provider.yaml（模型属性唯一事实源）：仅回写本次显式提交的
         # 字段（_num 规范化后的 None=未传），失败静默降级不阻断热切主流程。
-        _writeback_provider_yaml(server, {
-            "temperature": temperature, "max_tokens": max_tokens,
-            "top_p": top_p, "max_context_tokens": max_context_tokens,
-            "options": options,
-            "cheap_temperature": cheap_temperature, "cheap_max_tokens": cheap_max_tokens,
-            "cheap_top_p": cheap_top_p, "cheap_max_context_tokens": cheap_max_context_tokens,
-            "cheap_options": cheap_options,
-        }, agent)
+        _writeback_provider_yaml(
+            server,
+            {
+                "temperature": temperature,
+                "max_tokens": max_tokens,
+                "top_p": top_p,
+                "max_context_tokens": max_context_tokens,
+                "options": options,
+                "cheap_temperature": cheap_temperature,
+                "cheap_max_tokens": cheap_max_tokens,
+                "cheap_top_p": cheap_top_p,
+                "cheap_max_context_tokens": cheap_max_context_tokens,
+                "cheap_options": cheap_options,
+            },
+            agent,
+        )
         masked_key = (api_key[:6] + "..." + api_key[-4:]) if len(api_key) > 12 else "***"
-        result = {"ok": True, "model": model_name, "api_url": api_url,
-                  "api_key_masked": masked_key}
+        result = {"ok": True, "model": model_name, "api_url": api_url, "api_key_masked": masked_key}
         if cheap_model_name:
             cheap_masked = (cheap_api_key[:6] + "..." + cheap_api_key[-4:]) if len(cheap_api_key) > 12 else "***"
-            result["cheap_model"] = {
-                "model": cheap_model_name, "api_url": cheap_api_url,
-                "api_key_masked": cheap_masked}
+            result["cheap_model"] = {"model": cheap_model_name, "api_url": cheap_api_url, "api_key_masked": cheap_masked}
         return JSONResponse(result)
     except Exception as e:
         logger.exception("model_switch failed")
@@ -310,6 +329,7 @@ async def handle_web_upload_config(request):
 
     if dest_path.exists():
         from datetime import datetime
+
         stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         name_stem = dest_path.stem
         dest_path = configs_dir / f"{name_stem}_{stamp}.yaml"
@@ -323,6 +343,7 @@ async def handle_web_upload_config(request):
         return JSONResponse({"ok": False, "error": f"保存文件失败: {e}"}, status_code=500)
 
     from tea_agent.config import load_config
+
     try:
         cfg = load_config(str(dest_path))
     except Exception as e:
@@ -334,24 +355,29 @@ async def handle_web_upload_config(request):
     if not main_m.is_configured:
         with contextlib.suppress(Exception):
             dest_path.unlink()
-        return JSONResponse({
-            "ok": False,
-            "error": "配置无效：必须包含 main_model 的 api_url、api_key 和 model_name",
-        }, status_code=400)
+        return JSONResponse(
+            {
+                "ok": False,
+                "error": "配置无效：必须包含 main_model 的 api_url、api_key 和 model_name",
+            },
+            status_code=400,
+        )
 
     try:
         switch_result = server.switch_config(str(dest_path))
         if not switch_result.get("ok"):
             logger.warning(f"Auto-switch config after upload failed: {switch_result.get('error', '')}")
     except Exception as e:
-                    logger.warning(f"Auto-switch config after upload exception: {e}")
+        logger.warning(f"Auto-switch config after upload exception: {e}")
 
-    return JSONResponse({
-        "ok": True,
-        "filename": dest_path.name,
-        "path": str(dest_path),
-        "is_valid": True,
-    })
+    return JSONResponse(
+        {
+            "ok": True,
+            "filename": dest_path.name,
+            "path": str(dest_path),
+            "is_valid": True,
+        }
+    )
 
 
 async def handle_web_root(request):

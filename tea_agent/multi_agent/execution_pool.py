@@ -70,6 +70,7 @@ class PoolState(str, Enum):
 @dataclass
 class TaskInfo:
     """单个任务的完整元数据。"""
+
     id: str = field(default_factory=lambda: f"task-{uuid.uuid4().hex[:12]}")
     name: str = ""
     fn: str = ""
@@ -162,10 +163,7 @@ class ExecutionPool:
         self._scheduler_thread.start()
 
         self._start_async_loop()
-        logger.info(
-            f"🚀 ExecutionPool[{pool_name}] 启动 | "
-            f"workers={max_workers} async={max_async_workers}"
-        )
+        logger.info(f"🚀 ExecutionPool[{pool_name}] 启动 | workers={max_workers} async={max_async_workers}")
 
     # ── 公共 API ───────────────────────────────
 
@@ -209,9 +207,7 @@ class ExecutionPool:
 
         # 通过优先队列调度：(priority, seq, tid, fn, args, kwargs, task, future)
         try:
-            self._priority_queue.put_nowait(
-                (priority, seq, tid, fn, args, kwargs, task, future)
-            )
+            self._priority_queue.put_nowait((priority, seq, tid, fn, args, kwargs, task, future))
         except queue.Full:
             # 队列满时降级为直接提交
             def _run_direct():
@@ -239,6 +235,7 @@ class ExecutionPool:
                     raise
                 finally:
                     self._current = max(0, self._current - 1)
+
             self._thread_pool.submit(_run_direct)
         return future
 
@@ -378,11 +375,7 @@ class ExecutionPool:
                     state_counts[s] += 1
 
             stats = dict(self._stats)
-            stats["avg_duration"] = (
-                round(stats["total_duration"] / max(1, stats["completed"]), 3)
-                if stats["completed"]
-                else 0
-            )
+            stats["avg_duration"] = round(stats["total_duration"] / max(1, stats["completed"]), 3) if stats["completed"] else 0
 
         return {
             "pool_name": self.pool_name,
@@ -543,6 +536,7 @@ class LoadBalancerStrategy(str, Enum):
 @dataclass
 class PoolNode:
     """负载均衡节点（一个执行池）。"""
+
     name: str
     pool: ExecutionPool
     weight: float = 1.0
@@ -634,6 +628,7 @@ class LoadBalancer:
         if self.strategy == LoadBalancerStrategy.WEIGHTED:
             # 加权随机选择
             import random
+
             total_weight = sum(n.weight for n in nodes)
             r = random.uniform(0, total_weight)
             cumulative = 0
@@ -645,6 +640,7 @@ class LoadBalancer:
 
         # RANDOM
         import random
+
         return random.choice(nodes).pool
 
     def submit(
@@ -664,10 +660,12 @@ class LoadBalancer:
             node._total_submitted += 1
         future = pool.submit(fn, *args, priority=priority, name=name, **kwargs)
         if node:
+
             def _on_done(f, n=node):
                 n._current = max(0, n._current - 1)
                 with contextlib.suppress(Exception):
                     f.result()
+
             future.add_done_callback(_on_done)
         return future
 
@@ -688,8 +686,10 @@ class LoadBalancer:
             node._total_submitted += 1
         future = pool.submit_async(coro_fn, *args, priority=priority, name=name, **kwargs)
         if node:
+
             def _on_done(f, n=node):
                 n._current = max(0, n._current - 1)
+
             future.add_done_callback(_on_done)
         return future
 
@@ -735,10 +735,11 @@ class LoadBalancer:
 @dataclass
 class ResourceLimit:
     """资源限制配置。"""
-    max_cpu_time: float = 60.0       # 单任务最大 CPU 时间（秒）
-    max_memory_mb: float = 512.0     # 单任务最大内存（MB）
-    max_duration: float = 300.0      # 单任务最大墙上时间（秒）
-    max_concurrent: int = 20         # 最大并发任务数
+
+    max_cpu_time: float = 60.0  # 单任务最大 CPU 时间（秒）
+    max_memory_mb: float = 512.0  # 单任务最大内存（MB）
+    max_duration: float = 300.0  # 单任务最大墙上时间（秒）
+    max_concurrent: int = 20  # 最大并发任务数
 
 
 class ResourceGuard:
@@ -784,11 +785,13 @@ class ResourceGuard:
             # 检查并发
             count = sum(1 for v in self._active.values() if v["type"] == task_type)
             if count >= limit.max_concurrent:
-                self._violations.append({
-                    "task_id": task_id,
-                    "reason": f"max_concurrent exceeded ({count}/{limit.max_concurrent})",
-                    "time": time.time(),
-                })
+                self._violations.append(
+                    {
+                        "task_id": task_id,
+                        "reason": f"max_concurrent exceeded ({count}/{limit.max_concurrent})",
+                        "time": time.time(),
+                    }
+                )
                 logger.warning(f"⚠️ ResourceGuard: 并发限制 {task_id} ({count}/{limit.max_concurrent})")
                 return False
 
@@ -815,18 +818,22 @@ class ResourceGuard:
             cpu_elapsed = time.process_time() - info["cpu_start"]
 
             if elapsed > limit.max_duration:
-                self._violations.append({
-                    "task_id": task_id,
-                    "reason": f"wall_time exceeded ({elapsed:.1f}/{limit.max_duration}s)",
-                    "time": time.time(),
-                })
+                self._violations.append(
+                    {
+                        "task_id": task_id,
+                        "reason": f"wall_time exceeded ({elapsed:.1f}/{limit.max_duration}s)",
+                        "time": time.time(),
+                    }
+                )
                 return True
             if cpu_elapsed > limit.max_cpu_time:
-                self._violations.append({
-                    "task_id": task_id,
-                    "reason": f"cpu_time exceeded ({cpu_elapsed:.1f}/{limit.max_cpu_time}s)",
-                    "time": time.time(),
-                })
+                self._violations.append(
+                    {
+                        "task_id": task_id,
+                        "reason": f"cpu_time exceeded ({cpu_elapsed:.1f}/{limit.max_cpu_time}s)",
+                        "time": time.time(),
+                    }
+                )
                 return True
             return False
 
@@ -844,10 +851,7 @@ class ResourceGuard:
         """清理过期违规记录。"""
         now = time.time()
         with self._lock:
-            self._violations = [
-                v for v in self._violations
-                if now - v["time"] < max_age
-            ]
+            self._violations = [v for v in self._violations if now - v["time"] < max_age]
 
 
 # ═══════════════════════════════════════════════
@@ -856,9 +860,9 @@ class ResourceGuard:
 
 
 class CircuitState(str, Enum):
-    CLOSED = "closed"          # 正常
-    OPEN = "open"              # 熔断开启
-    HALF_OPEN = "half_open"    # 半开（尝试恢复）
+    CLOSED = "closed"  # 正常
+    OPEN = "open"  # 熔断开启
+    HALF_OPEN = "half_open"  # 半开（尝试恢复）
 
 
 class CircuitBreaker:
@@ -897,9 +901,7 @@ class CircuitBreaker:
 
     def __enter__(self):
         if not self._try_acquire():
-            raise RuntimeError(
-                f"CircuitBreaker[{self.name}] OPEN: 熔断开启"
-            )
+            raise RuntimeError(f"CircuitBreaker[{self.name}] OPEN: 熔断开启")
         return self
 
     def __exit__(self, exc_type, exc_val, exc_tb):
@@ -910,9 +912,7 @@ class CircuitBreaker:
 
     async def __aenter__(self):
         if not self._try_acquire():
-            raise RuntimeError(
-                f"CircuitBreaker[{self.name}] OPEN: 熔断开启"
-            )
+            raise RuntimeError(f"CircuitBreaker[{self.name}] OPEN: 熔断开启")
         return self
 
     async def __aexit__(self, exc_type, exc_val, exc_tb):
@@ -973,10 +973,7 @@ class CircuitBreaker:
             self._failure_count += 1
             if self._failure_count >= self.failure_threshold:
                 self.state = CircuitState.OPEN
-                logger.warning(
-                    f"🔴 CircuitBreaker[{self.name}] 触发熔断 "
-                    f"({self._failure_count}/{self.failure_threshold})"
-                )
+                logger.warning(f"🔴 CircuitBreaker[{self.name}] 触发熔断 ({self._failure_count}/{self.failure_threshold})")
 
     def reset(self):
         """手动重置熔断器。"""
@@ -1015,7 +1012,9 @@ class RetryPolicy:
         max_delay: float = 30.0,
         jitter: bool = True,
         retryable_exceptions: tuple = (
-            ConnectionError, TimeoutError, OSError,
+            ConnectionError,
+            TimeoutError,
+            OSError,
         ),
     ):
         self.max_retries = max_retries
@@ -1043,9 +1042,7 @@ class RetryPolicy:
             try:
                 result = fn(*args, **kwargs)
                 if self._attempts > 0:
-                    logger.info(
-                        f"🔄 重试成功 (attempt={self._attempts}/{self.max_retries})"
-                    )
+                    logger.info(f"🔄 重试成功 (attempt={self._attempts}/{self.max_retries})")
                 return result
             except self.retryable_exceptions as e:
                 last_exception = e
@@ -1061,10 +1058,7 @@ class RetryPolicy:
                     delay = delay * (0.5 + random.random() * 0.5)
                 self._total_delay += delay
 
-                logger.warning(
-                    f"🔄 重试 {self._attempts}/{self.max_retries} "
-                    f"等待 {delay:.1f}s | {type(e).__name__}: {e}"
-                )
+                logger.warning(f"🔄 重试 {self._attempts}/{self.max_retries} 等待 {delay:.1f}s | {type(e).__name__}: {e}")
                 time.sleep(delay)
 
         raise RetryExhaustedError(
@@ -1085,9 +1079,7 @@ class RetryPolicy:
             try:
                 result = await coro_fn(*args, **kwargs)
                 if self._attempts > 0:
-                    logger.info(
-                        f"🔄 异步重试成功 (attempt={self._attempts}/{self.max_retries})"
-                    )
+                    logger.info(f"🔄 异步重试成功 (attempt={self._attempts}/{self.max_retries})")
                 return result
             except self.retryable_exceptions as e:
                 last_exception = e
@@ -1103,10 +1095,7 @@ class RetryPolicy:
                     delay = delay * (0.5 + random.random() * 0.5)
                 self._total_delay += delay
 
-                logger.warning(
-                    f"🔄 异步重试 {self._attempts}/{self.max_retries} "
-                    f"等待 {delay:.1f}s | {type(e).__name__}: {e}"
-                )
+                logger.warning(f"🔄 异步重试 {self._attempts}/{self.max_retries} 等待 {delay:.1f}s | {type(e).__name__}: {e}")
                 await asyncio.sleep(delay)
 
         raise RetryExhaustedError(

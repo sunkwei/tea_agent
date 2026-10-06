@@ -25,14 +25,14 @@ async def _launch_browser(playwright):
         ]
     elif is_linux:
         candidates = [
-            (playwright.chromium, {"headless": True}, "chromium"),          # playwright install chromium
-            (playwright.firefox,  {"headless": True}, "firefox"),           # fallback
+            (playwright.chromium, {"headless": True}, "chromium"),  # playwright install chromium
+            (playwright.firefox, {"headless": True}, "firefox"),  # fallback
         ]
     else:  # darwin / others
         candidates = [
             (playwright.chromium, {"channel": "msedge", "headless": True}, "chromium:msedge"),
             (playwright.chromium, {"headless": True}, "chromium"),
-            (playwright.firefox,  {"headless": True}, "firefox"),
+            (playwright.firefox, {"headless": True}, "firefox"),
         ]
 
     errors = []
@@ -43,10 +43,7 @@ async def _launch_browser(playwright):
         except Exception as e:
             errors.append(f"{label}: {e}")
 
-    raise RuntimeError(
-        f"无法启动任何浏览器，已尝试: {'; '.join(errors)}。"
-        f"请执行 playwright install chromium 或 playwright install firefox"
-    )
+    raise RuntimeError(f"无法启动任何浏览器，已尝试: {'; '.join(errors)}。请执行 playwright install chromium 或 playwright install firefox")
 
 
 async def _js_fetch(url: str, wait_selector: str = "body", timeout: int = 15, return_html: bool = False):
@@ -92,27 +89,12 @@ def meta_toolkit_js_fetch() -> dict:
             "parameters": {
                 "type": "object",
                 "properties": {
-                    "url": {
-                        "type": "string",
-                        "description": "目标 URL"
-                    },
-                    "wait_selector": {
-                        "type": "string",
-                        "description": "等待某 CSS 选择器出现后再抓取，默认 body",
-                        "default": "body"
-                    },
-                    "timeout": {
-                        "type": "integer",
-                        "description": "超时秒数，默认 15",
-                        "default": 15
-                    },
-                    "return_html": {
-                        "type": "boolean",
-                        "description": "返回原始 HTML(true) 还是提取的文本(false)，默认 false",
-                        "default": False
-                    }
+                    "url": {"type": "string", "description": "目标 URL"},
+                    "wait_selector": {"type": "string", "description": "等待某 CSS 选择器出现后再抓取，默认 body", "default": "body"},
+                    "timeout": {"type": "integer", "description": "超时秒数，默认 15", "default": 15},
+                    "return_html": {"type": "boolean", "description": "返回原始 HTML(true) 还是提取的文本(false)，默认 false", "default": False},
                 },
-                "required": ["url"]
-            }
-        }
+                "required": ["url"],
+            },
+        },
     }

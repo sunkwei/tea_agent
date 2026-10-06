@@ -6,10 +6,10 @@ import logging
 
 logger = logging.getLogger("toolkit")
 
+
 def toolkit_proactive(action: str, content: str = "", priority: int = 2, goal_id: int = None):
     """Agent 自主心跳系统"""
     logger.info(f"toolkit_proactive called: action={action!r}, content={repr(content)[:80]}, priority={priority!r}, goal_id={goal_id!r}")
-
 
     try:
         if action == "check":
@@ -24,12 +24,15 @@ def toolkit_proactive(action: str, content: str = "", priority: int = 2, goal_id
     except Exception as e:
         return {"ok": False, "error": f"自主心跳出错: {e}", "returncode": 1}
 
+
 def _get_memory_manager():
     """Internal: get the memory manager."""
     from tea_agent.memory import MemoryManager
     from tea_agent.store import Storage
+
     storage = Storage()
     return MemoryManager(storage, extraction_threshold=1, dedup_threshold=0.3)
+
 
 def _check_proactive():
     """Internal: check proactive."""
@@ -41,7 +44,7 @@ def _check_proactive():
         insights = []
         for m in all_mems:
             tags = (m.get("tags") or "").lower()
-            cat = (m.get("category") or "")
+            cat = m.get("category") or ""
             if "goal" in tags or cat == "reminder":
                 goals.append(m)
             elif "insight" in tags:
@@ -56,18 +59,22 @@ def _check_proactive():
         }
 
         for g in sorted(goals, key=lambda x: x.get("priority", 2))[:5]:
-            report["goals"].append({
-                "id": g["id"],
-                "content": g["content"],
-                "priority": g.get("priority", 2),
-                "category": g.get("category", ""),
-            })
+            report["goals"].append(
+                {
+                    "id": g["id"],
+                    "content": g["content"],
+                    "priority": g.get("priority", 2),
+                    "category": g.get("category", ""),
+                }
+            )
 
         for ins in insights[:3]:
-            report["insights"].append({
-                "id": ins["id"],
-                "content": ins["content"][:120],
-            })
+            report["insights"].append(
+                {
+                    "id": ins["id"],
+                    "content": ins["content"][:120],
+                }
+            )
 
         if not goals and not insights:
             report["suggestion"] = "无待办目标。建议：反思当前会话，设定下一步进化方向。"
@@ -78,6 +85,7 @@ def _check_proactive():
         return {"ok": True, "report": report, "returncode": 0}
     except Exception as e:
         return {"ok": False, "error": f"检查失败: {e}", "returncode": 1}
+
 
 def _add_goal(content: str, priority: int = 2):
     if not content or not content.strip():
@@ -96,6 +104,7 @@ def _add_goal(content: str, priority: int = 2):
     except Exception as e:
         return {"ok": False, "error": f"设定目标失败: {e}", "returncode": 1}
 
+
 def _complete_goal(goal_id: int):
     if not goal_id:
         return {"ok": False, "error": "需要提供 goal_id", "returncode": 1}
@@ -106,6 +115,7 @@ def _complete_goal(goal_id: int):
     except Exception as e:
         return {"ok": False, "error": f"完成目标失败: {e}", "returncode": 1}
 
+
 def _list_goals():
     """Internal: list goals."""
     try:
@@ -114,19 +124,38 @@ def _list_goals():
         goals = []
         for m in all_mems:
             tags = (m.get("tags") or "").lower()
-            cat = (m.get("category") or "")
+            cat = m.get("category") or ""
             if "goal" in tags or cat == "reminder":
-                goals.append({
-                    "id": m["id"],
-                    "content": m["content"],
-                    "priority": m.get("priority", 2),
-                    "importance": m.get("importance", 3),
-                    "created": m.get("created_at", ""),
-                })
+                goals.append(
+                    {
+                        "id": m["id"],
+                        "content": m["content"],
+                        "priority": m.get("priority", 2),
+                        "importance": m.get("importance", 3),
+                        "created": m.get("created_at", ""),
+                    }
+                )
         goals.sort(key=lambda x: x["priority"])
         return {"ok": True, "goals": goals, "returncode": 0}
     except Exception as e:
         return {"ok": False, "error": f"列出目标失败: {e}", "returncode": 1}
 
+
 def meta_toolkit_proactive() -> dict:
-    return {"type": "function", "function": {"name": "toolkit_proactive", "description": "自主心跳：Agent 的自我目标管理系统。action=check/goal/done/list_goals。", "parameters": {"type": "object", "properties": {"action": {"type": "string", "enum": ["check", "goal", "done", "list_goals"], "description": "check/goal/done/list_goals"}, "content": {"type": "string", "description": "目标内容"}, "priority": {"type": "integer", "description": "优先级 0-3", "default": 2}, "goal_id": {"type": "integer", "description": "目标ID"}}, "required": ["action"]}}}
+    return {
+        "type": "function",
+        "function": {
+            "name": "toolkit_proactive",
+            "description": "自主心跳：Agent 的自我目标管理系统。action=check/goal/done/list_goals。",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "action": {"type": "string", "enum": ["check", "goal", "done", "list_goals"], "description": "check/goal/done/list_goals"},
+                    "content": {"type": "string", "description": "目标内容"},
+                    "priority": {"type": "integer", "description": "优先级 0-3", "default": 2},
+                    "goal_id": {"type": "integer", "description": "目标ID"},
+                },
+                "required": ["action"],
+            },
+        },
+    }

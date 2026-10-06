@@ -5,10 +5,19 @@ import logging
 logger = logging.getLogger("toolkit")
 
 
-def toolkit_edit(file_path: str, action: str = "apply_patch", content: str = "",
-                 start_line: int = 0, end_line: int = 0, new_text: str = "",
-                 old_text: str = "", preview: bool = False, backup: bool = True,
-                 return_diff: bool = False, strict: bool = False):
+def toolkit_edit(
+    file_path: str,
+    action: str = "apply_patch",
+    content: str = "",
+    start_line: int = 0,
+    end_line: int = 0,
+    new_text: str = "",
+    old_text: str = "",
+    preview: bool = False,
+    backup: bool = True,
+    return_diff: bool = False,
+    strict: bool = False,
+):
     """
     高级代码编辑工具。推荐使用 replace_text（文本匹配）代替 replace_lines（行号匹配）。
 
@@ -52,6 +61,7 @@ def toolkit_edit(file_path: str, action: str = "apply_patch", content: str = "",
     if result.get("ok") and not preview:
         try:
             from tea_agent.toolkit._git_snapshot import maybe_snapshot
+
             snap = maybe_snapshot([file_path], f"edit {action} {os.path.basename(file_path)}")
             if snap.get("snapshotted"):
                 result["git_snapshot"] = snap.get("hash", "")
@@ -64,14 +74,14 @@ def toolkit_edit(file_path: str, action: str = "apply_patch", content: str = "",
 #  post-write verification
 # ═══════════════════════════════════════════════════════════════
 
-def _verify_after_write(file_path: str, old_text: str = "",
-                        new_text: str = "", label: str = "") -> str:
+
+def _verify_after_write(file_path: str, old_text: str = "", new_text: str = "", label: str = "") -> str:
     """
     Read file back and verify old_text is gone, new_text is present.
     Returns warning string if something looks wrong, empty string if OK.
     """
     try:
-        with open(file_path, encoding='utf-8') as f:
+        with open(file_path, encoding="utf-8") as f:
             current = f.read()
     except Exception as e:
         return f"⚠️ 验证失败：无法读回文件 {file_path}: {e}"
@@ -81,15 +91,15 @@ def _verify_after_write(file_path: str, old_text: str = "",
 
     warnings = []
     if old_text:
-        old_norm = old_text.replace('\r\n', '\n').replace('\r', '\n')
-        cur_norm = current.replace('\r\n', '\n').replace('\r', '\n')
+        old_norm = old_text.replace("\r\n", "\n").replace("\r", "\n")
+        cur_norm = current.replace("\r\n", "\n").replace("\r", "\n")
         if old_norm in cur_norm:
             count = cur_norm.count(old_norm)
             warnings.append(f"旧内容仍然存在（出现 {count} 次），替换可能不完整")
 
     if new_text:
-        new_norm = new_text.replace('\r\n', '\n').replace('\r', '\n')
-        cur_norm = current.replace('\r\n', '\n').replace('\r', '\n')
+        new_norm = new_text.replace("\r\n", "\n").replace("\r", "\n")
+        cur_norm = current.replace("\r\n", "\n").replace("\r", "\n")
         if new_norm not in cur_norm:
             warnings.append("新内容未在文件中找到，写入可能失败")
 
@@ -102,9 +112,8 @@ def _verify_after_write(file_path: str, old_text: str = "",
 #  replace_text — text-based matching (recommended)
 # ═══════════════════════════════════════════════════════════════
 
-def _replace_text(file_path: str, old_text: str, new_text: str,
-                  preview: bool, backup: bool, return_diff: bool = False,
-                  strict: bool = False):
+
+def _replace_text(file_path: str, old_text: str, new_text: str, preview: bool, backup: bool, return_diff: bool = False, strict: bool = False):
     """Replace by exact text match — immune to line number drift."""
     import shutil
 
@@ -112,13 +121,13 @@ def _replace_text(file_path: str, old_text: str, new_text: str,
         return {"ok": False, "error": "❌ old_text 不能为空，请提供要替换的原始文本", "returncode": 1}
 
     try:
-        with open(file_path, encoding='utf-8') as f:
+        with open(file_path, encoding="utf-8") as f:
             original = f.read()
 
         # normalize line endings（匹配与替换统一在规范化串上进行，避免 CRLF 索引错位）
-        original_norm = original.replace('\r\n', '\n').replace('\r', '\n')
-        old_norm = old_text.replace('\r\n', '\n').replace('\r', '\n')
-        new_norm = new_text.replace('\r\n', '\n').replace('\r', '\n')
+        original_norm = original.replace("\r\n", "\n").replace("\r", "\n")
+        old_norm = old_text.replace("\r\n", "\n").replace("\r", "\n")
+        new_norm = new_text.replace("\r\n", "\n").replace("\r", "\n")
 
         # find old_text
         idx = original_norm.find(old_norm)
@@ -135,40 +144,45 @@ def _replace_text(file_path: str, old_text: str, new_text: str,
         if second != -1:
             if strict:
                 # 严格模式（原 toolkit_diff_edit 语义）：多处匹配 → 拒绝，避免改错位置
-                return {"ok": False, "error": "❌ 冲突: old_text 在文件中出现多次，无法唯一确定。"
-                                               "请提供更长的上下文片段（含行首缩进/相邻行）", "returncode": 1}
-            logger.warning(
-                f"⚠️ old_text 在文件中出现多次，将替换第一个匹配 "
-                f"(位置 {idx} 和 {second})"
-            )
+                return {
+                    "ok": False,
+                    "error": "❌ 冲突: old_text 在文件中出现多次，无法唯一确定。请提供更长的上下文片段（含行首缩进/相邻行）",
+                    "returncode": 1,
+                }
+            logger.warning(f"⚠️ old_text 在文件中出现多次，将替换第一个匹配 (位置 {idx} 和 {second})")
 
         # 在规范化串上执行替换（idx 与切片基于同一份串，杜绝 CRLF 索引错位）
-        replaced = original_norm[:idx] + new_norm + original_norm[idx + len(old_norm):]
+        replaced = original_norm[:idx] + new_norm + original_norm[idx + len(old_norm) :]
 
         # 恢复原始换行风格（CRLF 为主则转回 CRLF，否则保持 LF）
-        crlf_count = original.count('\r\n')
-        lone_lf = original.count('\n') - crlf_count
-        new_text_raw = replaced.replace('\n', '\r\n') if crlf_count > lone_lf else replaced
+        crlf_count = original.count("\r\n")
+        lone_lf = original.count("\n") - crlf_count
+        new_text_raw = replaced.replace("\n", "\r\n") if crlf_count > lone_lf else replaced
 
         diff_text = _generate_diff(original, new_text_raw)
 
         if preview:
-            return {"ok": True, "status": "preview", "file": file_path, "action": "replace_text",
-                    "match_at": idx, "duplicate": second != -1, "diff": diff_text, "returncode": 0}
+            return {
+                "ok": True,
+                "status": "preview",
+                "file": file_path,
+                "action": "replace_text",
+                "match_at": idx,
+                "duplicate": second != -1,
+                "diff": diff_text,
+                "returncode": 0,
+            }
 
         # backup
         if backup:
-            shutil.copy2(file_path, file_path + '.bak')
+            shutil.copy2(file_path, file_path + ".bak")
 
         # write
-        with open(file_path, 'w', encoding='utf-8') as f:
+        with open(file_path, "w", encoding="utf-8") as f:
             f.write(new_text_raw)
 
         # verify
-        vrf = _verify_after_write(file_path,
-                                  old_text=old_norm,
-                                  new_text=new_norm,
-                                  label="replace_text")
+        vrf = _verify_after_write(file_path, old_text=old_norm, new_text=new_norm, label="replace_text")
         msg = f"✅ 成功替换（文本匹配，位置 {idx}）"
         if vrf:
             msg += f" {vrf}"
@@ -176,7 +190,7 @@ def _replace_text(file_path: str, old_text: str, new_text: str,
         if return_diff:
             # 返回 unified diff 原文（原 toolkit_diff_edit 的能力）
             result["diff"] = diff_text
-            result["summary"] = f"1 file changed, {diff_text.count(chr(10)+'+') - (1 if diff_text.startswith('+++') else 0)} additions"
+            result["summary"] = f"1 file changed, {diff_text.count(chr(10) + '+') - (1 if diff_text.startswith('+++') else 0)} additions"
         return result
 
     except Exception as e:
@@ -195,6 +209,7 @@ def _tuple_to_dict(tup):
 #  existing actions (with verification added)
 # ═══════════════════════════════════════════════════════════════
 
+
 def _apply_patch(file_path: str, patch_content: str, preview: bool, backup: bool):
     import os
     import shutil
@@ -202,71 +217,66 @@ def _apply_patch(file_path: str, patch_content: str, preview: bool, backup: bool
     import tempfile
 
     try:
-        with open(file_path, encoding='utf-8') as f:
+        with open(file_path, encoding="utf-8") as f:
             original_content = f.read()
 
-        patch_available = shutil.which('patch') is not None
+        patch_available = shutil.which("patch") is not None
 
         if patch_available and not preview:
-            with tempfile.NamedTemporaryFile(mode='w', suffix='.patch',
-                                             delete=False, encoding='utf-8') as pf:
+            with tempfile.NamedTemporaryFile(mode="w", suffix=".patch", delete=False, encoding="utf-8") as pf:
                 pf.write(patch_content)
                 patch_file = pf.name
             try:
                 if backup:
-                    shutil.copy2(file_path, file_path + '.bak')
-                result = subprocess.run(
-                    ['patch', '--batch', '--forward', file_path, patch_file],
-                    capture_output=True, text=True, timeout=30)
+                    shutil.copy2(file_path, file_path + ".bak")
+                result = subprocess.run(["patch", "--batch", "--forward", file_path, patch_file], capture_output=True, text=True, timeout=30)
                 if result.returncode == 0:
                     return {"ok": True, "message": f"✅ 成功应用 patch 到 {file_path}", "returncode": 0}
-                if backup and os.path.exists(file_path + '.bak'):
-                    shutil.copy2(file_path + '.bak', file_path)
+                if backup and os.path.exists(file_path + ".bak"):
+                    shutil.copy2(file_path + ".bak", file_path)
                 return {"ok": False, "error": f"❌ patch 应用失败:\n{result.stderr}\n{result.stdout}", "returncode": 1}
             finally:
                 try:
                     os.unlink(patch_file)
                 except OSError:
-                    logger.exception('op_failed')
+                    logger.exception("op_failed")
 
         else:
-            return _apply_patch_python(file_path, original_content,
-                                       patch_content, preview, backup)
+            return _apply_patch_python(file_path, original_content, patch_content, preview, backup)
     except Exception as e:
         return {"ok": False, "error": f"❌ 应用 patch 失败: {e!s}", "returncode": 1}
 
 
-def _apply_patch_python(file_path: str, original_content: str,
-                        patch_content: str, preview: bool, backup: bool):
+def _apply_patch_python(file_path: str, original_content: str, patch_content: str, preview: bool, backup: bool):
     import json
     import re
     import shutil
 
     try:
-        original_content = original_content.replace('\r\n', '\n').replace('\r', '\n')
-        patch_content = patch_content.replace('\r\n', '\n').replace('\r', '\n')
-        lines = original_content.split('\n')
-        patch_lines = patch_content.split('\n')
+        original_content = original_content.replace("\r\n", "\n").replace("\r", "\n")
+        patch_content = patch_content.replace("\r\n", "\n").replace("\r", "\n")
+        lines = original_content.split("\n")
+        patch_lines = patch_content.split("\n")
 
         hunks = []
         current_hunk = None
         for line in patch_lines:
-            if line.startswith('@@'):
+            if line.startswith("@@"):
                 if current_hunk:
                     hunks.append(current_hunk)
-                match = re.match(r'@@ -(\d+),?(\d*) \+(\d+),?(\d*) @@', line)
+                match = re.match(r"@@ -(\d+),?(\d*) \+(\d+),?(\d*) @@", line)
                 if match:
                     current_hunk = {
-                        'old_start': int(match.group(1)),
-                        'old_count': int(match.group(2)) if match.group(2) else 1,
-                        'new_start': int(match.group(3)),
-                        'new_count': int(match.group(4)) if match.group(4) else 1,
-                        'lines': []
+                        "old_start": int(match.group(1)),
+                        "old_count": int(match.group(2)) if match.group(2) else 1,
+                        "new_start": int(match.group(3)),
+                        "new_count": int(match.group(4)) if match.group(4) else 1,
+                        "lines": [],
                     }
             elif current_hunk is not None and (
-                    line.startswith('+') or line.startswith('-') or
-                    line.startswith(' ') or line == '\\ No newline at end of file'):
-                current_hunk['lines'].append(line)
+                line.startswith("+") or line.startswith("-") or line.startswith(" ") or line == "\\ No newline at end of file"
+            ):
+                current_hunk["lines"].append(line)
         if current_hunk:
             hunks.append(current_hunk)
         if not hunks:
@@ -274,13 +284,13 @@ def _apply_patch_python(file_path: str, original_content: str,
 
         new_lines = lines[:]
         for hunk in reversed(hunks):
-            old_start = hunk['old_start']
+            old_start = hunk["old_start"]
             # 新建文件 hunk（@@ -0,0 +1,N @@）：无旧行可匹配，仅可插入
             is_new_file = old_start == 0
             if is_new_file:
-                newfile_lines = [l[1:] for l in hunk['lines'] if l.startswith('+')]
-                for l in hunk['lines']:
-                    if l.startswith('-') or l.startswith(' '):
+                newfile_lines = [ln[1:] for ln in hunk["lines"] if ln.startswith("+")]
+                for ln in hunk["lines"]:
+                    if ln.startswith("-") or ln.startswith(" "):
                         return (1, "", "❌ 新建文件 patch 不应包含删除/上下文行")
                 # 按 patch 顺序在文件开头原样插入
                 for i, nl in enumerate(newfile_lines):
@@ -294,34 +304,32 @@ def _apply_patch_python(file_path: str, original_content: str,
             # 逐行按顺序应用，正确处理 context(空格) / 删除(-) / 插入(+) 的穿插
             # pos 指向 new_lines 中当前应处理的旧行位置
             pos = start_idx
-            for l in hunk['lines']:
-                if l.startswith('+'):
+            for ln in hunk["lines"]:
+                if ln.startswith("+"):
                     # 插入：纯新增，不消费旧行
-                    new_lines.insert(pos, l[1:])
+                    new_lines.insert(pos, ln[1:])
                     pos += 1
-                elif l.startswith('-'):
+                elif ln.startswith("-"):
                     # 删除：校验旧行匹配后移除
-                    if pos >= len(new_lines) or new_lines[pos] != l[1:]:
-                        return (1, "", f"❌ patch 删除行不匹配: {l[1:]!r}")
+                    if pos >= len(new_lines) or new_lines[pos] != ln[1:]:
+                        return (1, "", f"❌ patch 删除行不匹配: {ln[1:]!r}")
                     new_lines.pop(pos)
-                elif l.startswith(' '):
+                elif ln.startswith(" "):
                     # context：校验旧行匹配后保留
-                    if pos >= len(new_lines) or new_lines[pos] != l[1:]:
-                        return (1, "", f"❌ patch 上下文不匹配: {l[1:]!r}")
+                    if pos >= len(new_lines) or new_lines[pos] != ln[1:]:
+                        return (1, "", f"❌ patch 上下文不匹配: {ln[1:]!r}")
                     pos += 1
                 # "\ No newline at end of file" 等其余行忽略
 
-        new_text = '\n'.join(new_lines)
+        new_text = "\n".join(new_lines)
 
         if preview:
             diff_preview = _generate_diff(original_content, new_text)
-            return (0, json.dumps({"status": "preview", "file": file_path,
-                                   "diff": diff_preview},
-                                  ensure_ascii=False, indent=2), "")
+            return (0, json.dumps({"status": "preview", "file": file_path, "diff": diff_preview}, ensure_ascii=False, indent=2), "")
 
         if backup:
-            shutil.copy2(file_path, file_path + '.bak')
-        with open(file_path, 'w', encoding='utf-8') as f:
+            shutil.copy2(file_path, file_path + ".bak")
+        with open(file_path, "w", encoding="utf-8") as f:
             f.write(new_text)
 
         vrf = _verify_after_write(file_path, label="apply_patch")
@@ -332,70 +340,69 @@ def _apply_patch_python(file_path: str, original_content: str,
         return (1, "", f"❌ 应用 patch 失败: {e!s}")
 
 
-def _insert_lines(file_path: str, start_line: int, new_text: str,
-                  preview: bool, backup: bool):
+def _insert_lines(file_path: str, start_line: int, new_text: str, preview: bool, backup: bool):
     import json
     import shutil
 
     try:
-        with open(file_path, encoding='utf-8') as f:
+        with open(file_path, encoding="utf-8") as f:
             lines = f.readlines()
 
         if start_line < 1 or start_line > len(lines) + 1:
-            return (1, "", f"❌ 行号 {start_line} 超出范围 (1-{len(lines)+1})")
+            return (1, "", f"❌ 行号 {start_line} 超出范围 (1-{len(lines) + 1})")
 
-        original_content = ''.join(lines)
-        new_text = new_text.replace('\r\n', '\n').replace('\r', '\n')
-        insert_lines_list = new_text.split('\n')
+        original_content = "".join(lines)
+        new_text = new_text.replace("\r\n", "\n").replace("\r", "\n")
+        insert_lines_list = new_text.split("\n")
         insert_index = start_line - 1
         # 最后一段插入文本是否需补 \n 分隔：
         # 若插入点之后还有行，或其后紧跟的原有行本身带 \n（行式拼接习惯），则补；
         # 仅当插到文件最末尾且原末行无 \n 时不补（让插入文本成为真正末行）。
         last_needs_nl = (
             insert_index < len(lines)  # 插入点后还有后续行
-            or (lines and lines[-1].endswith('\n'))  # 原文件行均以 \n 结束
+            or (lines and lines[-1].endswith("\n"))  # 原文件行均以 \n 结束
         )
         insert_with_nl = []
         for i, line in enumerate(insert_lines_list):
             if i < len(insert_lines_list) - 1:
-                insert_with_nl.append(line + '\n')
+                insert_with_nl.append(line + "\n")
             else:
-                insert_with_nl.append(line + '\n' if last_needs_nl else line)
+                insert_with_nl.append(line + "\n" if last_needs_nl else line)
 
-        new_lines = (lines[:insert_index] + insert_with_nl +
-                     lines[insert_index:])
-        new_text_joined = ''.join(new_lines)
+        new_lines = lines[:insert_index] + insert_with_nl + lines[insert_index:]
+        new_text_joined = "".join(new_lines)
 
         if preview:
             diff_preview = _generate_diff(original_content, new_text_joined)
-            return (0, json.dumps({"status": "preview", "file": file_path,
-                                   "action": "insert", "at_line": start_line,
-                                   "diff": diff_preview},
-                                  ensure_ascii=False, indent=2), "")
+            return (
+                0,
+                json.dumps(
+                    {"status": "preview", "file": file_path, "action": "insert", "at_line": start_line, "diff": diff_preview},
+                    ensure_ascii=False,
+                    indent=2,
+                ),
+                "",
+            )
 
         if backup:
-            shutil.copy2(file_path, file_path + '.bak')
-        with open(file_path, 'w', encoding='utf-8') as f:
+            shutil.copy2(file_path, file_path + ".bak")
+        with open(file_path, "w", encoding="utf-8") as f:
             f.write(new_text_joined)
 
-        vrf = _verify_after_write(file_path, new_text=new_text.strip(),
-                                  label=f"insert_lines@{start_line}")
+        vrf = _verify_after_write(file_path, new_text=new_text.strip(), label=f"insert_lines@{start_line}")
         if vrf:
-            return (0, f"✅ 成功在 {file_path}:{start_line} 插入 "
-                       f"{len(insert_lines_list)} 行 {vrf}", "")
-        return (0, f"✅ 成功在 {file_path}:{start_line} 插入 "
-                   f"{len(insert_lines_list)} 行", "")
+            return (0, f"✅ 成功在 {file_path}:{start_line} 插入 {len(insert_lines_list)} 行 {vrf}", "")
+        return (0, f"✅ 成功在 {file_path}:{start_line} 插入 {len(insert_lines_list)} 行", "")
     except Exception as e:
         return (1, "", f"❌ 插入失败: {e!s}")
 
 
-def _delete_lines(file_path: str, start_line: int, end_line: int,
-                  preview: bool, backup: bool):
+def _delete_lines(file_path: str, start_line: int, end_line: int, preview: bool, backup: bool):
     import json
     import shutil
 
     try:
-        with open(file_path, encoding='utf-8') as f:
+        with open(file_path, encoding="utf-8") as f:
             lines = f.readlines()
 
         if start_line < 1 or start_line > len(lines):
@@ -403,42 +410,42 @@ def _delete_lines(file_path: str, start_line: int, end_line: int,
         if end_line < start_line or end_line > len(lines):
             return (1, "", f"❌ 结束行号 {end_line} 超出范围")
 
-        deleted = lines[start_line - 1:end_line]
-        deleted_text = ''.join(deleted).strip()
-        new_lines = lines[:start_line - 1] + lines[end_line:]
-        new_text = ''.join(new_lines)
+        deleted = lines[start_line - 1 : end_line]
+        deleted_text = "".join(deleted).strip()
+        new_lines = lines[: start_line - 1] + lines[end_line:]
+        new_text = "".join(new_lines)
 
         if preview:
-            diff_preview = _generate_diff(''.join(lines), new_text)
-            return (0, json.dumps({"status": "preview", "file": file_path,
-                                   "action": "delete",
-                                   "deleted_lines": f"{start_line}-{end_line}",
-                                   "diff": diff_preview},
-                                  ensure_ascii=False, indent=2), "")
+            diff_preview = _generate_diff("".join(lines), new_text)
+            return (
+                0,
+                json.dumps(
+                    {"status": "preview", "file": file_path, "action": "delete", "deleted_lines": f"{start_line}-{end_line}", "diff": diff_preview},
+                    ensure_ascii=False,
+                    indent=2,
+                ),
+                "",
+            )
 
         if backup:
-            shutil.copy2(file_path, file_path + '.bak')
-        with open(file_path, 'w', encoding='utf-8') as f:
+            shutil.copy2(file_path, file_path + ".bak")
+        with open(file_path, "w", encoding="utf-8") as f:
             f.write(new_text)
 
-        vrf = _verify_after_write(file_path, old_text=deleted_text,
-                                  label=f"delete_lines:{start_line}-{end_line}")
+        vrf = _verify_after_write(file_path, old_text=deleted_text, label=f"delete_lines:{start_line}-{end_line}")
         if vrf:
-            return (0, f"✅ 成功删除 {file_path}:{start_line}-{end_line} "
-                       f"({len(deleted)} 行) {vrf}", "")
-        return (0, f"✅ 成功删除 {file_path}:{start_line}-{end_line} "
-                   f"({len(deleted)} 行)", "")
+            return (0, f"✅ 成功删除 {file_path}:{start_line}-{end_line} ({len(deleted)} 行) {vrf}", "")
+        return (0, f"✅ 成功删除 {file_path}:{start_line}-{end_line} ({len(deleted)} 行)", "")
     except Exception as e:
         return (1, "", f"❌ 删除失败: {e!s}")
 
 
-def _replace_lines(file_path: str, start_line: int, end_line: int,
-                   new_text: str, preview: bool, backup: bool):
+def _replace_lines(file_path: str, start_line: int, end_line: int, new_text: str, preview: bool, backup: bool):
     import json
     import shutil
 
     try:
-        with open(file_path, encoding='utf-8') as f:
+        with open(file_path, encoding="utf-8") as f:
             lines = f.readlines()
 
         if start_line < 1 or start_line > len(lines):
@@ -446,47 +453,45 @@ def _replace_lines(file_path: str, start_line: int, end_line: int,
         if end_line < start_line or end_line > len(lines):
             return (1, "", f"❌ 结束行号 {end_line} 超出范围")
 
-        old_lines = lines[start_line - 1:end_line]
-        old_text = ''.join(old_lines)
-        new_text = new_text.replace('\r\n', '\n').replace('\r', '\n')
-        insert_list = new_text.split('\n')
+        old_lines = lines[start_line - 1 : end_line]
+        old_text = "".join(old_lines)
+        new_text = new_text.replace("\r\n", "\n").replace("\r", "\n")
+        insert_list = new_text.split("\n")
 
         # 每个插入行都补 \n，保证替换块与后续行分隔；除非文件恰好以插入行结尾（无后续行）
         insert_with_nl = []
         for i, line in enumerate(insert_list):
-            is_last_insert = (i == len(insert_list) - 1)
+            is_last_insert = i == len(insert_list) - 1
             after_block_has_more = end_line < len(lines)  # 替换块后还有后续行
             if not is_last_insert or after_block_has_more:
-                insert_with_nl.append(line + '\n')
+                insert_with_nl.append(line + "\n")
             else:
                 insert_with_nl.append(line)
 
-        new_lines = (lines[:start_line - 1] + insert_with_nl +
-                     lines[end_line:])
-        new_text_joined = ''.join(new_lines)
+        new_lines = lines[: start_line - 1] + insert_with_nl + lines[end_line:]
+        new_text_joined = "".join(new_lines)
 
         if preview:
-            diff_preview = _generate_diff(''.join(lines), new_text_joined)
-            return (0, json.dumps({"status": "preview", "file": file_path,
-                                   "action": "replace",
-                                   "replaced_lines": f"{start_line}-{end_line}",
-                                   "diff": diff_preview},
-                                  ensure_ascii=False, indent=2), "")
+            diff_preview = _generate_diff("".join(lines), new_text_joined)
+            return (
+                0,
+                json.dumps(
+                    {"status": "preview", "file": file_path, "action": "replace", "replaced_lines": f"{start_line}-{end_line}", "diff": diff_preview},
+                    ensure_ascii=False,
+                    indent=2,
+                ),
+                "",
+            )
 
         if backup:
-            shutil.copy2(file_path, file_path + '.bak')
-        with open(file_path, 'w', encoding='utf-8') as f:
+            shutil.copy2(file_path, file_path + ".bak")
+        with open(file_path, "w", encoding="utf-8") as f:
             f.write(new_text_joined)
 
-        vrf = _verify_after_write(file_path,
-                                  old_text=old_text.strip(),
-                                  new_text=new_text.strip(),
-                                  label=f"replace_lines:{start_line}-{end_line}")
+        vrf = _verify_after_write(file_path, old_text=old_text.strip(), new_text=new_text.strip(), label=f"replace_lines:{start_line}-{end_line}")
         if vrf:
-            return (0, f"✅ 成功替换 {file_path}:{start_line}-{end_line} "
-                       f"({len(old_lines)}→{len(insert_list)} 行) {vrf}", "")
-        return (0, f"✅ 成功替换 {file_path}:{start_line}-{end_line} "
-                   f"({len(old_lines)}→{len(insert_list)} 行)", "")
+            return (0, f"✅ 成功替换 {file_path}:{start_line}-{end_line} ({len(old_lines)}→{len(insert_list)} 行) {vrf}", "")
+        return (0, f"✅ 成功替换 {file_path}:{start_line}-{end_line} ({len(old_lines)}→{len(insert_list)} 行)", "")
     except Exception as e:
         return (1, "", f"❌ 替换失败: {e!s}")
 
@@ -497,11 +502,11 @@ def _preview_patch(file_path: str, patch_content: str):
 
 def _generate_diff(old_content: str, new_text: str) -> str:
     import difflib
+
     old_lines = old_content.splitlines(keepends=True)
     new_lines = new_text.splitlines(keepends=True)
-    diff = difflib.unified_diff(old_lines, new_lines,
-                                fromfile='original', tofile='modified', n=3)
-    return ''.join(diff)
+    diff = difflib.unified_diff(old_lines, new_lines, fromfile="original", tofile="modified", n=3)
+    return "".join(diff)
 
 
 def meta_toolkit_edit() -> dict:
@@ -516,8 +521,7 @@ def meta_toolkit_edit() -> dict:
                     "file_path": {"type": "string", "description": "目标文件路径"},
                     "action": {
                         "type": "string",
-                        "enum": ["apply_patch", "insert_lines", "delete_lines",
-                                 "replace_lines", "replace_text", "preview_patch"],
+                        "enum": ["apply_patch", "insert_lines", "delete_lines", "replace_lines", "replace_text", "preview_patch"],
                         "description": "编辑操作类型。推荐 replace_text",
                     },
                     "content": {

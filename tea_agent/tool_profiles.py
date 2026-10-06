@@ -126,8 +126,7 @@ _PROFILE_TOOLSETS: dict[str, list[str]] = {
 
 # 冻结为 set，避免运行时被改动（full=None 不过滤）
 PROFILE_TOOLS: dict[str, frozenset[str] | None] = {
-    name: (frozenset(tools) if name != "full" else None)
-    for name, tools in list(_PROFILE_TOOLSETS.items()) + [("full", [])]
+    name: (frozenset(tools) if name != "full" else None) for name, tools in list(_PROFILE_TOOLSETS.items()) + [("full", [])]
 }
 
 
@@ -182,7 +181,4 @@ def filter_tools_by_profile(
     allowed = PROFILE_TOOLS.get(profile)
     if allowed is None:  # full 或未知档位：不过滤
         return tools
-    return [
-        t for t in tools
-        if t.get("function", {}).get("name") in allowed
-    ]
+    return [t for t in tools if t.get("function", {}).get("name") in allowed]

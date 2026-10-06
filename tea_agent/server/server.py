@@ -7,6 +7,7 @@ The server is just Starlette + routes — thin, clean, hot-reloadable.
 
 from __future__ import annotations
 
+import contextlib
 import logging
 import os
 
@@ -34,8 +35,10 @@ def _capture_and_encode(action, region=None):
     """Screenshot + base64 encode (shared by screenshot_region/full)."""
     import base64
     import tempfile
+
     try:
         from tea_agent.toolkit.toolkit_screenshot import toolkit_screenshot
+
         tmp = os.path.join(tempfile.gettempdir(), f"screenshot_{action}.png")
         r = toolkit_screenshot(action=action, region=region, output=tmp) if region else toolkit_screenshot(action=action, output=tmp)
         if not r.get("success"):
@@ -50,11 +53,10 @@ def _capture_and_encode(action, region=None):
             d = f.read()
         if len(d) < 100:
             return {"ok": False, "error": f"screenshot too small: {len(d)}b"}
-        return {"ok": True,
-                "image_base64": f"data:image/png;base64,{base64.b64encode(d).decode()}",
-                "path": p, "size": len(d)}
+        return {"ok": True, "image_base64": f"data:image/png;base64,{base64.b64encode(d).decode()}", "path": p, "size": len(d)}
     except Exception as e:
         return {"ok": False, "error": str(e)}
+
 
 _server_instance = None
 _uvicorn_server = None
@@ -64,8 +66,7 @@ _restart_requested = False
 _RESTART_LOCK_TTL = 600.0
 
 
-def _build_restart_args(host: str, port: int, config_path: str | None = None,
-                        api_key: str | None = None) -> list[str]:
+def _build_restart_args(host: str, port: int, config_path: str | None = None, api_key: str | None = None) -> list[str]:
     """构建重启子进程的参数列表（成对构建，避免空值留下悬空 flag）。
 
     回归背景（实测）：旧实现用
@@ -124,8 +125,7 @@ def _wait_ready(host: str, port: int, timeout: float = 20.0) -> bool:
     return False
 
 
-def _spawn_successor(host: str, port: int, attempts: int = 3,
-                     wait_ready: float = 20.0) -> bool:
+def _spawn_successor(host: str, port: int, attempts: int = 3, wait_ready: float = 20.0) -> bool:
     """端口释放后拉起新进程并探测就绪；未就绪则终止子进程重试。"""
     import subprocess
     import sys
@@ -147,10 +147,8 @@ def _spawn_successor(host: str, port: int, attempts: int = 3,
             logger.info("restart: 新进程就绪 pid=%s（第 %d 次尝试）", proc.pid, attempt)
             return True
         logger.error("restart: 新进程未就绪 pid=%s，终止并重试", proc.pid)
-        try:
+        with contextlib.suppress(OSError):
             proc.terminate()
-        except OSError:
-            pass
     logger.error("restart: 连续 %d 次拉起失败，服务可能未恢复", attempts)
     return False
 
@@ -199,14 +197,12 @@ def _drain_then_exit(wait_seconds: float, wait_for: set | None = None) -> None:
     try:
         while True:
             # wait_for=None（未指定）→ 沿用旧语义「等全部在途回合归零」
-            pending = (_inflight_topics() if wait_for is None
-                       else (_inflight_topics() & wait_for))
+            pending = _inflight_topics() if wait_for is None else (_inflight_topics() & wait_for)
             if not pending or time.monotonic() >= deadline:
                 break
             time.sleep(0.2)
         if pending:
-            logger.warning("restart: 等待在途回合超时（%ss，仍在途：%s），强制退出",
-                           wait_seconds, ", ".join(sorted(pending)))
+            logger.warning("restart: 等待在途回合超时（%ss，仍在途：%s），强制退出", wait_seconds, ", ".join(sorted(pending)))
         else:
             logger.info("restart: 在途回合已排空，退出旧进程")
     finally:
@@ -240,8 +236,7 @@ def restart_server(graceful: bool = True, wait_seconds: float = 120.0) -> dict:
     # 该标记会永久残留 → 之后每次请求都被拒为「already in progress」，重启能力
     # 被永久锁死。超过 TTL 即视为陈旧、允许重试。
     if _restart_requested and (time.monotonic() - _restart_requested) < _RESTART_LOCK_TTL:
-        return {"ok": False, "error": "Restart already in progress",
-                "since_seconds": round(time.monotonic() - _restart_requested, 1)}
+        return {"ok": False, "error": "Restart already in progress", "since_seconds": round(time.monotonic() - _restart_requested, 1)}
     _restart_requested = time.monotonic()
 
     if graceful:
@@ -258,15 +253,18 @@ def restart_server(graceful: bool = True, wait_seconds: float = 120.0) -> dict:
         # 只等「此刻已在途」的回合：draining 已挡住新回合，其余无需等
         wait_for = _inflight_topics()
         in_flight = len(wait_for)
-        threading.Thread(target=_drain_then_exit, args=(wait_seconds, wait_for),
-                         daemon=True, name="tea-restart-drain").start()
-        return {"ok": True, "message": "Restart initiated (graceful)",
-                "mode": "graceful", "draining": True,
-                "wait_seconds": wait_seconds, "inflight_turns": in_flight}
+        threading.Thread(target=_drain_then_exit, args=(wait_seconds, wait_for), daemon=True, name="tea-restart-drain").start()
+        return {
+            "ok": True,
+            "message": "Restart initiated (graceful)",
+            "mode": "graceful",
+            "draining": True,
+            "wait_seconds": wait_seconds,
+            "inflight_turns": in_flight,
+        }
 
     _uvicorn_server.should_exit = True
-    return {"ok": True, "message": "Restart initiated (immediate)",
-            "mode": "immediate", "draining": False}
+    return {"ok": True, "message": "Restart initiated (immediate)", "mode": "immediate", "draining": False}
 
 
 class MinimalServer:
@@ -304,8 +302,7 @@ class MinimalServer:
     def health(self):
         statuses = self._registry.status()
         all_ok = all(s.get("loaded", False) for s in statuses)
-        return {"status": "ok" if all_ok else "degraded",
-                "version": __version__, "modules": statuses}
+        return {"status": "ok" if all_ok else "degraded", "version": __version__, "modules": statuses}
 
     def list_modules(self):
         return self._registry.status()
@@ -341,127 +338,158 @@ class MinimalServer:
     def list_tasks(self):
         """Delegate to StorageModule."""
         from .modules.storage_module import StorageModule
+
         return StorageModule.list_tasks()
 
     def create_task(self, name, command, schedule):
         from .modules.storage_module import StorageModule
+
         return StorageModule.create_task(name, command, schedule)
 
     def delete_task(self, task_id):
         from .modules.storage_module import StorageModule
+
         return StorageModule.delete_task(task_id)
 
     def get_config_info(self):
         from .modules.agent_module import AgentModule
+
         return AgentModule.get_config_info()
 
     def update_config(self, updates):
         from .modules.agent_module import AgentModule
+
         return AgentModule.update_config(updates)
 
     def switch_config(self, config_path):
         from .modules.agent_module import AgentModule
+
         return AgentModule.switch_config(config_path)
 
     def list_config_files(self, check_valid=False):
         from .modules.agent_module import AgentModule
+
         return AgentModule.list_config_files(check_valid)
 
     def create_config_file(self, **kwargs):
         from .modules.agent_module import AgentModule
+
         return AgentModule.create_config_file(**kwargs)
 
     def _get_storage(self):
         from .modules.storage_module import StorageModule
+
         return StorageModule.get_storage()
 
     def get_agent(self):
         from .modules.agent_module import AgentModule
+
         return AgentModule.get_agent()
 
     def switch_model(self, *args, **kwargs):
         from .modules.agent_module import AgentModule
+
         return AgentModule.switch_model(*args, **kwargs)
 
     def get_model_service(self):
         """ProviderService 单例（模型管理：提供商/模型查询/自定义供应商）。"""
         from tea_agent.model_manager import get_provider_service
+
         return get_provider_service(self.get_config_path())
 
     def list_sessions(self, limit=20):
         from .modules.storage_module import StorageModule
+
         return StorageModule.list_topics(limit)
 
     def create_topic_session(self, title="API"):
         from .modules.storage_module import StorageModule
+
         return StorageModule.create_topic(title)
 
     def get_session(self, topic_id):
         from .modules.storage_module import StorageModule
+
         return StorageModule.get_topic(topic_id)
 
     def delete_session(self, topic_id):
         from .modules.storage_module import StorageModule
+
         return StorageModule.delete_topic(topic_id)
 
     def rename_topic(self, topic_id, new_title):
         from .modules.storage_module import StorageModule
+
         return StorageModule.rename_topic(topic_id, new_title)
 
     def get_topic_info(self, topic_id):
         from .modules.storage_module import StorageModule
+
         return StorageModule.get_topic_info(topic_id)
 
     def get_topic_conversations(self, topic_id, limit=0):
         from .modules.storage_module import StorageModule
+
         return StorageModule.get_topic_conversations(topic_id, limit)
 
     def get_image(self, image_id):
         from .modules.storage_module import StorageModule
+
         return StorageModule.get_image(image_id)
 
     def get_topic_trajectory(self, topic_id, limit=0):
         from .modules.storage_module import StorageModule
+
         return StorageModule.get_topic_trajectory(topic_id, limit)
 
     def get_session_messages(self, topic_id, limit=50):
         from .modules.storage_module import StorageModule
+
         return StorageModule.get_session_messages(topic_id, limit)
 
     def list_memories(self, limit=50):
         from .modules.storage_module import StorageModule
+
         return StorageModule.list_memories(limit)
 
     def create_memory(self, content, category="general", priority=2):
         from .modules.storage_module import StorageModule
+
         return StorageModule.create_memory(content, category, priority)
 
     def delete_memory(self, mem_id):
         from .modules.storage_module import StorageModule
+
         return StorageModule.delete_memory(mem_id)
 
     def search(self, query, limit=20):
         from .modules.storage_module import StorageModule
+
         return StorageModule.search(query, limit)
 
     def list_tools(self):
         from .modules.toolkit_module import ToolkitModule
+
         return ToolkitModule.list_tools()
 
     def run_tool(self, tool_name, arguments):
         from .modules.toolkit_module import ToolkitModule
+
         return ToolkitModule.run_tool(tool_name, arguments)
 
     def create_session(self, config_path=None):
         from .modules.agent_module import AgentModule
+
         return AgentModule.create_session(config_path)
 
     def chat_completion(self, *args, **kwargs):
         from .modules.agent_module import AgentModule
+
         return AgentModule.chat_completion(*args, **kwargs)
 
     def chat_completion_stream(self, *args, **kwargs):
         from .modules.agent_module import AgentModule
+
         return AgentModule.chat_completion_stream(*args, **kwargs)
 
     def screenshot_region(self, x, y, w, h):
@@ -500,8 +528,6 @@ class MinimalServer:
         return {"ok": True, "route_count": len(routes)}
 
 
-
-
 def create_app(api_key=None, config_path=None):
     """Create the Starlette application (thin — logic in modules)."""
     logging.getLogger("uvicorn.access").setLevel(logging.WARNING)
@@ -519,25 +545,25 @@ def create_app(api_key=None, config_path=None):
     #    3) 排除 TimedRotatingFileHandler（继承自 StreamHandler），避免误伤文件日志。
     try:
         from tea_agent.logging_setup import setup_logging
+
         setup_logging(debug=False)
     except Exception:
         pass
     _root = logging.getLogger()
     if not getattr(_root, "_tea_server_quiet", False):
+
         class _ServerQuietFilter(logging.Filter):
             def filter(self, record: logging.LogRecord) -> bool:
                 return record.levelno >= logging.WARNING
 
         for _h in list(_root.handlers):
-            if isinstance(_h, logging.StreamHandler) \
-               and not isinstance(_h, logging.handlers.TimedRotatingFileHandler):
+            if isinstance(_h, logging.StreamHandler) and not isinstance(_h, logging.handlers.TimedRotatingFileHandler):
                 _h.addFilter(_ServerQuietFilter())
         _root._tea_server_quiet = True
     logging.getLogger("api_server").setLevel(logging.INFO)
 
     global _server_instance
-    _server_instance = MinimalServer(api_key=api_key or "",
-                                     config_path=config_path or "")
+    _server_instance = MinimalServer(api_key=api_key or "", config_path=config_path or "")
     results = _server_instance.load_modules()
     ok_count = sum(1 for v in results.values() if v)
     logger.info(f"Modules loaded: {ok_count}/{len(results)}")
@@ -587,8 +613,7 @@ def get_server():
     return _server_instance
 
 
-def run_server(host="127.0.0.1", port=8282,
-               api_key=None, config_path=None, open_browser=False):
+def run_server(host="127.0.0.1", port=8282, api_key=None, config_path=None, open_browser=False):
     try:
         import uvicorn
     except ImportError:
@@ -621,8 +646,8 @@ def run_server(host="127.0.0.1", port=8282,
         import threading as _th
         import time as _time
         import webbrowser as _wb
-        _th.Thread(target=lambda: (_time.sleep(1.5), _wb.open(server_url)),
-                   daemon=True).start()
+
+        _th.Thread(target=lambda: (_time.sleep(1.5), _wb.open(server_url)), daemon=True).start()
 
     config = uvicorn.Config(app, host=host, port=port, log_level="warning")
     global _uvicorn_server, _restart_args
@@ -637,8 +662,7 @@ def run_server(host="127.0.0.1", port=8282,
 
         _resumed = rebuild_buffers(state_module=_state)
         if _resumed:
-            logger.warning("restart recovery: %d in-flight turn(s) restored: %s",
-                           len(_resumed), ", ".join(_resumed))
+            logger.warning("restart recovery: %d in-flight turn(s) restored: %s", len(_resumed), ", ".join(_resumed))
         _requeued = _state.restore_queues()
         if _requeued:
             logger.info("restart recovery: %d queued message(s) restored", _requeued)
@@ -675,6 +699,7 @@ def main():
     """CLI entry point."""
     import argparse
     import sys
+
     parser = argparse.ArgumentParser(description="Tea Agent Server")
     parser.add_argument("--host", type=str, default="127.0.0.1")
     parser.add_argument("--port", type=int, default=8282)
@@ -686,23 +711,26 @@ def main():
     # config.yaml 已删除：--config 仅保留签名兼容，不再解析配置文件
     config_path = args.config or ""
     if args.config:
-        print("Warning: --config is deprecated (config.yaml removed); "
-              "use ~/.tea_agent/provider.yaml instead.")
+        print("Warning: --config is deprecated (config.yaml removed); use ~/.tea_agent/provider.yaml instead.")
 
     # ── 首启判定：以 provider.yaml 为唯一事实源（config.yaml 不再是启动前提）──
     # 存在且非空 → 直接启动（默认用第一个提供商的第一个模型）；
     # 缺失/为空 → TTY 下交互引导写 provider.yaml，非 TTY 打印指引不阻塞
     from tea_agent.setup_wizard import needs_provider_setup, run_provider_setup_wizard
+
     if needs_provider_setup():
         if sys.stdin.isatty():
             print("\n检测到首次运行：provider.yaml 无可用提供商，启动配置向导...\n")
             if not run_provider_setup_wizard():
                 print("\n⚠ 配置向导已取消，将无模型配置继续启动（对话前请完成配置）。")
         else:
-            print("\n⚠ 未找到可用的 provider.yaml（非交互环境，跳过配置向导）。\n"
-                  "   请运行 `python -m tea_agent.setup_wizard --provider` 或在 Web 配置页完成配置。\n")
+            print(
+                "\n⚠ 未找到可用的 provider.yaml（非交互环境，跳过配置向导）。\n"
+                "   请运行 `python -m tea_agent.setup_wizard --provider` 或在 Web 配置页完成配置。\n"
+            )
 
     from tea_agent.config import load_config
+
     try:
         # config 文件可能不存在：load_config 容忍缺失，身份三元组由 provider.yaml 提供
         cfg = load_config(config_path if os.path.isfile(config_path) else None)
@@ -711,13 +739,12 @@ def main():
         sys.exit(1)
     if not cfg.main_model.is_configured:
         # 不再退出：provider.yaml 缺 api_key 时仍启动进程，配置页/向导可随时补齐
-        print("⚠ 主模型未配置（provider.yaml 缺少可用提供商或 api_key），对话功能暂不可用。\n"
-              "   请运行 `python -m tea_agent.setup_wizard --provider` 或在配置页完成配置。\n")
+        print(
+            "⚠ 主模型未配置（provider.yaml 缺少可用提供商或 api_key），对话功能暂不可用。\n"
+            "   请运行 `python -m tea_agent.setup_wizard --provider` 或在配置页完成配置。\n"
+        )
 
-    run_server(host=args.host, port=args.port,
-               api_key=args.api_key or None,
-               config_path=config_path,
-               open_browser=args.browser)
+    run_server(host=args.host, port=args.port, api_key=args.api_key or None, config_path=config_path, open_browser=args.browser)
 
 
 if __name__ == "__main__":

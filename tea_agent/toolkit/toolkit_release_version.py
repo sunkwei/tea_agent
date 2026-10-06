@@ -1,4 +1,3 @@
-
 import logging
 import re
 import subprocess
@@ -7,8 +6,10 @@ from pathlib import Path
 
 logger = logging.getLogger("toolkit")
 
-def toolkit_release_version(version: str, changes: list, changelog_section: str = "Improvements & Changes",
-                           build: bool = True, git_commit: bool = True) -> dict:
+
+def toolkit_release_version(
+    version: str, changes: list, changelog_section: str = "Improvements & Changes", build: bool = True, git_commit: bool = True
+) -> dict:
     """
     自动化版本发布工具
 
@@ -22,13 +23,11 @@ def toolkit_release_version(version: str, changes: list, changelog_section: str 
     Returns:
         dict: 包含操作结果的字典
     """
-    logger.info(f"toolkit_release_version called: version={version!r}, changes={repr(changes)[:80]}, changelog_section={changelog_section!r}, build={build!r}, git_commit={git_commit!r}")
+    logger.info(
+        f"toolkit_release_version called: version={version!r}, changes={repr(changes)[:80]}, changelog_section={changelog_section!r}, build={build!r}, git_commit={git_commit!r}"
+    )
 
-    results = {
-        "version": version,
-        "status": "success",
-        "steps": []
-    }
+    results = {"version": version, "status": "success", "steps": []}
 
     # 1. 更新 pyproject.toml 版本号
     # 历史缺陷: 旧正则 r'version\s*=...' 无行首锚定，会误改 ruff 的
@@ -36,7 +35,7 @@ def toolkit_release_version(version: str, changes: list, changelog_section: str 
     # 修复: MULTILINE + ^ 锚定，且只替换第一个命中（[project] 的 version 行）。
     pyproject_path = Path("pyproject.toml")
     if pyproject_path.exists():
-        content = pyproject_path.read_text(encoding='utf-8')
+        content = pyproject_path.read_text(encoding="utf-8")
         new_content = re.sub(
             r'^version\s*=\s*["\'][^"\']+["\']',
             f'version = "{version}"',
@@ -44,13 +43,13 @@ def toolkit_release_version(version: str, changes: list, changelog_section: str 
             count=1,
             flags=re.MULTILINE,
         )
-        pyproject_path.write_text(new_content, encoding='utf-8')
+        pyproject_path.write_text(new_content, encoding="utf-8")
         results["steps"].append("✓ 更新 pyproject.toml 版本号")
 
     # 2. 更新 CHANGELOG.md
     changelog_path = Path("CHANGELOG.md")
     if changelog_path.exists():
-        changelog_content = changelog_path.read_text(encoding='utf-8')
+        changelog_content = changelog_path.read_text(encoding="utf-8")
 
         # 生成新条目
         today = datetime.now().strftime("%Y-%m-%d")
@@ -62,7 +61,7 @@ def toolkit_release_version(version: str, changes: list, changelog_section: str 
             "Improvements & Changes": "### Improvements & Changes",
             "Bug Fixes": "### Bug Fixes",
             "Documentation": "### Documentation",
-            "Chore": "### Chore"
+            "Chore": "### Chore",
         }
 
         new_entry += f"{section_prefix.get(changelog_section, '### Improvements & Changes')}\n"
@@ -70,14 +69,14 @@ def toolkit_release_version(version: str, changes: list, changelog_section: str 
             new_entry += f"- {change}\n"
 
         # 插入到第一个版本号之前
-        first_version_match = re.search(r'##\s*\[', changelog_content)
+        first_version_match = re.search(r"##\s*\[", changelog_content)
         if first_version_match:
             insert_pos = first_version_match.start()
             new_changelog = changelog_content[:insert_pos] + new_entry + changelog_content[insert_pos:]
         else:
             new_changelog = changelog_content + new_entry
 
-        changelog_path.write_text(new_changelog, encoding='utf-8')
+        changelog_path.write_text(new_changelog, encoding="utf-8")
         results["steps"].append("✓ 更新 CHANGELOG.md")
 
     # 3. 执行构建
@@ -110,6 +109,28 @@ def toolkit_release_version(version: str, changes: list, changelog_section: str 
 
     return results
 
+
 def meta_toolkit_release_version() -> dict:
     """Meta toolkit release version."""
-    return {"type": "function", "function": {"name": "toolkit_release_version", "description": "自动化版本发布工具。更新版本号、CHANGELOG，并构建项目。", "parameters": {"type": "object", "properties": {"version": {"type": "string", "description": "新版本号，如 '0.2.4'"}, "changes": {"type": "array", "items": {"type": "string"}, "description": "变更说明列表"}, "changelog_section": {"type": "string", "description": "变更章节类型：Features, Improvements & Changes, Bug Fixes, Documentation 等", "default": "Improvements & Changes"}, "build": {"type": "boolean", "description": "是否执行构建（python -m build）", "default": True}, "git_commit": {"type": "boolean", "description": "是否创建 git commit", "default": True}}, "required": ["version", "changes"]}}}
+    return {
+        "type": "function",
+        "function": {
+            "name": "toolkit_release_version",
+            "description": "自动化版本发布工具。更新版本号、CHANGELOG，并构建项目。",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "version": {"type": "string", "description": "新版本号，如 '0.2.4'"},
+                    "changes": {"type": "array", "items": {"type": "string"}, "description": "变更说明列表"},
+                    "changelog_section": {
+                        "type": "string",
+                        "description": "变更章节类型：Features, Improvements & Changes, Bug Fixes, Documentation 等",
+                        "default": "Improvements & Changes",
+                    },
+                    "build": {"type": "boolean", "description": "是否执行构建（python -m build）", "default": True},
+                    "git_commit": {"type": "boolean", "description": "是否创建 git commit", "default": True},
+                },
+                "required": ["version", "changes"],
+            },
+        },
+    }

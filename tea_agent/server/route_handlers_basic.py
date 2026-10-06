@@ -41,6 +41,7 @@ async def handle_openapi(request):
 #  OpenAI-compatible Chat Completions
 # ================================================================
 
+
 async def handle_chat_completions(request):
     body = await request.json()
     model = body.get("model", "default")
@@ -54,38 +55,38 @@ async def handle_chat_completions(request):
         return JSONResponse({"error": "messages required"}, status_code=400)
     server = get_server()
     if stream:
-        gen = server.chat_completion_stream(
-            model, messages, temperature, max_tokens, topic_id, config_path)
+        gen = server.chat_completion_stream(model, messages, temperature, max_tokens, topic_id, config_path)
         return StreamingResponse(gen, media_type="text/event-stream")
-    result = server.chat_completion(
-        model, messages, False, temperature, max_tokens, topic_id)
+    result = server.chat_completion(model, messages, False, temperature, max_tokens, topic_id)
     return JSONResponse(result)
 
 
 async def handle_list_models(request):
     try:
         cfg = get_server().get_config()
-        models = [{"id": cfg["model"], "object": "model",
-                   "created": int(time.time()), "owned_by": "tea-agent"}]
+        models = [{"id": cfg["model"], "object": "model", "created": int(time.time()), "owned_by": "tea-agent"}]
         return JSONResponse({"object": "list", "data": models})
     except Exception as e:
-        return JSONResponse({"object": "list", "data": [{"id": "unknown",
-            "object": "model", "created": int(time.time()),
-            "owned_by": "tea-agent"}],
-            "warning": f"Agent not configured: {e}"})
+        return JSONResponse(
+            {
+                "object": "list",
+                "data": [{"id": "unknown", "object": "model", "created": int(time.time()), "owned_by": "tea-agent"}],
+                "warning": f"Agent not configured: {e}",
+            }
+        )
 
 
 # ================================================================
 #  Tools
 # ================================================================
 
+
 async def handle_list_tools(request):
     try:
         tools = get_server().list_tools()
         return JSONResponse({"object": "list", "data": tools, "total": len(tools)})
     except Exception as e:
-        return JSONResponse({"object": "list", "data": [], "total": 0,
-                             "warning": f"Agent not configured: {e}"})
+        return JSONResponse({"object": "list", "data": [], "total": 0, "warning": f"Agent not configured: {e}"})
 
 
 async def handle_run_tool(request):
@@ -100,14 +101,13 @@ async def handle_run_tool(request):
 #  Sessions / Topics
 # ================================================================
 
+
 async def handle_list_sessions(request):
     limit = int(request.query_params.get("limit", 20))
     try:
-        return JSONResponse({"object": "list",
-                             "data": get_server().list_sessions(limit)})
+        return JSONResponse({"object": "list", "data": get_server().list_sessions(limit)})
     except Exception as e:
-        return JSONResponse({"object": "list", "data": [],
-                             "warning": str(e)})
+        return JSONResponse({"object": "list", "data": [], "warning": str(e)})
 
 
 async def handle_create_session(request):
@@ -145,6 +145,7 @@ async def handle_get_session_messages(request):
 #  Config
 # ================================================================
 
+
 async def handle_get_config(request):
     try:
         return JSONResponse(get_server().get_config_info())
@@ -166,6 +167,7 @@ async def handle_switch_config(request):
 # ================================================================
 #  Memory
 # ================================================================
+
 
 async def handle_list_memory(request):
     server = get_server()
@@ -190,9 +192,7 @@ async def handle_create_memory(request):
     content = (body.get("content") or "").strip()
     if not content:
         return JSONResponse({"ok": False, "error": "content required"}, status_code=400)
-    mem = server.create_memory(content,
-        category=body.get("category", "general"),
-        priority=body.get("priority", 2))
+    mem = server.create_memory(content, category=body.get("category", "general"), priority=body.get("priority", 2))
     if mem.get("error"):
         return JSONResponse({"ok": False, "error": mem["error"]}, status_code=503)
     return JSONResponse({"ok": True, **mem}, status_code=201)
@@ -209,6 +209,7 @@ async def handle_delete_memory(request):
 #  Tasks
 # ================================================================
 
+
 async def handle_list_tasks(request):
     server = get_server()
     tasks = server.list_tasks()
@@ -218,8 +219,7 @@ async def handle_list_tasks(request):
 async def handle_create_task(request):
     server = get_server()
     body = await request.json()
-    task = server.create_task(body.get("name",""),
-        body.get("command",""), body.get("schedule",""))
+    task = server.create_task(body.get("name", ""), body.get("command", ""), body.get("schedule", ""))
     return JSONResponse(task, status_code=201)
 
 
@@ -234,6 +234,7 @@ async def handle_delete_task(request):
 #  Search / Export / Upload
 # ================================================================
 
+
 async def handle_search(request):
     server = get_server()
     query = request.query_params.get("q", "")
@@ -242,180 +243,292 @@ async def handle_search(request):
         return JSONResponse({"error": "query required"}, status_code=400)
     results = server.search(query, limit=limit)
     return JSONResponse(results)
+
+
 OPENAPI_SPEC = {
     "openapi": "3.0.3",
-    "info": {"title": "Tea Agent API", "version": __version__,
-             "description": "REST API for Tea Agent"},
+    "info": {"title": "Tea Agent API", "version": __version__, "description": "REST API for Tea Agent"},
     "servers": [{"url": "http://127.0.0.1:8081", "description": "Local"}],
     "paths": {
-        "/health": {"get": {"summary": "Health check", "tags": ["System"],
-            "responses": {"200": {"description": "OK"}}}},
-        "/v1/chat/completions": {"post": {"summary": "Chat completion",
-            "tags": ["Chat"],
-            "requestBody": {"required": True, "content": {
-                "application/json": {"schema": {"type": "object",
-                    "properties": {
-                        "model": {"type": "string", "example": "gpt-4o"},
-                        "messages": {"type": "array", "items": {"type": "object"}},
-                        "stream": {"type": "boolean", "default": False},
-                        "temperature": {"type": "number", "default": 0.7},
-                        "topic_id": {"type": "string"},
-                        "config_path": {"type": "string",
-                            "description": "Config file path, different instances can use different configs"}},
-                    "required": ["messages"]}}}},
-            "responses": {"200": {"description": "OK"}}}},
-        "/v1/models": {"get": {"summary": "List models", "tags": ["Models"],
-            "responses": {"200": {"description": "OK"}}}},
-        "/v1/tools": {"get": {"summary": "List tools", "tags": ["Tools"],
-            "responses": {"200": {"description": "OK"}}}},
-        "/v1/tools/{name}/run": {"post": {
-            "summary": "Execute a tool", "tags": ["Tools"],
-            "parameters": [{"name": "name", "in": "path",
-                "required": True, "schema": {"type": "string"}}],
-            "responses": {"200": {"description": "OK"}}}},
-        "/v1/sessions": {"get": {"summary": "List sessions", "tags": ["Sessions"],
-            "responses": {"200": {"description": "OK"}}},
-            "post": {"summary": "Create session", "tags": ["Sessions"],
-            "responses": {"201": {"description": "Created"}}}},
-        "/v1/sessions/{topic_id}": {"get": {
-            "summary": "Get session", "tags": ["Sessions"],
-            "parameters": [{"name": "topic_id", "in": "path",
-                "required": True, "schema": {"type": "string"}}],
-            "responses": {"200": {"description": "OK"}}},
-            "delete": {"summary": "Delete session", "tags": ["Sessions"],
-            "parameters": [{"name": "topic_id", "in": "path",
-                "required": True, "schema": {"type": "string"}}],
-            "responses": {"200": {"description": "OK"}}}},
-        "/v1/config": {"get": {"summary": "Get config", "tags": ["Config"],
-            "responses": {"200": {"description": "OK"}}}},
-        "/v1/config/switch": {"post": {
-            "summary": "Switch config", "tags": ["Config"],
-            "responses": {"200": {"description": "OK"}}}},
-        "/api/providers": {"get": {
-            "summary": "List providers (builtin + custom)", "tags": ["Model Management"],
-            "responses": {"200": {"description": "Provider list with source/capabilities/active"}}},
+        "/health": {"get": {"summary": "Health check", "tags": ["System"], "responses": {"200": {"description": "OK"}}}},
+        "/v1/chat/completions": {
             "post": {
-                "summary": "Add custom provider", "tags": ["Model Management"],
-                "requestBody": {"required": True, "content": {"application/json": {"schema": {
-                    "type": "object",
-                    "required": ["name", "api_url", "default_model"],
-                    "properties": {
-                        "name": {"type": "string", "description": "2-32 chars, [A-Za-z0-9_-]"},
-                        "api_url": {"type": "string"},
-                        "default_model": {"type": "string"},
-                        "models": {"type": "array", "items": {
-                            "oneOf": [
-                                {"type": "string"},
-                                {"type": "object",
-                                 "properties": {
-                                     "id": {"type": "string"},
-                                     "context_window": {"type": "integer"},
-                                     "max_output_tokens": {"type": "integer"},
-                                     "supports_vision": {"type": "boolean"},
-                                     "supports_thinking": {"type": "boolean"},
-                                 },
-                                 "required": ["id"]},
-                            ],
-                            "description": "string 简写或含 id/窗口/输出的富条目"},
-                        },
-                        "supports_thinking": {"type": "boolean"},
-                        "supports_vision": {"type": "boolean"},
-                        "description": {"type": "string"},
-                    }}}}},
-                "responses": {"200": {"description": "Created"}, "409": {"description": "Duplicate name"}}}},
-        "/api/providers/{name}": {"put": {
-            "summary": "Update custom provider", "tags": ["Model Management"],
-            "parameters": [{"name": "name", "in": "path", "required": True,
-                            "schema": {"type": "string"}}],
-            "responses": {"200": {"description": "Updated"}, "403": {"description": "Builtin cannot be modified"},
-                          "404": {"description": "Not found"}}},
+                "summary": "Chat completion",
+                "tags": ["Chat"],
+                "requestBody": {
+                    "required": True,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "type": "object",
+                                "properties": {
+                                    "model": {"type": "string", "example": "gpt-4o"},
+                                    "messages": {"type": "array", "items": {"type": "object"}},
+                                    "stream": {"type": "boolean", "default": False},
+                                    "temperature": {"type": "number", "default": 0.7},
+                                    "topic_id": {"type": "string"},
+                                    "config_path": {
+                                        "type": "string",
+                                        "description": "Config file path, different instances can use different configs",
+                                    },
+                                },
+                                "required": ["messages"],
+                            }
+                        }
+                    },
+                },
+                "responses": {"200": {"description": "OK"}},
+            }
+        },
+        "/v1/models": {"get": {"summary": "List models", "tags": ["Models"], "responses": {"200": {"description": "OK"}}}},
+        "/v1/tools": {"get": {"summary": "List tools", "tags": ["Tools"], "responses": {"200": {"description": "OK"}}}},
+        "/v1/tools/{name}/run": {
+            "post": {
+                "summary": "Execute a tool",
+                "tags": ["Tools"],
+                "parameters": [{"name": "name", "in": "path", "required": True, "schema": {"type": "string"}}],
+                "responses": {"200": {"description": "OK"}},
+            }
+        },
+        "/v1/sessions": {
+            "get": {"summary": "List sessions", "tags": ["Sessions"], "responses": {"200": {"description": "OK"}}},
+            "post": {"summary": "Create session", "tags": ["Sessions"], "responses": {"201": {"description": "Created"}}},
+        },
+        "/v1/sessions/{topic_id}": {
+            "get": {
+                "summary": "Get session",
+                "tags": ["Sessions"],
+                "parameters": [{"name": "topic_id", "in": "path", "required": True, "schema": {"type": "string"}}],
+                "responses": {"200": {"description": "OK"}},
+            },
             "delete": {
-                "summary": "Delete custom provider", "tags": ["Model Management"],
-                "parameters": [{"name": "name", "in": "path", "required": True,
-                                "schema": {"type": "string"}}],
-                "responses": {"200": {"description": "Deleted"}, "403": {"description": "Builtin cannot be deleted"}}}},
-        "/api/providers/{name}/models": {"get": {
-            "summary": "Query provider models (cache-first, live + static fallback)",
-            "tags": ["Model Management"],
-            "parameters": [
-                {"name": "name", "in": "path", "required": True, "schema": {"type": "string"}},
-                {"name": "refresh", "in": "query", "required": False,
-                 "schema": {"type": "boolean", "default": False},
-                 "description": "true=force live query"},
-                {"name": "api_key", "in": "query", "required": False,
-                 "schema": {"type": "string"}, "description": "for live query (custom provider)"}],
-            "responses": {"200": {"description": "Models (source: live|cache|static)"}}}},
-        "/api/providers/{name}/apply": {"post": {
-            "summary": "Apply provider to model config (one-click)", "tags": ["Model Management"],
-            "parameters": [{"name": "name", "in": "path", "required": True,
-                            "schema": {"type": "string"}}],
-            "requestBody": {"required": True, "content": {"application/json": {"schema": {
-                "type": "object",
-                "properties": {
-                    "api_key": {"type": "string"},
-                    "model": {"type": "string", "description": "defaults to provider default_model"},
-                    "role": {"type": "string", "enum": ["main", "cheap"], "default": "main"},
-                    "temperature": {"type": "number"},
-                    "max_tokens": {"type": "integer"},
-                    "top_p": {"type": "number"},
-                }}}}},
-            "responses": {"200": {"description": "Applied to provider.yaml roles (main hot-swaps)"},
-                          "404": {"description": "Provider not found"}}}},
-        "/api/model/test": {"post": {
-            "summary": "Test connection (endpoint + key + model)", "tags": ["Model Management"],
-            "requestBody": {"required": True, "content": {"application/json": {"schema": {
-                "type": "object",
-                "required": ["api_url", "api_key"],
-                "properties": {
-                    "api_url": {"type": "string"},
-                    "api_key": {"type": "string"},
-                    "model": {"type": "string"},
-                }}}}},
-            "responses": {"200": {"description": "Connection test result (latency_ms)"},
-                          "400": {"description": "Missing params"}}}},
-        "/api/model-config": {"get": {
-            "summary": "Unified model config panel (provider.yaml single source)",
-            "tags": ["Model Config Panel"],
-            "responses": {"200": {"description":
-                "providers→models→per-model config + roles + active + pending_switch"}}}},
+                "summary": "Delete session",
+                "tags": ["Sessions"],
+                "parameters": [{"name": "topic_id", "in": "path", "required": True, "schema": {"type": "string"}}],
+                "responses": {"200": {"description": "OK"}},
+            },
+        },
+        "/v1/config": {"get": {"summary": "Get config", "tags": ["Config"], "responses": {"200": {"description": "OK"}}}},
+        "/v1/config/switch": {"post": {"summary": "Switch config", "tags": ["Config"], "responses": {"200": {"description": "OK"}}}},
+        "/api/providers": {
+            "get": {
+                "summary": "List providers (builtin + custom)",
+                "tags": ["Model Management"],
+                "responses": {"200": {"description": "Provider list with source/capabilities/active"}},
+            },
+            "post": {
+                "summary": "Add custom provider",
+                "tags": ["Model Management"],
+                "requestBody": {
+                    "required": True,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "type": "object",
+                                "required": ["name", "api_url", "default_model"],
+                                "properties": {
+                                    "name": {"type": "string", "description": "2-32 chars, [A-Za-z0-9_-]"},
+                                    "api_url": {"type": "string"},
+                                    "default_model": {"type": "string"},
+                                    "models": {
+                                        "type": "array",
+                                        "items": {
+                                            "oneOf": [
+                                                {"type": "string"},
+                                                {
+                                                    "type": "object",
+                                                    "properties": {
+                                                        "id": {"type": "string"},
+                                                        "context_window": {"type": "integer"},
+                                                        "max_output_tokens": {"type": "integer"},
+                                                        "supports_vision": {"type": "boolean"},
+                                                        "supports_thinking": {"type": "boolean"},
+                                                    },
+                                                    "required": ["id"],
+                                                },
+                                            ],
+                                            "description": "string 简写或含 id/窗口/输出的富条目",
+                                        },
+                                    },
+                                    "supports_thinking": {"type": "boolean"},
+                                    "supports_vision": {"type": "boolean"},
+                                    "description": {"type": "string"},
+                                },
+                            }
+                        }
+                    },
+                },
+                "responses": {"200": {"description": "Created"}, "409": {"description": "Duplicate name"}},
+            },
+        },
+        "/api/providers/{name}": {
+            "put": {
+                "summary": "Update custom provider",
+                "tags": ["Model Management"],
+                "parameters": [{"name": "name", "in": "path", "required": True, "schema": {"type": "string"}}],
+                "responses": {
+                    "200": {"description": "Updated"},
+                    "403": {"description": "Builtin cannot be modified"},
+                    "404": {"description": "Not found"},
+                },
+            },
+            "delete": {
+                "summary": "Delete custom provider",
+                "tags": ["Model Management"],
+                "parameters": [{"name": "name", "in": "path", "required": True, "schema": {"type": "string"}}],
+                "responses": {"200": {"description": "Deleted"}, "403": {"description": "Builtin cannot be deleted"}},
+            },
+        },
+        "/api/providers/{name}/models": {
+            "get": {
+                "summary": "Query provider models (cache-first, live + static fallback)",
+                "tags": ["Model Management"],
+                "parameters": [
+                    {"name": "name", "in": "path", "required": True, "schema": {"type": "string"}},
+                    {
+                        "name": "refresh",
+                        "in": "query",
+                        "required": False,
+                        "schema": {"type": "boolean", "default": False},
+                        "description": "true=force live query",
+                    },
+                    {
+                        "name": "api_key",
+                        "in": "query",
+                        "required": False,
+                        "schema": {"type": "string"},
+                        "description": "for live query (custom provider)",
+                    },
+                ],
+                "responses": {"200": {"description": "Models (source: live|cache|static)"}},
+            }
+        },
+        "/api/providers/{name}/apply": {
+            "post": {
+                "summary": "Apply provider to model config (one-click)",
+                "tags": ["Model Management"],
+                "parameters": [{"name": "name", "in": "path", "required": True, "schema": {"type": "string"}}],
+                "requestBody": {
+                    "required": True,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "type": "object",
+                                "properties": {
+                                    "api_key": {"type": "string"},
+                                    "model": {"type": "string", "description": "defaults to provider default_model"},
+                                    "role": {"type": "string", "enum": ["main", "cheap"], "default": "main"},
+                                    "temperature": {"type": "number"},
+                                    "max_tokens": {"type": "integer"},
+                                    "top_p": {"type": "number"},
+                                },
+                            }
+                        }
+                    },
+                },
+                "responses": {
+                    "200": {"description": "Applied to provider.yaml roles (main hot-swaps)"},
+                    "404": {"description": "Provider not found"},
+                },
+            }
+        },
+        "/api/model/test": {
+            "post": {
+                "summary": "Test connection (endpoint + key + model)",
+                "tags": ["Model Management"],
+                "requestBody": {
+                    "required": True,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "type": "object",
+                                "required": ["api_url", "api_key"],
+                                "properties": {
+                                    "api_url": {"type": "string"},
+                                    "api_key": {"type": "string"},
+                                    "model": {"type": "string"},
+                                },
+                            }
+                        }
+                    },
+                },
+                "responses": {"200": {"description": "Connection test result (latency_ms)"}, "400": {"description": "Missing params"}},
+            }
+        },
+        "/api/model-config": {
+            "get": {
+                "summary": "Unified model config panel (provider.yaml single source)",
+                "tags": ["Model Config Panel"],
+                "responses": {"200": {"description": "providers→models→per-model config + roles + active + pending_switch"}},
+            }
+        },
         "/api/model-config/model": {
-            "put": {"summary": "Update per-model config (max_context/max_output/thinking/vision/tools/note)",
-                    "tags": ["Model Config Panel"],
-                    "requestBody": {"required": True, "content": {"application/json": {"schema": {
-                        "type": "object", "required": ["provider", "model"],
-                        "properties": {"provider": {"type": "string"},
-                                       "model": {"type": "string"},
-                                       "config": {"type": "object"}}}}}},
-                    "responses": {"200": {"description": "Updated entry"}}},
-            "post": {"summary": "Add model to provider (config optional, heuristic defaults)",
-                     "tags": ["Model Config Panel"],
-                     "responses": {"200": {"description": "Created entry"}}},
-            "delete": {"summary": "Delete model config entry",
-                       "tags": ["Model Config Panel"],
-                       "parameters": [
-                           {"name": "provider", "in": "query", "required": True,
-                            "schema": {"type": "string"}},
-                           {"name": "model", "in": "query", "required": True,
-                            "schema": {"type": "string"}}],
-                       "responses": {"200": {"description": "Deleted"},
-                                     "404": {"description": "Not found"}}}},
-        "/api/model-config/sync": {"post": {
-            "summary": "Sync live /v1/models into provider.yaml (new only, keep user edits)",
-            "tags": ["Model Config Panel"],
-            "responses": {"200": {"description": "added/kept/total"}}}},
-        "/api/model-config/switch": {"post": {
-            "summary": "Switch model & continue current session (deferred when a turn is in progress)",
-            "tags": ["Model Config Panel"],
-            "requestBody": {"required": True, "content": {"application/json": {"schema": {
-                "type": "object", "required": ["provider", "model"],
-                "properties": {
-                    "provider": {"type": "string"}, "model": {"type": "string"},
-                    "role": {"type": "string", "enum": ["main", "cheap"], "default": "main"},
-                    "api_key": {"type": "string"},
-                    "continue_session": {"type": "boolean", "default": True},
-                    "temperature": {"type": "number"}, "max_tokens": {"type": "integer"},
-                    "top_p": {"type": "number"}}}}}},
-            "responses": {"200": {"description":
-                "apply result + switch mode: applied|pending_next_turn|next_message"}}}},
-    }
+            "put": {
+                "summary": "Update per-model config (max_context/max_output/thinking/vision/tools/note)",
+                "tags": ["Model Config Panel"],
+                "requestBody": {
+                    "required": True,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "type": "object",
+                                "required": ["provider", "model"],
+                                "properties": {"provider": {"type": "string"}, "model": {"type": "string"}, "config": {"type": "object"}},
+                            }
+                        }
+                    },
+                },
+                "responses": {"200": {"description": "Updated entry"}},
+            },
+            "post": {
+                "summary": "Add model to provider (config optional, heuristic defaults)",
+                "tags": ["Model Config Panel"],
+                "responses": {"200": {"description": "Created entry"}},
+            },
+            "delete": {
+                "summary": "Delete model config entry",
+                "tags": ["Model Config Panel"],
+                "parameters": [
+                    {"name": "provider", "in": "query", "required": True, "schema": {"type": "string"}},
+                    {"name": "model", "in": "query", "required": True, "schema": {"type": "string"}},
+                ],
+                "responses": {"200": {"description": "Deleted"}, "404": {"description": "Not found"}},
+            },
+        },
+        "/api/model-config/sync": {
+            "post": {
+                "summary": "Sync live /v1/models into provider.yaml (new only, keep user edits)",
+                "tags": ["Model Config Panel"],
+                "responses": {"200": {"description": "added/kept/total"}},
+            }
+        },
+        "/api/model-config/switch": {
+            "post": {
+                "summary": "Switch model & continue current session (deferred when a turn is in progress)",
+                "tags": ["Model Config Panel"],
+                "requestBody": {
+                    "required": True,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "type": "object",
+                                "required": ["provider", "model"],
+                                "properties": {
+                                    "provider": {"type": "string"},
+                                    "model": {"type": "string"},
+                                    "role": {"type": "string", "enum": ["main", "cheap"], "default": "main"},
+                                    "api_key": {"type": "string"},
+                                    "continue_session": {"type": "boolean", "default": True},
+                                    "temperature": {"type": "number"},
+                                    "max_tokens": {"type": "integer"},
+                                    "top_p": {"type": "number"},
+                                },
+                            }
+                        }
+                    },
+                },
+                "responses": {"200": {"description": "apply result + switch mode: applied|pending_next_turn|next_message"}},
+            }
+        },
+    },
 }

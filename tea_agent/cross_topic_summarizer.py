@@ -97,11 +97,13 @@ class CrossTopicSummarizer:
             for t in topics:
                 tid = t.get("topic_id", "")
                 title = t.get("title", "") or "(无标题)"
-                result.append({
-                    "topic_id": tid,
-                    "title": title[:100],
-                    "created": t.get("last_update_stamp", "")[:19],
-                })
+                result.append(
+                    {
+                        "topic_id": tid,
+                        "title": title[:100],
+                        "created": t.get("last_update_stamp", "")[:19],
+                    }
+                )
             return result
         except Exception:
             logger.exception("cross_topic: 读取话题失败")
@@ -148,6 +150,7 @@ class CrossTopicSummarizer:
             try:
                 from tea_agent.config import get_config
                 from tea_agent.providers import get_cheap_client
+
                 cfg = get_config()
                 self._cheap_client = get_cheap_client(cfg)
             except Exception:
@@ -158,16 +161,13 @@ class CrossTopicSummarizer:
             return self._fallback_analysis(topics)
 
         try:
-            summaries = "\n".join(
-                f"{i+1}. [{t.get('created','')[:10]}] {t.get('title','')}"
-                for i, t in enumerate(topics)
-            )
+            summaries = "\n".join(f"{i + 1}. [{t.get('created', '')[:10]}] {t.get('title', '')}" for i, t in enumerate(topics))
             prompt = self.ANALYZE_PROMPT.format(
                 topic_count=len(topics),
                 topic_summaries=summaries,
             )
             resp = self._cheap_client.chat.completions.create(
-                model=self._cheap_client.model if hasattr(self._cheap_client, 'model') else "gpt-4o-mini",
+                model=self._cheap_client.model if hasattr(self._cheap_client, "model") else "gpt-4o-mini",
                 messages=[{"role": "user", "content": prompt}],
                 response_format={"type": "json_object"},
             )
@@ -184,8 +184,9 @@ class CrossTopicSummarizer:
         if len(titles) < 3:
             return []
         # 简单的统计回退：工作密度趋势
-        return [{
-            "content": f"最近 {len(topics)} 个会话涵盖了 {len({t[:20] for t in titles})} 个不同主题方向。"
-                       f"建议检查是否有偏离主要工作线的情况。",
-            "importance": 2,
-        }]
+        return [
+            {
+                "content": f"最近 {len(topics)} 个会话涵盖了 {len({t[:20] for t in titles})} 个不同主题方向。建议检查是否有偏离主要工作线的情况。",
+                "importance": 2,
+            }
+        ]

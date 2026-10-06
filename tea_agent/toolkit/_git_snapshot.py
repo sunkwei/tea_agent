@@ -29,6 +29,7 @@ toolkit_file 等）修改成功后自动留一个 git 快照，会话中断也�
 注意：本模块以下划线开头，tlk.py 按 toolkit_*.py 扫描，不会注册为工具。
 """
 
+import contextlib
 import logging
 import os
 import subprocess
@@ -60,8 +61,12 @@ def _run_git(args, cwd, env=None):
     """执行 git 命令，返回 (ok, output)。env 可注入（如临时索引 GIT_INDEX_FILE）。"""
     try:
         r = subprocess.run(
-            ["git"] + list(args), capture_output=True, text=True,
-            cwd=cwd, timeout=30, env=env,
+            ["git"] + list(args),
+            capture_output=True,
+            text=True,
+            cwd=cwd,
+            timeout=30,
+            env=env,
         )
         return r.returncode == 0, (r.stderr or r.stdout).strip()
     except subprocess.TimeoutExpired:
@@ -112,9 +117,14 @@ def _snapshot_side(file_paths, msg, cwd) -> dict:
         ref = _snapshot_ref()
         p_ok, parent = _run_git(["rev-parse", "--verify", ref], cwd)
         args = [
-            "-c", f"user.name={AUTHOR_NAME}",
-            "-c", f"user.email={AUTHOR_EMAIL}",
-            "commit-tree", tree, "-m", msg,
+            "-c",
+            f"user.name={AUTHOR_NAME}",
+            "-c",
+            f"user.email={AUTHOR_EMAIL}",
+            "commit-tree",
+            tree,
+            "-m",
+            msg,
         ]
         if p_ok and parent.strip():
             args += ["-p", parent.strip()]
@@ -126,13 +136,10 @@ def _snapshot_side(file_paths, msg, cwd) -> dict:
         if not ok:
             return {"snapshotted": False, "error": f"update-ref failed: {out}"}
         logger.info("git snapshot [%s] %s → %s", ref, msg, sha[:12])
-        return {"snapshotted": True, "hash": sha[:12], "rev": sha, "ref": ref,
-                "message": msg, "clean": False}
+        return {"snapshotted": True, "hash": sha[:12], "rev": sha, "ref": ref, "message": msg, "clean": False}
     finally:
-        try:
+        with contextlib.suppress(OSError):
             os.unlink(idx)
-        except OSError:
-            pass
 
 
 def _snapshot_branch(file_paths, msg, cwd) -> dict:
@@ -142,18 +149,23 @@ def _snapshot_branch(file_paths, msg, cwd) -> dict:
         return {"snapshotted": False, "error": f"git add failed: {err}"}
     ok, status = _run_git(["status", "--porcelain"], cwd)
     if ok and status.strip():
-        staged = [
-            ln for ln in status.splitlines()
-            if ln.strip() and ln[:1] in _STAGED_PREFIXES and ln[1:2] in (" ", "M", "A")
-        ]
+        staged = [ln for ln in status.splitlines() if ln.strip() and ln[:1] in _STAGED_PREFIXES and ln[1:2] in (" ", "M", "A")]
     else:
         staged = []
     if not staged:
         return {"snapshotted": False, "error": "no changes", "clean": True}
-    ok, out = _run_git([
-        "-c", f"user.name={AUTHOR_NAME}", "-c", f"user.email={AUTHOR_EMAIL}",
-        "commit", "-m", msg,
-    ], cwd)
+    ok, out = _run_git(
+        [
+            "-c",
+            f"user.name={AUTHOR_NAME}",
+            "-c",
+            f"user.email={AUTHOR_EMAIL}",
+            "commit",
+            "-m",
+            msg,
+        ],
+        cwd,
+    )
     if not ok:
         return {"snapshotted": False, "error": f"commit failed: {out}"}
     h = ""
@@ -163,8 +175,7 @@ def _snapshot_branch(file_paths, msg, cwd) -> dict:
             if len(parts) >= 2:
                 h = parts[1].rstrip("]")
     logger.info("git snapshot (branch) committed: %s → %s", msg, h or out[:50])
-    return {"snapshotted": True, "hash": h, "rev": h, "ref": "HEAD",
-            "message": msg, "clean": False}
+    return {"snapshotted": True, "hash": h, "rev": h, "ref": "HEAD", "message": msg, "clean": False}
 
 
 def git_snapshot(file_paths, message="snapshot") -> dict:

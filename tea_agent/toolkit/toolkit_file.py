@@ -36,12 +36,24 @@ def _resolve_path(filename: str):
     try:
         resolved.relative_to(cwd)
     except ValueError:
-        return False, (f"路径逃逸被拒绝: {raw}（解析为 {resolved}，超出项目目录 {cwd}）；"
-                       f"如需跨目录操作请显式使用绝对路径或设 TEA_FILE_ALLOW_OUTSIDE=1")
+        return False, (
+            f"路径逃逸被拒绝: {raw}（解析为 {resolved}，超出项目目录 {cwd}）；如需跨目录操作请显式使用绝对路径或设 TEA_FILE_ALLOW_OUTSIDE=1"
+        )
     return True, str(resolved)
 
 
-def toolkit_file(action: str, filename: str = "", content: str = "", path: str = ".", recursive: bool = False, show_hidden: bool = False, offset: int = 0, limit: int = 0, chunks: list = None, append: bool = False):
+def toolkit_file(
+    action: str,
+    filename: str = "",
+    content: str = "",
+    path: str = ".",
+    recursive: bool = False,
+    show_hidden: bool = False,
+    offset: int = 0,
+    limit: int = 0,
+    chunks: list = None,
+    append: bool = False,
+):
     """
     统一文件操作。
     - action="read": 读取文件内容。offset=起始行号(1-based), limit=行数上限。均为0则读全文。需 filename。
@@ -49,19 +61,21 @@ def toolkit_file(action: str, filename: str = "", content: str = "", path: str =
       大内容用 chunks（字符串列表，自动拼接，免去单次超长参数）；append=True 追加而非覆盖。
     - action="list": 列出目录内容 (跨平台 dir/ls)。可选 path/recursive/show_hidden。
     """
-    logger.info(f"toolkit_file called: action={action!r}, filename={filename!r}, content={repr(content)[:80]}, path={path!r}, offset={offset!r}, limit={limit!r}")
+    logger.info(
+        f"toolkit_file called: action={action!r}, filename={filename!r}, content={repr(content)[:80]}, path={path!r}, offset={offset!r}, limit={limit!r}"
+    )
 
     if action == "read":
         ok, resolved = _resolve_path(filename)
         if not ok:
             return f"Error: {resolved}"
         try:
-            with open(resolved, encoding='utf-8') as f:
+            with open(resolved, encoding="utf-8") as f:
                 if offset > 0 or limit > 0:
                     lines = f.readlines()
                     start = max(0, offset - 1) if offset > 0 else 0
                     end = min(len(lines), start + limit) if limit > 0 else len(lines)
-                    return ''.join(f"{i+1}: {lines[i]}" for i in range(start, end))
+                    return "".join(f"{i + 1}: {lines[i]}" for i in range(start, end))
                 return f.read()
         except FileNotFoundError:
             return f"Error: File '{filename}' not found."
@@ -77,9 +91,9 @@ def toolkit_file(action: str, filename: str = "", content: str = "", path: str =
             if chunks:
                 content = "\n".join(str(c) for c in chunks if c is not None)
             # 归一化换行符：\r\n → \n，确保始终使用 LF
-            normalized = content.replace('\r\n', '\n').replace('\r', '\n')
-            mode = 'a' if append else 'w'
-            with open(filename, mode, encoding='utf-8') as f:
+            normalized = content.replace("\r\n", "\n").replace("\r", "\n")
+            mode = "a" if append else "w"
+            with open(filename, mode, encoding="utf-8") as f:
                 f.write(normalized)
             # 修改成功后自动 git 快照（继承原 toolkit_save_file 的"改了没存盘"保护；
             # 非 git 环境静默跳过，失败不影响结果）
@@ -114,7 +128,7 @@ def toolkit_file(action: str, filename: str = "", content: str = "", path: str =
                 output_lines.append(f"{indent}❌ Error: {e}")
                 return
             for item in items:
-                if not show_hidden and item.name.startswith('.'):
+                if not show_hidden and item.name.startswith("."):
                     continue
                 icon = "📁" if item.is_dir() else "📄"
                 output_lines.append(f"{indent}{icon} {item.name}")
@@ -126,6 +140,7 @@ def toolkit_file(action: str, filename: str = "", content: str = "", path: str =
 
     else:
         return f"❌ 未知 action: '{action}'，可选: read / write / list"
+
 
 def meta_toolkit_file() -> dict:
     """Meta toolkit file."""

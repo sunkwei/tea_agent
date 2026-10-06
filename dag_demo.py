@@ -10,9 +10,9 @@ DAG 工作流 Demo — 模拟一个完整的代码审查工作流。
     3. 或在 web 聊天界面发送任意消息，查看 DAG 卡片
 """
 
-import time
-import sys
 import os
+import sys
+import time
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
@@ -85,9 +85,9 @@ def create_demo_dag():
     )
     print(f"✅ DAG 已注册: viz_id={viz_id}")
     print(f"   节点: {len(nodes)}, 边: {len(edges)}")
-    print(f"\n📊 在浏览器中查看:")
-    print(f"   http://localhost:8080/dag/simple-demo")
-    print(f"   或 http://localhost:8080/dag/simple-demo/image?format=svg")
+    print("\n📊 在浏览器中查看:")
+    print("   http://localhost:8080/dag/simple-demo")
+    print("   或 http://localhost:8080/dag/simple-demo/image?format=svg")
     return viz_id
 
 

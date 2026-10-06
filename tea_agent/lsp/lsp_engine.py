@@ -19,14 +19,17 @@ logger = logging.getLogger("lsp")
 _JEDI_PROJECT_CACHE: dict[str, Any] = {}
 _JEDI_CACHE_LOCK = threading.Lock()
 
+
 def _get_jedi_project(project_root: str):
     """获取 jedi Project 实例（缓存 + 线程安全，避免重复创建）"""
     if project_root not in _JEDI_PROJECT_CACHE:
         with _JEDI_CACHE_LOCK:
             if project_root not in _JEDI_PROJECT_CACHE:
                 import jedi
+
                 _JEDI_PROJECT_CACHE[project_root] = jedi.Project(project_root)
     return _JEDI_PROJECT_CACHE[project_root]
+
 
 def _read_file_safe(filepath: str) -> str | None:
     """安全读取文件"""
@@ -35,6 +38,7 @@ def _read_file_safe(filepath: str) -> str | None:
             return f.read()
     except Exception:
         return None
+
 
 def diagnose(project_root: str, filepath: str = None) -> dict:
     """运行 ruff 诊断，返回 (ok, diagnostics, error)"""
@@ -46,7 +50,8 @@ def diagnose(project_root: str, filepath: str = None) -> dict:
 
         result = subprocess.run(
             ["ruff", "check", "--output-format", "json", target],
-            capture_output=True, text=True,
+            capture_output=True,
+            text=True,
             timeout=30,
             cwd=project_root,
         )
@@ -55,6 +60,7 @@ def diagnose(project_root: str, filepath: str = None) -> dict:
             return {"ok": True, "diagnostics": [], "total": 0, "hint": "无问题 ✓"}
 
         import json
+
         diagnostics = json.loads(result.stdout) if result.stdout.strip() else []
         # 按代码前缀分组：E=pycodestyle错误, F=Pyflakes逻辑错误 为 errors
         # W=pycodestyle警告, I=isort, N=naming, D=docstring, ... 为 warnings
@@ -81,6 +87,7 @@ def diagnose(project_root: str, filepath: str = None) -> dict:
     except Exception as e:
         return {"ok": False, "error": str(e)}
 
+
 def _fmt_diagnostic(d: dict) -> str:
     """格式化单条诊断为可读字符串"""
     loc = f"{d.get('filename', '')}:{d.get('location', {}).get('row', '?')}:{d.get('location', {}).get('column', '?')}"
@@ -89,6 +96,7 @@ def _fmt_diagnostic(d: dict) -> str:
     fix = d.get("fix", {})
     fix_hint = f" (可自动修复: {fix.get('message', '')})" if fix else ""
     return f"[{code}] {loc}\n  {msg}{fix_hint}"
+
 
 def semantic_diagnose(project_root: str, filepath: str) -> dict:
     """基于 jedi 的语义级诊断 — 检查未定义符号、无法解析的引用等深局问题。
@@ -115,54 +123,55 @@ def semantic_diagnose(project_root: str, filepath: str) -> dict:
 
     try:
         import jedi
-        script = jedi.Script(source, path=filepath,
-                             project=_get_jedi_project(project_root))
+
+        script = jedi.Script(source, path=filepath, project=_get_jedi_project(project_root))
 
         issues = []
         seen_names = set()
 
         # 1. 扫描所有引用，检查能否解析
         all_names = script.get_names(all_scopes=True, definitions=True)
-        defined = {n.name for n in all_names if n.type in
-                   ('function', 'class', 'param', 'statement', 'import')}
+        defined = {n.name for n in all_names if n.type in ("function", "class", "param", "statement", "import")}
 
         all_refs = script.get_names(all_scopes=True, definitions=False)
         for ref in all_refs:
             name = ref.name
-            if name in seen_names or name.startswith('_') or name in defined:
+            if name in seen_names or name.startswith("_") or name in defined:
                 continue
             # 尝试推断
             try:
                 inferred = ref.infer()
                 if not inferred:
                     seen_names.add(name)
-                    issues.append({
-                        "type": "unresolved_reference",
-                        "name": name,
-                        "line": ref.line,
-                        "column": ref.column or 0,
-                        "message": f"符号 '{name}' 无法解析到定义，可能是拼写错误或缺少导入",
-                    })
+                    issues.append(
+                        {
+                            "type": "unresolved_reference",
+                            "name": name,
+                            "line": ref.line,
+                            "column": ref.column or 0,
+                            "message": f"符号 '{name}' 无法解析到定义，可能是拼写错误或缺少导入",
+                        }
+                    )
             except Exception:
-                logger.exception('op_failed')
-
+                logger.exception("op_failed")
 
         # 2. 检查导入
         for name in script.get_names(all_scopes=True):
-            if name.type == 'import':
+            if name.type == "import":
                 try:
                     inferred = name.infer()
                     if not inferred:
-                        issues.append({
-                            "type": "unresolved_import",
-                            "name": name.name,
-                            "line": name.line,
-                            "column": 0,
-                            "message": f"导入 '{name.name}' 无法解析",
-                        })
+                        issues.append(
+                            {
+                                "type": "unresolved_import",
+                                "name": name.name,
+                                "line": name.line,
+                                "column": 0,
+                                "message": f"导入 '{name.name}' 无法解析",
+                            }
+                        )
                 except Exception:
-                    logger.exception('op_failed')
-
+                    logger.exception("op_failed")
 
         hint = f"发现 {len(issues)} 个语义问题" if issues else "语义检查通过 ✓"
         return {
@@ -177,6 +186,7 @@ def semantic_diagnose(project_root: str, filepath: str) -> dict:
     except Exception as e:
         return {"ok": False, "error": str(e)[:300]}
 
+
 def completion(project_root: str, filepath: str, line: int, col: int) -> dict:
     """代码补全 — 基于 jedi"""
     try:
@@ -185,18 +195,21 @@ def completion(project_root: str, filepath: str, line: int, col: int) -> dict:
             return {"ok": False, "error": f"无法读取文件: {filepath}"}
 
         import jedi
+
         script = jedi.Script(source, path=filepath, project=_get_jedi_project(project_root))
         completions = script.complete(line, col)
 
         items = []
         for c in completions[:15]:  # 最多15条
-            items.append({
-                "name": c.name,
-                "complete": c.complete,
-                "type": c.type,
-                "description": c.description[:200] if c.description else "",
-                "docstring": c.docstring(raw=True)[:300] if c.docstring(raw=True) else "",
-            })
+            items.append(
+                {
+                    "name": c.name,
+                    "complete": c.complete,
+                    "type": c.type,
+                    "description": c.description[:200] if c.description else "",
+                    "docstring": c.docstring(raw=True)[:300] if c.docstring(raw=True) else "",
+                }
+            )
 
         return {
             "ok": True,
@@ -207,6 +220,7 @@ def completion(project_root: str, filepath: str, line: int, col: int) -> dict:
     except Exception as e:
         return {"ok": False, "error": str(e)}
 
+
 def goto_definition(project_root: str, filepath: str, line: int, col: int) -> dict:
     """跳转定义 — 基于 jedi"""
     try:
@@ -215,20 +229,23 @@ def goto_definition(project_root: str, filepath: str, line: int, col: int) -> di
             return {"ok": False, "error": f"无法读取文件: {filepath}"}
 
         import jedi
+
         script = jedi.Script(source, path=filepath, project=_get_jedi_project(project_root))
         definitions = script.goto(line, col)
 
         items = []
         for d in definitions:
-            items.append({
-                "name": d.name,
-                "type": d.type,
-                "module": d.module_name or "",
-                "file": str(d.module_path) if d.module_path else "",
-                "line": d.line,
-                "column": d.column,
-                "description": d.description[:300] if d.description else "",
-            })
+            items.append(
+                {
+                    "name": d.name,
+                    "type": d.type,
+                    "module": d.module_name or "",
+                    "file": str(d.module_path) if d.module_path else "",
+                    "line": d.line,
+                    "column": d.column,
+                    "description": d.description[:300] if d.description else "",
+                }
+            )
 
         return {
             "ok": True,
@@ -238,6 +255,7 @@ def goto_definition(project_root: str, filepath: str, line: int, col: int) -> di
     except Exception as e:
         return {"ok": False, "error": str(e)}
 
+
 def hover(project_root: str, filepath: str, line: int, col: int) -> dict:
     """悬停信息 — 类型 + docstring"""
     try:
@@ -246,6 +264,7 @@ def hover(project_root: str, filepath: str, line: int, col: int) -> dict:
             return {"ok": False, "error": f"无法读取文件: {filepath}"}
 
         import jedi
+
         script = jedi.Script(source, path=filepath, project=_get_jedi_project(project_root))
 
         # 获取当前位置的签名/帮助
@@ -254,20 +273,24 @@ def hover(project_root: str, filepath: str, line: int, col: int) -> dict:
 
         sig_info = []
         for sig in signatures:
-            sig_info.append({
-                "name": sig.name,
-                "params": str(sig.params) if sig.params else "",
-                "index": sig.index,
-            })
+            sig_info.append(
+                {
+                    "name": sig.name,
+                    "params": str(sig.params) if sig.params else "",
+                    "index": sig.index,
+                }
+            )
 
         def_info = []
         for d in definitions:
-            def_info.append({
-                "name": d.name,
-                "type": d.type,
-                "docstring": d.docstring(raw=True)[:500] if d.docstring(raw=True) else "",
-                "module": d.module_name or "",
-            })
+            def_info.append(
+                {
+                    "name": d.name,
+                    "type": d.type,
+                    "docstring": d.docstring(raw=True)[:500] if d.docstring(raw=True) else "",
+                    "module": d.module_name or "",
+                }
+            )
 
         return {
             "ok": True,
@@ -278,6 +301,7 @@ def hover(project_root: str, filepath: str, line: int, col: int) -> dict:
     except Exception as e:
         return {"ok": False, "error": str(e)}
 
+
 def references(project_root: str, filepath: str, line: int, col: int) -> dict:
     """查找引用 — 基于 jedi"""
     try:
@@ -286,19 +310,22 @@ def references(project_root: str, filepath: str, line: int, col: int) -> dict:
             return {"ok": False, "error": f"无法读取文件: {filepath}"}
 
         import jedi
+
         script = jedi.Script(source, path=filepath, project=_get_jedi_project(project_root))
         refs = script.get_references(line, col)
 
         items = []
         for r in refs[:30]:
-            items.append({
-                "name": r.name,
-                "type": r.type,
-                "module": r.module_name or "",
-                "file": str(r.module_path) if r.module_path else "",
-                "line": r.line,
-                "column": r.column,
-            })
+            items.append(
+                {
+                    "name": r.name,
+                    "type": r.type,
+                    "module": r.module_name or "",
+                    "file": str(r.module_path) if r.module_path else "",
+                    "line": r.line,
+                    "column": r.column,
+                }
+            )
 
         return {
             "ok": True,
@@ -308,6 +335,7 @@ def references(project_root: str, filepath: str, line: int, col: int) -> dict:
         }
     except Exception as e:
         return {"ok": False, "error": str(e)}
+
 
 def collect_context(project_root: str, filepath: str, symbol: str = None, max_files: int = 5) -> dict:
     """仓库级上下文收集：给定文件/符号，自动拉取相关代码片段。
@@ -337,17 +365,23 @@ def collect_context(project_root: str, filepath: str, symbol: str = None, max_fi
             module_symbols = []
             for n in names:
                 if n.type in ("function", "class", "module"):
-                    module_symbols.append({
-                        "name": n.name, "type": n.type,
-                        "line": n.line, "description": n.description[:200] if n.description else "",
-                    })
+                    module_symbols.append(
+                        {
+                            "name": n.name,
+                            "type": n.type,
+                            "line": n.line,
+                            "description": n.description[:200] if n.description else "",
+                        }
+                    )
             if module_symbols:
                 rel = os.path.relpath(filepath, project_root)
-                results["files"].append({
-                    "path": rel,
-                    "kind": "target",
-                    "symbols": module_symbols[:30],
-                })
+                results["files"].append(
+                    {
+                        "path": rel,
+                        "kind": "target",
+                        "symbols": module_symbols[:30],
+                    }
+                )
 
         # 2. 如果指定了符号，收集其定义和引用
         if symbol and filepath:
@@ -361,12 +395,14 @@ def collect_context(project_root: str, filepath: str, symbol: str = None, max_fi
                         if r.module_path and str(r.module_path) not in scanned:
                             scanned.add(str(r.module_path))
                             rel = os.path.relpath(str(r.module_path), project_root)
-                            results["symbols"].append({
-                                "name": r.name,
-                                "file": rel,
-                                "line": r.line,
-                                "type": r.type,
-                            })
+                            results["symbols"].append(
+                                {
+                                    "name": r.name,
+                                    "file": rel,
+                                    "line": r.line,
+                                    "type": r.type,
+                                }
+                            )
                     break
 
         # 3. 补充同目录的关键文件
@@ -380,8 +416,7 @@ def collect_context(project_root: str, filepath: str, symbol: str = None, max_fi
                     if src:
                         script = jedi.Script(src, path=str(pf), project=_get_jedi_project(project_root))
                         names = script.get_names(all_scopes=True, definitions=True, references=False)
-                        syms = [{"name": n.name, "type": n.type, "line": n.line} for n in names
-                                if n.type in ("function", "class")][:15]
+                        syms = [{"name": n.name, "type": n.type, "line": n.line} for n in names if n.type in ("function", "class")][:15]
                         results["files"].append({"path": rel, "kind": "sibling", "symbols": syms})
 
         results["hint"] = f"收集了 {len(results['files'])} 个文件, {len(results['symbols'])} 个符号引用"
@@ -396,15 +431,11 @@ def collect_context(project_root: str, filepath: str, symbol: str = None, max_fi
 
 # ── C++ (clangd) 支持 ────────────────────────────────────────
 
+
 def _check_clangd() -> bool:
     """检查 clangd 是否已安装。"""
     try:
-        result = subprocess.run(
-            ["clangd", "--version"],
-            capture_output=True,
-            text=True,
-            timeout=5
-        )
+        result = subprocess.run(["clangd", "--version"], capture_output=True, text=True, timeout=5)
         return result.returncode == 0
     except (subprocess.CalledProcessError, FileNotFoundError, subprocess.TimeoutExpired):
         return False
@@ -420,7 +451,7 @@ def cpp_diagnose(project_root: str, filepath: str) -> dict:
     Returns:
         {"ok": bool, "diagnostics": [...], "total": int, "hint": str}
     """
-    if not filepath or not any(filepath.endswith(ext) for ext in ('.cpp', '.cc', '.cxx', '.c', '.h', '.hpp', '.hxx')):
+    if not filepath or not any(filepath.endswith(ext) for ext in (".cpp", ".cc", ".cxx", ".c", ".h", ".hpp", ".hxx")):
         return {"ok": True, "diagnostics": [], "total": 0, "hint": "非 C++ 文件，跳过"}
 
     if not _check_clangd():
@@ -434,22 +465,22 @@ def cpp_diagnose(project_root: str, filepath: str) -> dict:
             capture_output=True,
             text=True,
             timeout=30,
-            cwd=project_root
+            cwd=project_root,
         )
 
         # 解析 clangd 输出
         diagnostics = []
-        for line in result.stderr.split('\n'):
-            if 'error:' in line or 'warning:' in line:
+        for line in result.stderr.split("\n"):
+            if "error:" in line or "warning:" in line:
                 # 格式: file:line:col: error: message
-                parts = line.split(':', 3)
+                parts = line.split(":", 3)
                 if len(parts) >= 4:
                     diag = {
                         "file": parts[0],
                         "line": int(parts[1]) if parts[1].isdigit() else 0,
                         "column": int(parts[2]) if parts[2].isdigit() else 0,
                         "severity": "error" if "error:" in line else "warning",
-                        "message": parts[3].strip()
+                        "message": parts[3].strip(),
                     }
                     diagnostics.append(diag)
 
@@ -479,7 +510,7 @@ def cpp_diagnose(project_root: str, filepath: str) -> dict:
 
 def cpp_goto_definition(project_root: str, filepath: str, line: int, col: int) -> dict:
     """C++ 跳转定义 — 基于 ctags（简化实现，完整 LSP 需 clangd 服务器模式）。"""
-    if not filepath or not any(filepath.endswith(ext) for ext in ('.cpp', '.cc', '.cxx', '.c', '.h', '.hpp', '.hxx')):
+    if not filepath or not any(filepath.endswith(ext) for ext in (".cpp", ".cc", ".cxx", ".c", ".h", ".hpp", ".hxx")):
         return {"ok": False, "error": "非 C++ 文件"}
 
     if not _check_clangd():
@@ -488,11 +519,7 @@ def cpp_goto_definition(project_root: str, filepath: str, line: int, col: int) -
     try:
         # 使用 ctags 作为简化实现
         result = subprocess.run(
-            ["ctags", "-f", "-", "--fields=+n", "--sort=yes", filepath],
-            capture_output=True,
-            text=True,
-            timeout=10,
-            cwd=project_root
+            ["ctags", "-f", "-", "--fields=+n", "--sort=yes", filepath], capture_output=True, text=True, timeout=10, cwd=project_root
         )
 
         if result.returncode != 0:
@@ -500,17 +527,19 @@ def cpp_goto_definition(project_root: str, filepath: str, line: int, col: int) -
 
         # 解析 ctags 输出
         definitions = []
-        for tag_line in result.stdout.strip().split('\n'):
-            if not tag_line or tag_line.startswith('!'):
+        for tag_line in result.stdout.strip().split("\n"):
+            if not tag_line or tag_line.startswith("!"):
                 continue
 
-            parts = tag_line.split('\t')
+            parts = tag_line.split("\t")
             if len(parts) >= 3:
-                definitions.append({
-                    "name": parts[0],
-                    "file": parts[1],
-                    "pattern": parts[2] if len(parts) > 2 else "",
-                })
+                definitions.append(
+                    {
+                        "name": parts[0],
+                        "file": parts[1],
+                        "pattern": parts[2] if len(parts) > 2 else "",
+                    }
+                )
 
         return {
             "ok": True,
@@ -527,17 +556,13 @@ def cpp_completion(project_root: str, filepath: str, line: int, col: int) -> dic
 
     注意：完整实现需要 clangd LSP 协议，这里使用简化实现。
     """
-    if not filepath or not any(filepath.endswith(ext) for ext in ('.cpp', '.cc', '.cxx', '.c', '.h', '.hpp', '.hxx')):
+    if not filepath or not any(filepath.endswith(ext) for ext in (".cpp", ".cc", ".cxx", ".c", ".h", ".hpp", ".hxx")):
         return {"ok": False, "error": "非 C++ 文件"}
 
     # 简化实现：使用 ctags 提取当前文件的符号
     try:
         result = subprocess.run(
-            ["ctags", "-f", "-", "--fields=+n", "--sort=yes", filepath],
-            capture_output=True,
-            text=True,
-            timeout=10,
-            cwd=project_root
+            ["ctags", "-f", "-", "--fields=+n", "--sort=yes", filepath], capture_output=True, text=True, timeout=10, cwd=project_root
         )
 
         if result.returncode != 0:
@@ -545,16 +570,18 @@ def cpp_completion(project_root: str, filepath: str, line: int, col: int) -> dic
 
         # 解析 ctags 输出
         completions = []
-        for tag_line in result.stdout.strip().split('\n'):
-            if not tag_line or tag_line.startswith('!'):
+        for tag_line in result.stdout.strip().split("\n"):
+            if not tag_line or tag_line.startswith("!"):
                 continue
 
-            parts = tag_line.split('\t')
+            parts = tag_line.split("\t")
             if len(parts) >= 3:
-                completions.append({
-                    "name": parts[0],
-                    "type": "function" if "f:" in tag_line else "variable",
-                })
+                completions.append(
+                    {
+                        "name": parts[0],
+                        "type": "function" if "f:" in tag_line else "variable",
+                    }
+                )
 
         return {
             "ok": True,
@@ -572,9 +599,9 @@ def diagnose_auto(project_root: str, filepath: str = None) -> dict:
         return diagnose(project_root)
 
     ext = Path(filepath).suffix.lower()
-    if ext in ('.py', '.pyw', '.pyi'):
+    if ext in (".py", ".pyw", ".pyi"):
         return diagnose(project_root, filepath)
-    if ext in ('.cpp', '.cc', '.cxx', '.c', '.h', '.hpp', '.hxx'):
+    if ext in (".cpp", ".cc", ".cxx", ".c", ".h", ".hpp", ".hxx"):
         return cpp_diagnose(project_root, filepath)
     return {"ok": True, "diagnostics": [], "total": 0, "hint": f"不支持的文件类型: {ext}"}
 
@@ -582,9 +609,9 @@ def diagnose_auto(project_root: str, filepath: str = None) -> dict:
 def goto_definition_auto(project_root: str, filepath: str, line: int, col: int) -> dict:
     """自动检测语言并跳转定义。"""
     ext = Path(filepath).suffix.lower()
-    if ext in ('.py', '.pyw', '.pyi'):
+    if ext in (".py", ".pyw", ".pyi"):
         return goto_definition(project_root, filepath, line, col)
-    if ext in ('.cpp', '.cc', '.cxx', '.c', '.h', '.hpp', '.hxx'):
+    if ext in (".cpp", ".cc", ".cxx", ".c", ".h", ".hpp", ".hxx"):
         return cpp_goto_definition(project_root, filepath, line, col)
     return {"ok": False, "error": f"不支持的文件类型: {ext}"}
 
@@ -592,8 +619,8 @@ def goto_definition_auto(project_root: str, filepath: str, line: int, col: int) 
 def completion_auto(project_root: str, filepath: str, line: int, col: int) -> dict:
     """自动检测语言并补全。"""
     ext = Path(filepath).suffix.lower()
-    if ext in ('.py', '.pyw', '.pyi'):
+    if ext in (".py", ".pyw", ".pyi"):
         return completion(project_root, filepath, line, col)
-    if ext in ('.cpp', '.cc', '.cxx', '.c', '.h', '.hpp', '.hxx'):
+    if ext in (".cpp", ".cc", ".cxx", ".c", ".h", ".hpp", ".hxx"):
         return cpp_completion(project_root, filepath, line, col)
     return {"ok": False, "error": f"不支持的文件类型: {ext}"}

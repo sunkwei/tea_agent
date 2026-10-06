@@ -52,6 +52,7 @@ class LiteSession:
         # API 弹性：从配置读取超时与重试次数（网络中断/睡眠恢复容错）
         try:
             from tea_agent.config import get_config as _get_cfg
+
             _cfg = _get_cfg()
             _req_to = float(getattr(_cfg, "api_request_timeout", 120.0))
             _conn_to = float(getattr(_cfg, "api_connect_timeout", 30.0))
@@ -78,22 +79,16 @@ class LiteSession:
         except Exception as e:
             # 环境代理变量畸形（NO_PROXY 含 [::1] 等）会让 SDK 内部建 httpx 客户端失败，
             # 这里降级为忽略环境代理，避免子 Agent 完全无法创建。
-            logger.warning(
-                "LiteSession: OpenAI 客户端初始化失败（疑似代理环境变量畸形），回退为忽略环境代理: %s", e
-            )
+            logger.warning("LiteSession: OpenAI 客户端初始化失败（疑似代理环境变量畸形），回退为忽略环境代理: %s", e)
             import httpx
 
-            _client_kwargs["http_client"] = httpx.Client(
-                timeout=httpx.Timeout(_req_to), proxy=None, trust_env=False
-            )
+            _client_kwargs["http_client"] = httpx.Client(timeout=httpx.Timeout(_req_to), proxy=None, trust_env=False)
             self.api = OpenAI(**_client_kwargs)
 
         # 构建工具定义（全部工具，无过滤）
         self.tools = self._build_tools()
 
-        logger.info(
-            f"LiteSession init | model: {model} | tools: {len(self.tools)} | 自由奔放模式"
-        )
+        logger.info(f"LiteSession init | model: {model} | tools: {len(self.tools)} | 自由奔放模式")
 
     def _default_system_prompt(self) -> str:
         """默认系统提示词（单一来源：prompt_manager.DEFAULT_SYSTEM_PROMPT）。"""
@@ -141,9 +136,7 @@ class LiteSession:
         tools, _shielded = apply_shield(tools)
         return tools
 
-    def chat(
-        self, user_input: str, callback: Callable[[str], None] | None = None
-    ) -> dict:
+    def chat(self, user_input: str, callback: Callable[[str], None] | None = None) -> dict:
         """单轮对话。返回 {user, thinking, assistant, tool_calls, error}。
 
         Args:
@@ -202,12 +195,7 @@ class LiteSession:
             {"role": "user", "content": user_input},
         ]
 
-    def _execute_chat_loop(
-        self,
-        messages: list[dict],
-        state: dict,
-        callback: Callable[[str], None] | None
-    ) -> None:
+    def _execute_chat_loop(self, messages: list[dict], state: dict, callback: Callable[[str], None] | None) -> None:
         """执行对话循环。
 
         Args:
@@ -224,9 +212,7 @@ class LiteSession:
             # 避免回复停在上一个工具结果
             if state["iterations"] >= self.max_iterations:
                 response = self._call_api(messages)
-                content, tool_calls_data, reasoning = self._process_response(
-                    response, callback
-                )
+                content, tool_calls_data, reasoning = self._process_response(response, callback)
                 state["full_reply"] += content
                 if reasoning:
                     state["thinking_content"] += reasoning
@@ -236,9 +222,7 @@ class LiteSession:
             response = self._call_api(messages)
 
             # 处理响应
-            content, tool_calls_data, reasoning = self._process_response(
-                response, callback
-            )
+            content, tool_calls_data, reasoning = self._process_response(response, callback)
 
             # 累积回复
             state["full_reply"] += content
@@ -259,13 +243,7 @@ class LiteSession:
             # 无工具调用，对话结束
             break
 
-    def _handle_tool_calls(
-        self,
-        messages: list[dict],
-        valid_tool_calls: list,
-        content: str,
-        reasoning_content: str = ""
-    ) -> None:
+    def _handle_tool_calls(self, messages: list[dict], valid_tool_calls: list, content: str, reasoning_content: str = "") -> None:
         """处理工具调用。
 
         Args:
@@ -276,9 +254,7 @@ class LiteSession:
                 见 _build_assistant_message 注释——DeepSeek V4 思考模式要求回传）
         """
         # 添加 assistant 消息到上下文
-        assistant_msg = self._build_assistant_message(
-            content, valid_tool_calls, reasoning_content
-        )
+        assistant_msg = self._build_assistant_message(content, valid_tool_calls, reasoning_content)
         messages.append(assistant_msg)
 
         # 执行工具调用
@@ -287,11 +263,13 @@ class LiteSession:
                 break
 
             call_id, func_name, result_str = self._execute_tool(call)
-            messages.append({
-                "role": "tool",
-                "tool_call_id": call_id,
-                "content": result_str,
-            })
+            messages.append(
+                {
+                    "role": "tool",
+                    "tool_call_id": call_id,
+                    "content": result_str,
+                }
+            )
 
         # 立即排空本会话注入的 additionalContexts 并作为 user 消息消费，
         # 避免泄漏到全局 tool_hooks 单例、污染下一个会话的工具循环
@@ -303,12 +281,7 @@ class LiteSession:
             ctx_text = ctx_text or str(ctx)
             messages.append({"role": "user", "content": f"[附加上下文]\n{ctx_text}"})
 
-    def _build_assistant_message(
-        self,
-        content: str,
-        valid_tool_calls: list,
-        reasoning_content: str = ""
-    ) -> dict:
+    def _build_assistant_message(self, content: str, valid_tool_calls: list, reasoning_content: str = "") -> dict:
         """构建助手消息。
 
         Args:
@@ -341,12 +314,7 @@ class LiteSession:
             msg["reasoning_content"] = reasoning_content
         return msg
 
-    def _build_chat_result(
-        self,
-        user_input: str,
-        state: dict,
-        error: str | None = None
-    ) -> dict:
+    def _build_chat_result(self, user_input: str, state: dict, error: str | None = None) -> dict:
         """构建对话结果。
 
         Args:
@@ -376,6 +344,7 @@ class LiteSession:
         # 事件日志（旁路 fail-open）：append-only，投影层据此重放 L1/L2/L3
         try:
             from tea_agent import session_events as se
+
             if not hasattr(self, "_event_log"):
                 self._event_log = []
             se.append_event(
@@ -387,9 +356,12 @@ class LiteSession:
                 data={"starts_request_series": starts, "model": self.model},
             )
             se.persist_step_request(
-                getattr(self, "storage", None), getattr(self, "topic_id", "") or "lite",
-                self.turn_meta.turns, len(self.turn_meta.steps),
-                {"starts_request_series": starts, "model": self.model})
+                getattr(self, "storage", None),
+                getattr(self, "topic_id", "") or "lite",
+                self.turn_meta.turns,
+                len(self.turn_meta.steps),
+                {"starts_request_series": starts, "model": self.model},
+            )
         except Exception as e:  # noqa: BLE001 — 旁路观测不得影响请求
             logger.debug("session_events 记录跳过: %s", e)
 
@@ -409,11 +381,7 @@ class LiteSession:
 
             # 映射 reasoning_effort（"auto"=自动推导不发送；非法值回退自动映射）
             reasoning_effort = self.reasoning_effort
-            if (
-                reasoning_effort
-                and reasoning_effort in REASONING_EFFORT_VALUES
-                and reasoning_effort != "auto"
-            ):
+            if reasoning_effort and reasoning_effort in REASONING_EFFORT_VALUES and reasoning_effort != "auto":
                 extra_body["reasoning_effort"] = reasoning_effort
             else:
                 strength = max(0.0, min(1.0, self.thinking_strength))
@@ -440,8 +408,10 @@ class LiteSession:
 
         # API 弹性：请求建立阶段失败（网络中断/睡眠恢复）自动重试
         from tea_agent.api_retry import call_with_retry
+
         try:
             from tea_agent.config import get_config as _get_cfg
+
             _cfg = _get_cfg()
             _mr = int(getattr(_cfg, "api_max_retries", 3))
             _bf = float(getattr(_cfg, "api_retry_backoff", 2.0))
@@ -451,7 +421,9 @@ class LiteSession:
 
         return call_with_retry(
             self.api.chat.completions.create,
-            max_retries=_mr, backoff=_bf, sleep_recovery_wait=_sw,
+            max_retries=_mr,
+            backoff=_bf,
+            sleep_recovery_wait=_sw,
             **kwargs,
         )
 
@@ -530,16 +502,12 @@ class LiteSession:
                 # 无法修复时返回 None，丢弃该 tool_call。
                 args = normalize_tool_args(data["name"], data["arguments"])
                 if args is None:
-                    logger.warning(
-                        f"工具 {data['name']} 参数 JSON 无效: {data['arguments'][:100]}"
-                    )
+                    logger.warning(f"工具 {data['name']} 参数 JSON 无效: {data['arguments'][:100]}")
                     continue
                 valid_calls.append(
                     SimpleToolCall(
                         id=data["id"],
-                        function=SimpleFunction(
-                            name=data["name"], arguments=args
-                        ),
+                        function=SimpleFunction(name=data["name"], arguments=args),
                     )
                 )
 
@@ -571,11 +539,7 @@ class LiteSession:
                     for ctx in extra_contexts:
                         tool_hooks.inject_context(ctx)
                 result = final_result
-                result_str = (
-                    json.dumps(result, ensure_ascii=False)
-                    if isinstance(result, dict)
-                    else str(result)
-                )
+                result_str = json.dumps(result, ensure_ascii=False) if isinstance(result, dict) else str(result)
         except Exception as e:
             result_str = f"工具执行错误: {e}"
             logger.warning(f"工具 {func_name} 执行失败: {e}")

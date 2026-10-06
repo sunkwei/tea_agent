@@ -4,6 +4,7 @@ import logging
 
 logger = logging.getLogger("toolkit")
 
+
 def toolkit_mode(action: str, text: str = "", mode: str = ""):
     """
     Agent 工作阶段模式管理。6 个 phase mode + 兼容旧 pragmatic/creative。
@@ -27,44 +28,164 @@ def toolkit_mode(action: str, text: str = "", mode: str = ""):
     # ── 各 phase 关键词 ──
     PHASE_KW = {  # noqa: N806
         "design": [
-            "设计", "架构", "方案", "规划", "选型", "权衡", "评估",
-            "design", "architecture", "plan", "proposal", "blueprint",
-            "可行性", "技术方案", "调研", "对比", "原型", "prototype",
-            "模块划分", "接口设计", "数据模型", "流程图",
-            "toolkit_explr", "toolkit_search", "toolkit_plan", "toolkit_kb",
+            "设计",
+            "架构",
+            "方案",
+            "规划",
+            "选型",
+            "权衡",
+            "评估",
+            "design",
+            "architecture",
+            "plan",
+            "proposal",
+            "blueprint",
+            "可行性",
+            "技术方案",
+            "调研",
+            "对比",
+            "原型",
+            "prototype",
+            "模块划分",
+            "接口设计",
+            "数据模型",
+            "流程图",
+            "toolkit_explr",
+            "toolkit_search",
+            "toolkit_plan",
+            "toolkit_kb",
         ],
         "develop": [
-            "实现", "开发", "编写", "添加", "修改", "删除", "重构",
-            "implement", "develop", "code", "add", "modify", "remove", "refactor",
-            "功能", "feature", "逻辑", "logic", "接口", "api", "算法", "algorithm",
-            "必须", "需要", "要求", "确保", "保证", "确定",
-            "toolkit_edit", "toolkit_self_evolve", "toolkit_exec", "toolkit_file",
+            "实现",
+            "开发",
+            "编写",
+            "添加",
+            "修改",
+            "删除",
+            "重构",
+            "implement",
+            "develop",
+            "code",
+            "add",
+            "modify",
+            "remove",
+            "refactor",
+            "功能",
+            "feature",
+            "逻辑",
+            "logic",
+            "接口",
+            "api",
+            "算法",
+            "algorithm",
+            "必须",
+            "需要",
+            "要求",
+            "确保",
+            "保证",
+            "确定",
+            "toolkit_edit",
+            "toolkit_self_evolve",
+            "toolkit_exec",
+            "toolkit_file",
         ],
         "test": [
-            "测试", "单测", "覆盖", "回归", "调试", "排查", "定位",
-            "test", "debug", "coverage", "pytest", "unittest", "mock",
-            "报错", "错误", "异常", "崩溃", "失败", "断言",
-            "修复", "fix", "bug", "defect", "fault", "traceback",
-            "toolkit_run_tests", "toolkit_lsp",
+            "测试",
+            "单测",
+            "覆盖",
+            "回归",
+            "调试",
+            "排查",
+            "定位",
+            "test",
+            "debug",
+            "coverage",
+            "pytest",
+            "unittest",
+            "mock",
+            "报错",
+            "错误",
+            "异常",
+            "崩溃",
+            "失败",
+            "断言",
+            "修复",
+            "fix",
+            "bug",
+            "defect",
+            "fault",
+            "traceback",
+            "toolkit_run_tests",
+            "toolkit_lsp",
         ],
         "review": [
-            "审查", "评审", "review", "检查", "审视", "审计",
-            "代码质量", "code quality", "安全", "security", "性能", "performance",
-            "规范", "standard", "最佳实践", "best practice", "反模式",
-            "隐患", "漏洞", "vulnerability", "风险",
-            "toolkit_diff", "toolkit_lsp", "toolkit_search",
+            "审查",
+            "评审",
+            "review",
+            "检查",
+            "审视",
+            "审计",
+            "代码质量",
+            "code quality",
+            "安全",
+            "security",
+            "性能",
+            "performance",
+            "规范",
+            "standard",
+            "最佳实践",
+            "best practice",
+            "反模式",
+            "隐患",
+            "漏洞",
+            "vulnerability",
+            "风险",
+            "toolkit_diff",
+            "toolkit_lsp",
+            "toolkit_search",
         ],
         "docs": [
-            "文档", "说明", "readme", "changelog", "注释", "手册",
-            "documentation", "docs", "docstring", "guide", "tutorial",
-            "记录", "record", "总结", "summary", "撰写", "编写",
-            "toolkit_publish_doc", "toolkit_kb",
+            "文档",
+            "说明",
+            "readme",
+            "changelog",
+            "注释",
+            "手册",
+            "documentation",
+            "docs",
+            "docstring",
+            "guide",
+            "tutorial",
+            "记录",
+            "record",
+            "总结",
+            "summary",
+            "撰写",
+            "编写",
+            "toolkit_publish_doc",
+            "toolkit_kb",
         ],
         "devops": [
-            "部署", "发布", "构建", "打包", "上线", "回滚",
-            "deploy", "release", "build", "package", "publish", "rollback",
-            "版本", "version", "bump", "ci/cd", "pipeline", "docker",
-            "toolkit_build", "toolkit_release_version",
+            "部署",
+            "发布",
+            "构建",
+            "打包",
+            "上线",
+            "回滚",
+            "deploy",
+            "release",
+            "build",
+            "package",
+            "publish",
+            "rollback",
+            "版本",
+            "version",
+            "bump",
+            "ci/cd",
+            "pipeline",
+            "docker",
+            "toolkit_build",
+            "toolkit_release_version",
         ],
     }
 
@@ -158,17 +279,17 @@ def toolkit_mode(action: str, text: str = "", mode: str = ""):
             scores[phase] = score
 
         # 额外规则加权
-        if re.search(r'(设计|架构|方案|选型|可行性)', input_text):
+        if re.search(r"(设计|架构|方案|选型|可行性)", input_text):
             scores["design"] += 4
-        if re.search(r'(实现|开发|修改|添加|删除|重构|必须|需要)', input_text):
+        if re.search(r"(实现|开发|修改|添加|删除|重构|必须|需要)", input_text):
             scores["develop"] += 3
-        if re.search(r'(测试|调试|修复|bug|报错|异常|失败)', input_text):
+        if re.search(r"(测试|调试|修复|bug|报错|异常|失败)", input_text):
             scores["test"] += 5
-        if re.search(r'(审查|review|检查|代码质量|安全|隐患)', input_text):
+        if re.search(r"(审查|review|检查|代码质量|安全|隐患)", input_text):
             scores["review"] += 4
-        if re.search(r'(文档|readme|changelog|说明|总结|注释)', input_text):
+        if re.search(r"(文档|readme|changelog|说明|总结|注释)", input_text):
             scores["docs"] += 4
-        if re.search(r'(部署|发布|构建|打包|版本|release)', input_text):
+        if re.search(r"(部署|发布|构建|打包|版本|release)", input_text):
             scores["devops"] += 4
 
         best = max(scores, key=scores.get)
@@ -186,13 +307,15 @@ def toolkit_mode(action: str, text: str = "", mode: str = ""):
         """获取 memory manager。"""
         from tea_agent.memory import MemoryManager
         from tea_agent.store import Storage
+
         try:
             from tea_agent.session_ref import get_agent
+
             agent = get_agent()
             if agent and hasattr(agent, "db"):
                 return MemoryManager(agent.db, extraction_threshold=1, dedup_threshold=0.3)
         except Exception:
-            logger.exception('op_failed')
+            logger.exception("op_failed")
 
         return MemoryManager(Storage(), extraction_threshold=1, dedup_threshold=0.3)
 
@@ -264,7 +387,13 @@ def toolkit_mode(action: str, text: str = "", mode: str = ""):
         mm = _get_memory_manager()
         old = _get_existing_mode_memory(mm)
         _set_mode(mm, resolved, old)
-        return {"ok": True, "switched_to": resolved, "requested": mode, "instruction": MODE_INSTRUCTIONS.get(resolved, "")[:100] + "...", "returncode": 0}
+        return {
+            "ok": True,
+            "switched_to": resolved,
+            "requested": mode,
+            "instruction": MODE_INSTRUCTIONS.get(resolved, "")[:100] + "...",
+            "returncode": 0,
+        }
 
     if action == "auto":
         detected = _detect_phase(text)
@@ -274,15 +403,40 @@ def toolkit_mode(action: str, text: str = "", mode: str = ""):
             return {"ok": True, "mode": detected, "switched": False, "reason": "模式未变化", "returncode": 0}
         old = _get_existing_mode_memory(mm)
         _set_mode(mm, detected, old)
-        return {"ok": True, "mode": detected, "switched": True, "from": current, "to": detected, "instruction": MODE_INSTRUCTIONS.get(detected, "")[:100] + "...", "returncode": 0}
+        return {
+            "ok": True,
+            "mode": detected,
+            "switched": True,
+            "from": current,
+            "to": detected,
+            "instruction": MODE_INSTRUCTIONS.get(detected, "")[:100] + "...",
+            "returncode": 0,
+        }
 
     if action == "status":
         mm = _get_memory_manager()
         old = _get_existing_mode_memory(mm)
         if old:
             current = _current_mode(mm)
-            return {"ok": True, "has_mode": True, "mode": current, "content": old["content"], "priority": old["priority"], "id": old["id"], "labels": _LABELS, "returncode": 0}
-        return {"ok": True, "has_mode": False, "mode": "develop (default)", "message": "未设置模式，默认 develop", "tip": "使用 toolkit_mode(action='auto', text='用户输入')", "valid_modes": list(_LABELS.keys()), "returncode": 0}
+            return {
+                "ok": True,
+                "has_mode": True,
+                "mode": current,
+                "content": old["content"],
+                "priority": old["priority"],
+                "id": old["id"],
+                "labels": _LABELS,
+                "returncode": 0,
+            }
+        return {
+            "ok": True,
+            "has_mode": False,
+            "mode": "develop (default)",
+            "message": "未设置模式，默认 develop",
+            "tip": "使用 toolkit_mode(action='auto', text='用户输入')",
+            "valid_modes": list(_LABELS.keys()),
+            "returncode": 0,
+        }
 
     return {"ok": False, "error": f"未知 action: {action}", "returncode": 1}
 
@@ -303,28 +457,15 @@ def meta_toolkit_mode() -> dict:
             "parameters": {
                 "type": "object",
                 "properties": {
-                    "action": {
-                        "type": "string",
-                        "enum": ["detect", "switch", "status", "auto"],
-                        "description": "detect/switch/status/auto"
-                    },
-                    "text": {
-                        "type": "string",
-                        "description": "用户输入文本，用于自动检测模式"
-                    },
+                    "action": {"type": "string", "enum": ["detect", "switch", "status", "auto"], "description": "detect/switch/status/auto"},
+                    "text": {"type": "string", "description": "用户输入文本，用于自动检测模式"},
                     "mode": {
                         "type": "string",
-                        "enum": [
-                            "design", "develop", "test", "review", "docs", "devops",
-                            "creative", "pragmatic", "mixed"
-                        ],
-                        "description": (
-                            "[switch] 目标模式: design/develop/test/review/docs/devops/creative, "
-                            "兼容 pragmatic→develop, mixed→develop"
-                        )
+                        "enum": ["design", "develop", "test", "review", "docs", "devops", "creative", "pragmatic", "mixed"],
+                        "description": ("[switch] 目标模式: design/develop/test/review/docs/devops/creative, 兼容 pragmatic→develop, mixed→develop"),
                     },
                 },
-                "required": ["action"]
-            }
-        }
+                "required": ["action"],
+            },
+        },
     }

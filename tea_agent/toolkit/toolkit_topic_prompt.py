@@ -20,6 +20,7 @@ def _get_agent():
     """获取当前 Agent 实例"""
     try:
         from tea_agent.session_ref import get_agent
+
         return get_agent()
     except Exception:
         logger.exception("获取 Agent 失败")
@@ -36,20 +37,12 @@ def meta_toolkit_topic_prompt() -> dict:
             "parameters": {
                 "type": "object",
                 "properties": {
-                    "action": {
-                        "type": "string",
-                        "enum": ["get", "set", "clear", "status"],
-                        "description": "get/set/clear/status",
-                        "default": "get"
-                    },
-                    "content": {
-                        "type": "string",
-                        "description": "要设置的系统提示词内容"
-                    }
+                    "action": {"type": "string", "enum": ["get", "set", "clear", "status"], "description": "get/set/clear/status", "default": "get"},
+                    "content": {"type": "string", "description": "要设置的系统提示词内容"},
                 },
-                "required": ["action"]
-            }
-        }
+                "required": ["action"],
+            },
+        },
     }
 
 
@@ -71,8 +64,8 @@ def toolkit_topic_prompt(action: str = "get", content: str = "") -> str:
     if agent is None:
         return "❌ 无法获取当前 Agent 实例"
 
-    storage = getattr(agent, 'storage', None)
-    topic_id = getattr(agent, 'current_topic_id', None)
+    storage = getattr(agent, "storage", None)
+    topic_id = getattr(agent, "current_topic_id", None)
 
     if not storage:
         return "❌ 当前会话无存储支持，无法管理主题级 system prompt"
@@ -108,7 +101,7 @@ def toolkit_topic_prompt(action: str = "get", content: str = "") -> str:
 
             # 获取全局进化版本信息
             global_info = "（无 prompt_manager）"
-            pm = getattr(agent, 'prompt_manager', None)
+            pm = getattr(agent, "prompt_manager", None)
             if pm:
                 global_info = f"v{pm.current_version} (id={pm.current_prompt_id})"
 

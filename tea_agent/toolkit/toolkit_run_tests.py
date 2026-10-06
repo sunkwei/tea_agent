@@ -3,6 +3,7 @@ import logging
 
 logger = logging.getLogger("toolkit")
 
+
 def toolkit_run_tests(pattern: str = "test_*.py") -> dict:
     """
     运行项目中的测试文件（通过 pytest，glob 显式展开）。
@@ -20,9 +21,7 @@ def toolkit_run_tests(pattern: str = "test_*.py") -> dict:
 
     cwd = os.getcwd()
     # 同时收集当前目录与 tea_agent/tests/ 下的测试文件（subprocess 无 shell，需显式展开 glob）
-    test_files = sorted(set(
-        glob.glob(pattern) + glob.glob(os.path.join("tea_agent", "tests", pattern))
-    ))
+    test_files = sorted(set(glob.glob(pattern) + glob.glob(os.path.join("tea_agent", "tests", pattern))))
     test_files = [t for t in test_files if os.path.exists(t)]
 
     if not test_files:
@@ -31,15 +30,18 @@ def toolkit_run_tests(pattern: str = "test_*.py") -> dict:
     try:
         r = subprocess.run(
             [sys.executable, "-m", "pytest", *test_files, "-q", "--tb=short"],
-            capture_output=True, text=True, timeout=300, cwd=cwd,
+            capture_output=True,
+            text=True,
+            timeout=300,
+            cwd=cwd,
         )
         output = r.stdout + r.stderr
-        m = re.search(r'(\d+)\s+passed', output)
+        m = re.search(r"(\d+)\s+passed", output)
         passed = int(m.group(1)) if m else 0
-        m = re.search(r'(\d+)\s+failed', output)
+        m = re.search(r"(\d+)\s+failed", output)
         failed = int(m.group(1)) if m else 0
         # pytest 统计可能是复数 "errors" 也可能是单数 "1 error"
-        m = re.search(r'(\d+)\s+error', output)
+        m = re.search(r"(\d+)\s+error", output)
         errors = int(m.group(1)) if m else 0
         return {
             "ok": r.returncode == 0,

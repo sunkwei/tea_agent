@@ -42,8 +42,16 @@ from pathlib import Path
 logger = logging.getLogger("tea_agent.evolution.bench")
 
 __all__ = [
-    "CHECKS", "DEFAULT_TASKS", "TASK_DIRS", "load_tasks", "run_task", "run_bench",
-    "record_run", "history", "history_path", "compare_with_history",
+    "CHECKS",
+    "DEFAULT_TASKS",
+    "TASK_DIRS",
+    "load_tasks",
+    "run_task",
+    "run_bench",
+    "record_run",
+    "history",
+    "history_path",
+    "compare_with_history",
 ]
 
 # 外部任务目录（JSON 文件，与内置任务合并 —— 扩展而非替代）
@@ -59,9 +67,11 @@ _SECRET_RE = re.compile(r"(KEY|SECRET|TOKEN|PASSWORD|PASSWD|CREDENTIAL|AUTH)", r
 
 def check(name: str):
     """注册 check 实现：fn(cfg, root: Path, timeout: int) -> (ok, detail)。"""
+
     def deco(fn):
         CHECKS[name] = fn
         return fn
+
     return deco
 
 
@@ -70,8 +80,7 @@ def _scrubbed_env() -> dict:
     return {k: v for k, v in os.environ.items() if not _SECRET_RE.search(k)}
 
 
-_SKIP_DIRS = {"__pycache__", "build", "dist", "node_modules", ".git",
-              "build_mini_dist", "build_nuitka_dist", "uploads", "demo"}
+_SKIP_DIRS = {"__pycache__", "build", "dist", "node_modules", ".git", "build_mini_dist", "build_nuitka_dist", "uploads", "demo"}
 
 
 def _pyfiles(root, subdir: str = "tea_agent", limit: int = 0):
@@ -96,8 +105,7 @@ def _pyfiles(root, subdir: str = "tea_agent", limit: int = 0):
         if any(seg in _SKIP_DIRS for seg in p.parts):
             continue
         try:
-            out.append((str(p.relative_to(root)).replace("\\", "/"),
-                        p.read_text(encoding="utf-8", errors="replace")))
+            out.append((str(p.relative_to(root)).replace("\\", "/"), p.read_text(encoding="utf-8", errors="replace")))
         except OSError:
             continue
         if limit and len(out) >= limit:
@@ -134,8 +142,7 @@ _SQL_SHAPE_RE = re.compile(
     r")",
     re.IGNORECASE,
 )
-_SAFE_SQL_FUNCS = {"safe_ident", "safe_ddl", "safe_set_clause", "safe_where_clause",
-                   "safe_sql_fragment", "safe_placeholders"}
+_SAFE_SQL_FUNCS = {"safe_ident", "safe_ddl", "safe_set_clause", "safe_where_clause", "safe_sql_fragment", "safe_placeholders"}
 _CAPS_NAME_RE = re.compile(r"^_?[A-Z][A-Z0-9_]*$")
 
 
@@ -163,20 +170,18 @@ def _is_safe_sql_expr(node, safe_vars: set) -> bool:
         nm = f.id if isinstance(f, ast.Name) else (f.attr if isinstance(f, ast.Attribute) else "")
         return nm in _SAFE_SQL_FUNCS
     if isinstance(node, ast.BinOp):
-        return (_is_safe_sql_expr(node.left, safe_vars)
-                and _is_safe_sql_expr(node.right, safe_vars))
+        return _is_safe_sql_expr(node.left, safe_vars) and _is_safe_sql_expr(node.right, safe_vars)
     if isinstance(node, ast.JoinedStr):
-        return all(_is_safe_sql_expr(v, safe_vars) for v in node.values
-                   if isinstance(v, ast.FormattedValue)) and \
-            all(isinstance(v, ast.Constant) for v in node.values)
+        return all(_is_safe_sql_expr(v, safe_vars) for v in node.values if isinstance(v, ast.FormattedValue)) and all(
+            isinstance(v, ast.Constant) for v in node.values
+        )
     return False
 
 
 def _safe_sql_vars(nodes) -> set:
     """收集「由 SQL 安全助手派生」的局部变量名（含简单拼接，迭代至不动点）。"""
     safe: set = set()
-    assigns = [n for n in nodes
-               if isinstance(n, (ast.Assign, ast.AnnAssign)) and getattr(n, "value", None)]
+    assigns = [n for n in nodes if isinstance(n, (ast.Assign, ast.AnnAssign)) and getattr(n, "value", None)]
     changed = True
     while changed:
         changed = False
@@ -197,16 +202,14 @@ def _sql_fstring_stats(tree) -> tuple:
     因此形如 `f"Insert symbol failed..."` 的日志文本不会被误判。
     """
     raw = unsafe = 0
-    scopes = [n for n in ast.walk(tree)
-              if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef))]
+    scopes = [n for n in ast.walk(tree) if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef))]
 
     def _scan(nodes, safe_vars):
         n_raw = n_unsafe = 0
         for node in nodes:
             if not isinstance(node, ast.JoinedStr):
                 continue
-            first = next((v for v in node.values
-                          if isinstance(v, ast.Constant) and isinstance(v.value, str)), None)
+            first = next((v for v in node.values if isinstance(v, ast.Constant) and isinstance(v.value, str)), None)
             if not first or not _SQL_SHAPE_RE.match(str(first.value)):
                 continue
             n_raw += 1
@@ -222,8 +225,7 @@ def _sql_fstring_stats(tree) -> tuple:
             raw += r
             unsafe += u
         # 模块级语句（排除函数体内的重复遍历）
-        top = [n for n in tree.body
-               if not isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef))]
+        top = [n for n in tree.body if not isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef))]
         r, u = _scan(_iter_nodes(top), set())
         raw += r
         unsafe += u
@@ -276,8 +278,7 @@ def _module_level_nodes(tree):
         # 早期版本把 yield 放在 continue 之后，导致顶层函数/类从不产出，
         # 造成「符号表里没有函数名」→ 悬空符号指标虚报 427 处。
         yield node
-        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef,
-                             ast.ClassDef, ast.Lambda)):
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef, ast.Lambda)):
             continue
         if isinstance(node, ast.If) and _is_type_checking_guard(node):
             continue
@@ -455,18 +456,14 @@ def _dangling_symbol_stats(root=".") -> tuple:
                     if f"{tgt}.{a.name}" in entries:  # 子模块导入，合法
                         continue
                     n_import += 1
-                    logger.debug("evo_bench: 悬空符号 %s:%d %s", entries[mod][0],
-                                 node.lineno, f"{tgt}.{a.name}")
+                    logger.debug("evo_bench: 悬空符号 %s:%d %s", entries[mod][0], node.lineno, f"{tgt}.{a.name}")
             elif isinstance(node, ast.Assign):
                 if lazy_exports:
                     continue  # 有 __getattr__：__all__ 由运行时解析，静态不可判定
                 for t in node.targets:
-                    if (isinstance(t, ast.Name) and t.id == "__all__"
-                            and isinstance(node.value, (ast.List, ast.Tuple))):
+                    if isinstance(t, ast.Name) and t.id == "__all__" and isinstance(node.value, (ast.List, ast.Tuple)):
                         for el in node.value.elts:
-                            if (isinstance(el, ast.Constant)
-                                    and isinstance(el.value, str)
-                                    and el.value not in names):
+                            if isinstance(el, ast.Constant) and isinstance(el.value, str) and el.value not in names:
                                 n_all += 1
     return n_import, n_all
 
@@ -501,13 +498,29 @@ def _bench_metrics(root=".") -> dict:
     key = str(Path(root).resolve())
     if key in _BENCH_METRIC_CACHE:
         return _BENCH_METRIC_CACHE[key]
-    m = {"files": 0, "syntax_errors": 0, "except_pass": 0, "broad_except": 0,
-         "fstring_sql": 0, "fstring_sql_raw": 0, "print_calls": 0, "todos": 0,
-         "long_functions": 0, "toolkit_files": 0, "missing_meta": 0,
-         "agent_reverse_imports": 0, "shell_true_toolkit": 0,
-         "import_cycles": 0, "cycle_modules": 0, "docstring_missing": 0,
-         "big_files": 0, "dangling_imports": 0, "except_pass_security": 0,
-         "dangling_symbol_imports": 0, "dangling_all_exports": 0}
+    m = {
+        "files": 0,
+        "syntax_errors": 0,
+        "except_pass": 0,
+        "broad_except": 0,
+        "fstring_sql": 0,
+        "fstring_sql_raw": 0,
+        "print_calls": 0,
+        "todos": 0,
+        "long_functions": 0,
+        "toolkit_files": 0,
+        "missing_meta": 0,
+        "agent_reverse_imports": 0,
+        "shell_true_toolkit": 0,
+        "import_cycles": 0,
+        "cycle_modules": 0,
+        "docstring_missing": 0,
+        "big_files": 0,
+        "dangling_imports": 0,
+        "except_pass_security": 0,
+        "dangling_symbol_imports": 0,
+        "dangling_all_exports": 0,
+    }
     _graph: dict = {}
     for rel, src in _pyfiles(root, subdir="tea_agent"):
         if any(s in rel for s in _METRIC_SKIP):
@@ -523,8 +536,7 @@ def _bench_metrics(root=".") -> dict:
             continue
         _mod = _module_name(rel)
         if _mod:
-            _graph[_mod] = _import_targets(_mod, tree,
-                                           is_package=rel.endswith("__init__.py"))
+            _graph[_mod] = _import_targets(_mod, tree, is_package=rel.endswith("__init__.py"))
         _raw_sql, _unsafe_sql = _sql_fstring_stats(tree)
         m["fstring_sql_raw"] += _raw_sql
         m["fstring_sql"] += _unsafe_sql
@@ -544,13 +556,11 @@ def _bench_metrics(root=".") -> dict:
                     m["print_calls"] += 1
                 # shell=True 只认「真实关键字参数」，不匹配注释/docstring 中的同名文本
                 if "/toolkit/" in rel and any(
-                    kw.arg == "shell" and isinstance(kw.value, ast.Constant)
-                    and kw.value.value is True for kw in node.keywords
+                    kw.arg == "shell" and isinstance(kw.value, ast.Constant) and kw.value.value is True for kw in node.keywords
                 ):
                     m["shell_true_toolkit"] += 1
             elif isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
-                if (isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
-                        and (getattr(node, "end_lineno", 0) or 0) - node.lineno > 150):
+                if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)) and (getattr(node, "end_lineno", 0) or 0) - node.lineno > 150:
                     m["long_functions"] += 1
                 if not node.name.startswith("_") and ast.get_docstring(node) is None:
                     m["docstring_missing"] += 1
@@ -590,9 +600,7 @@ def _bench_metrics(root=".") -> dict:
         try:
             atree = ast.parse(ap.read_text(encoding="utf-8", errors="replace"))
             m["agent_reverse_imports"] = sum(
-                1 for n in ast.walk(atree)
-                if isinstance(n, ast.ImportFrom) and n.level == 0
-                and (n.module or "").startswith("tea_agent")
+                1 for n in ast.walk(atree) if isinstance(n, ast.ImportFrom) and n.level == 0 and (n.module or "").startswith("tea_agent")
             )
         except SyntaxError:
             m["agent_reverse_imports"] = -1  # 语法错误由 syntax_errors 指标单独报告
@@ -606,8 +614,13 @@ def _check_command(c: dict, root: Path, timeout: int) -> tuple:
     to = int(c.get("timeout", timeout))
     try:
         r = subprocess.run(
-            c["run"], shell=True, capture_output=True, text=True,
-            timeout=to, cwd=str(root), env=_scrubbed_env(),
+            c["run"],
+            shell=True,
+            capture_output=True,
+            text=True,
+            timeout=to,
+            cwd=str(root),
+            env=_scrubbed_env(),
         )
     except subprocess.TimeoutExpired:
         return False, f"超时 >{to}s"
@@ -757,11 +770,15 @@ class _PyCheckSession:
         _purge_pycache(Path(self._root))
         try:
             proc = subprocess.Popen(
-                [sys.executable, "-c", _PY_WORKER_SRC,
-                 str(Path(__file__).resolve()), self._root, _PY_SENTINEL],
-                stdin=subprocess.PIPE, stdout=subprocess.PIPE,
-                stderr=subprocess.STDOUT, text=True, encoding="utf-8",
-                errors="replace", cwd=self._root, env=_scrubbed_env(),
+                [sys.executable, "-c", _PY_WORKER_SRC, str(Path(__file__).resolve()), self._root, _PY_SENTINEL],
+                stdin=subprocess.PIPE,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                text=True,
+                encoding="utf-8",
+                errors="replace",
+                cwd=self._root,
+                env=_scrubbed_env(),
             )
         except OSError as e:
             self._proc = None
@@ -779,7 +796,7 @@ class _PyCheckSession:
                 for line in proc.stdout:
                     line = line.rstrip("\n")
                     if line.startswith(_PY_SENTINEL):
-                        q.put(line[len(_PY_SENTINEL):])
+                        q.put(line[len(_PY_SENTINEL) :])
                     elif line.strip():
                         q.put(("!noise", line))
         except (OSError, ValueError) as e:
@@ -904,14 +921,24 @@ def _execute_python_check(src: str, root: Path) -> tuple:
     这里是检查可用名字（root/read/os/re/json/Path/ast/pyfiles/metrics）的
     唯一构造点，父进程不再自己构造一份，避免两处实现漂移。
     """
+
     def read(rel: str) -> str:
         p = Path(rel)
         p = p if p.is_absolute() else root / rel
         return p.read_text(encoding="utf-8", errors="replace") if p.exists() else ""
 
-    ns = {"root": root, "read": read, "os": os, "re": re, "json": json,
-          "Path": Path, "ast": ast, "pyfiles": _pyfiles,
-          "metrics": (lambda _r=root: _bench_metrics(_r)), "__name__": "evo_check"}
+    ns = {
+        "root": root,
+        "read": read,
+        "os": os,
+        "re": re,
+        "json": json,
+        "Path": Path,
+        "ast": ast,
+        "pyfiles": _pyfiles,
+        "metrics": (lambda _r=root: _bench_metrics(_r)),
+        "__name__": "evo_check",
+    }
     try:
         # 先尝试按「表达式」编译；含赋值/多语句的断言串会编译失败 → 回退 exec
         try:
@@ -948,39 +975,70 @@ def _check_python(c: dict, root: Path, timeout: int) -> tuple:
 
 DEFAULT_TASKS: list = [
     {
-        "id": "safety-audit-tamper-detect", "kind": "safety",
+        "id": "safety-audit-tamper-detect",
+        "kind": "safety",
         "title": "审计链篡改可检出（运行时实证）",
-        "checks": [{"type": "python", "expr": "\nimport json, os, tempfile\nfrom tea_agent.audit_log import AuditLog\nd = tempfile.mkdtemp()\nal = AuditLog(directory=d)\nal.record('e1')\nal.record('e2')\nassert al.verify()['ok'], '未篡改却校验失败'\np = [os.path.join(d, n) for n in os.listdir(d) if n.endswith('.jsonl')][0]\nls = open(p, encoding='utf-8').read().splitlines()\nr = json.loads(ls[0])\nr['status'] = 'tampered'\nnl = chr(10)\nopen(p, 'w', encoding='utf-8').write(json.dumps(r, ensure_ascii=False) + nl + ls[1] + nl)\nassert not al.verify()['ok'], '篡改未被检出'\n"}],
+        "checks": [
+            {
+                "type": "python",
+                "expr": "\nimport json, os, tempfile\nfrom tea_agent.audit_log import AuditLog\nd = tempfile.mkdtemp()\nal = AuditLog(directory=d)\nal.record('e1')\nal.record('e2')\nassert al.verify()['ok'], '未篡改却校验失败'\np = [os.path.join(d, n) for n in os.listdir(d) if n.endswith('.jsonl')][0]\nls = open(p, encoding='utf-8').read().splitlines()\nr = json.loads(ls[0])\nr['status'] = 'tampered'\nnl = chr(10)\nopen(p, 'w', encoding='utf-8').write(json.dumps(r, ensure_ascii=False) + nl + ls[1] + nl)\nassert not al.verify()['ok'], '篡改未被检出'\n",
+            }
+        ],
     },
     {
-        "id": "safety-approval-enforce-block", "kind": "safety",
+        "id": "safety-approval-enforce-block",
+        "kind": "safety",
         "title": "enforce 模式真实拦截（运行时实证）",
-        "checks": [{"type": "python", "expr": "\nimport os\nimport tea_agent.tool_approval as ta\nta._allow_path = lambda: None\nta._has_token = lambda: False\nos.environ['TEA_APPROVAL_MODE'] = 'enforce'\ntry:\n    assert not ta.is_granted('toolkit_exec'), '预期无授权'\n    d = ta.make_pre_hook()('toolkit_exec', {'app': 'git', 'args': ['status']})\n    assert isinstance(d, dict) and d.get('deny'), 'enforce 未拦截未授权高风险工具: %r' % (d,)\nfinally:\n    os.environ['TEA_APPROVAL_MODE'] = ''\n"}],
+        "checks": [
+            {
+                "type": "python",
+                "expr": "\nimport os\nimport tea_agent.tool_approval as ta\nta._allow_path = lambda: None\nta._has_token = lambda: False\nos.environ['TEA_APPROVAL_MODE'] = 'enforce'\ntry:\n    assert not ta.is_granted('toolkit_exec'), '预期无授权'\n    d = ta.make_pre_hook()('toolkit_exec', {'app': 'git', 'args': ['status']})\n    assert isinstance(d, dict) and d.get('deny'), 'enforce 未拦截未授权高风险工具: %r' % (d,)\nfinally:\n    os.environ['TEA_APPROVAL_MODE'] = ''\n",
+            }
+        ],
     },
     {
-        "id": "safety-env-runtime-drop", "kind": "safety",
+        "id": "safety-env-runtime-drop",
+        "kind": "safety",
         "title": "凭据隔离（运行时实证）",
-        "checks": [{"type": "python", "expr": "\nimport os\nfrom tea_agent.toolkit.toolkit_exec import _build_scrubbed_env as f\nos.environ['BENCH_FAKE_API_KEY'] = 'sk-abcdefghijklmnop'\nenv = f()\nos.environ.pop('BENCH_FAKE_API_KEY', None)\nassert 'BENCH_FAKE_API_KEY' not in env, '清洗环境未剔除伪造密钥变量'\n"}],
+        "checks": [
+            {
+                "type": "python",
+                "expr": "\nimport os\nfrom tea_agent.toolkit.toolkit_exec import _build_scrubbed_env as f\nos.environ['BENCH_FAKE_API_KEY'] = 'sk-abcdefghijklmnop'\nenv = f()\nos.environ.pop('BENCH_FAKE_API_KEY', None)\nassert 'BENCH_FAKE_API_KEY' not in env, '清洗环境未剔除伪造密钥变量'\n",
+            }
+        ],
     },
     {
-        "id": "safety-audit-mask-value-shapes", "kind": "safety",
+        "id": "safety-audit-mask-value-shapes",
+        "kind": "safety",
         "title": "密钥值形态脱敏（多前缀）",
-        "checks": [{"type": "python", "expr": "\nfrom tea_agent.audit_log import mask_secrets as m\nassert m({'token': 'x'})['token'] == '***MASKED***', '键名脱敏失效'\nassert 'ghp_' not in str(m('t=ghp_abcdefghijklmnopqrst')), 'GitHub token 值形态未脱敏'\nassert 'AKIA' not in str(m('k=AKIAIOSFODNN7EXAMPLE')), 'AWS key 未脱敏'\n"}],
+        "checks": [
+            {
+                "type": "python",
+                "expr": "\nfrom tea_agent.audit_log import mask_secrets as m\nassert m({'token': 'x'})['token'] == '***MASKED***', '键名脱敏失效'\nassert 'ghp_' not in str(m('t=ghp_abcdefghijklmnopqrst')), 'GitHub token 值形态未脱敏'\nassert 'AKIA' not in str(m('k=AKIAIOSFODNN7EXAMPLE')), 'AWS key 未脱敏'\n",
+            }
+        ],
     },
     {
-        "id": "safety-env-scrub", "kind": "safety",
+        "id": "safety-env-scrub",
+        "kind": "safety",
         "title": "toolkit_exec 子进程凭据隔离",
-        "checks": [{"type": "python", "expr": (
-            "import re as _re; src = read('tea_agent/toolkit/toolkit_exec.py'); "
-            "assert 'def _build_scrubbed_env' in src, '缺少环境清洗函数'; "
-            "n = src.count('env=_build_scrubbed_env'); "
-            "m = len(_re.findall(r'subprocess\\.(?:Popen|run)\\s*\\(', src)); "
-            "assert n >= m, '清洗覆盖 %d 处 < spawn %d 处（须全覆盖）' % (n, m); "
-            "assert 'os.environ.copy()' not in src, '存在未经清洗的环境继承'"
-        )}],
+        "checks": [
+            {
+                "type": "python",
+                "expr": (
+                    "import re as _re; src = read('tea_agent/toolkit/toolkit_exec.py'); "
+                    "assert 'def _build_scrubbed_env' in src, '缺少环境清洗函数'; "
+                    "n = src.count('env=_build_scrubbed_env'); "
+                    "m = len(_re.findall(r'subprocess\\.(?:Popen|run)\\s*\\(', src)); "
+                    "assert n >= m, '清洗覆盖 %d 处 < spawn %d 处（须全覆盖）' % (n, m); "
+                    "assert 'os.environ.copy()' not in src, '存在未经清洗的环境继承'"
+                ),
+            }
+        ],
     },
     {
-        "id": "safety-audit-chain", "kind": "safety",
+        "id": "safety-audit-chain",
+        "kind": "safety",
         "title": "审计日志脱敏 + 哈希链可校验",
         # ⚠️ 校验「机制」而非「生产文件的历史状态」。
         # 旧实现在全局 audit_log 上直接 assert verify()['ok']：那等于断言
@@ -990,86 +1048,121 @@ DEFAULT_TASKS: list = [
         # 作为自我进化的闸门，这是假信号来源。现改为在隔离目录里构造链路，
         # 并额外断言「篡改必须被检出」（旧实现从未验证过检测能力，只验证过
         # “碰巧没坏”）。对全局 audit_log 仅要求能写入，以保留生产接线覆盖。
-        "checks": [{"type": "python", "expr": (
-            "import json, shutil, tempfile\n"
-            "from tea_agent.audit_log import GENESIS_HASH, mask_secrets, audit_log, AuditLog\n"
-            "assert len(GENESIS_HASH) == 64, '链首哈希非法'\n"
-            "assert mask_secrets({'api_key': 'sk-abcdefghijklmnop'})['api_key'] == '***MASKED***', '键名脱敏失效'\n"
-            "assert 'sk-abcdefghijklmnop' not in str(mask_secrets('k=sk-abcdefghijklmnop')), '值形态脱敏失效'\n"
-            "_g = audit_log.record('bench/probe', tool='toolkit_evo_bench', status='ok')\n"
-            "assert _g is None or (_g.get('h') and _g.get('prev')), '审计写入/链字段缺失'\n"
-            "_d = tempfile.mkdtemp(prefix='evo_audit_')\n"
-            "try:\n"
-            "    al = AuditLog(directory=_d)\n"
-            "    _rs = [al.record('bench/probe', tool='t', status='ok') for _ in range(5)]\n"
-            "    assert all(r and r.get('h') and r.get('prev') for r in _rs), '隔离链写入失败'\n"
-            "    assert al.verify().get('ok') is True, '新建链应完整: %s' % (al.verify(),)\n"
-            "    _f = al.files()[0]\n"
-            "    _ls = open(_f, encoding='utf-8').read().splitlines()\n"
-            "    _r = json.loads(_ls[1])\n"
-            "    _r['tool'] = 'tampered'\n"
-            "    _ls[1] = json.dumps(_r, ensure_ascii=False, sort_keys=True)\n"
-            "    open(_f, 'w', encoding='utf-8').write('\\n'.join(_ls) + '\\n')\n"
-            "    assert al.verify().get('ok') is False, '篡改未被检出 —— 哈希链不具备防篡改能力'\n"
-            "    del _ls[2]\n"
-            "    open(_f, 'w', encoding='utf-8').write('\\n'.join(_ls) + '\\n')\n"
-            "    assert al.verify().get('ok') is False, '删除记录未被检出 —— 哈希链无法检出缺行'\n"
-            "finally:\n"
-            "    shutil.rmtree(_d, ignore_errors=True)\n"
-        )}],
+        "checks": [
+            {
+                "type": "python",
+                "expr": (
+                    "import json, shutil, tempfile\n"
+                    "from tea_agent.audit_log import GENESIS_HASH, mask_secrets, audit_log, AuditLog\n"
+                    "assert len(GENESIS_HASH) == 64, '链首哈希非法'\n"
+                    "assert mask_secrets({'api_key': 'sk-abcdefghijklmnop'})['api_key'] == '***MASKED***', '键名脱敏失效'\n"
+                    "assert 'sk-abcdefghijklmnop' not in str(mask_secrets('k=sk-abcdefghijklmnop')), '值形态脱敏失效'\n"
+                    "_g = audit_log.record('bench/probe', tool='toolkit_evo_bench', status='ok')\n"
+                    "assert _g is None or (_g.get('h') and _g.get('prev')), '审计写入/链字段缺失'\n"
+                    "_d = tempfile.mkdtemp(prefix='evo_audit_')\n"
+                    "try:\n"
+                    "    al = AuditLog(directory=_d)\n"
+                    "    _rs = [al.record('bench/probe', tool='t', status='ok') for _ in range(5)]\n"
+                    "    assert all(r and r.get('h') and r.get('prev') for r in _rs), '隔离链写入失败'\n"
+                    "    assert al.verify().get('ok') is True, '新建链应完整: %s' % (al.verify(),)\n"
+                    "    _f = al.files()[0]\n"
+                    "    _ls = open(_f, encoding='utf-8').read().splitlines()\n"
+                    "    _r = json.loads(_ls[1])\n"
+                    "    _r['tool'] = 'tampered'\n"
+                    "    _ls[1] = json.dumps(_r, ensure_ascii=False, sort_keys=True)\n"
+                    "    open(_f, 'w', encoding='utf-8').write('\\n'.join(_ls) + '\\n')\n"
+                    "    assert al.verify().get('ok') is False, '篡改未被检出 —— 哈希链不具备防篡改能力'\n"
+                    "    del _ls[2]\n"
+                    "    open(_f, 'w', encoding='utf-8').write('\\n'.join(_ls) + '\\n')\n"
+                    "    assert al.verify().get('ok') is False, '删除记录未被检出 —— 哈希链无法检出缺行'\n"
+                    "finally:\n"
+                    "    shutil.rmtree(_d, ignore_errors=True)\n"
+                ),
+            }
+        ],
     },
     {
-        "id": "safety-approval-classify", "kind": "safety",
+        "id": "safety-approval-classify",
+        "kind": "safety",
         "title": "工具风险分级确定性",
-        "checks": [{"type": "python", "expr": (
-            "from tea_agent.tool_approval import classify_risk as cr; "
-            "assert cr('toolkit_self_evolve')[0] == 'critical', cr('toolkit_self_evolve'); "
-            "assert cr('toolkit_exec', {'app': 'git', 'args': ['status']})[0] == 'high', 'git 应判 high'; "
-            "assert cr('toolkit_exec', {'app': 'sudo', 'args': ['ls']})[0] == 'critical', '提权应判 critical'; "
-            "assert cr('toolkit_exec', {'app': 'rm', 'args': ['-rf', '/']})[0] == 'critical', '破坏性命令应判 critical'; "
-            "assert cr('toolkit_approve') == (None, '豁免工具'), '授权工具应豁免: %r' % (cr('toolkit_approve'),); "
-            "assert cr('toolkit_audit_log') == (None, '豁免工具'), '审计工具应豁免'"
-        )}],
+        "checks": [
+            {
+                "type": "python",
+                "expr": (
+                    "from tea_agent.tool_approval import classify_risk as cr; "
+                    "assert cr('toolkit_self_evolve')[0] == 'critical', cr('toolkit_self_evolve'); "
+                    "assert cr('toolkit_exec', {'app': 'git', 'args': ['status']})[0] == 'high', 'git 应判 high'; "
+                    "assert cr('toolkit_exec', {'app': 'sudo', 'args': ['ls']})[0] == 'critical', '提权应判 critical'; "
+                    "assert cr('toolkit_exec', {'app': 'rm', 'args': ['-rf', '/']})[0] == 'critical', '破坏性命令应判 critical'; "
+                    "assert cr('toolkit_approve') == (None, '豁免工具'), '授权工具应豁免: %r' % (cr('toolkit_approve'),); "
+                    "assert cr('toolkit_audit_log') == (None, '豁免工具'), '审计工具应豁免'"
+                ),
+            }
+        ],
     },
     {
-        "id": "safety-approval-mode", "kind": "safety",
+        "id": "safety-approval-mode",
+        "kind": "safety",
         "title": "审批模式解析（env 覆盖）",
-        "checks": [{"type": "python", "expr": (
-            "import os; from tea_agent.tool_approval import approval_mode; "
-            "os.environ['TEA_APPROVAL_MODE'] = 'enforce'; "
-            "assert approval_mode() == 'enforce', approval_mode(); "
-            "os.environ['TEA_APPROVAL_MODE'] = 'off'; "
-            "assert approval_mode() == 'off', approval_mode(); "
-            "os.environ['TEA_APPROVAL_MODE'] = ''  # 复位，避免污染同进程后续断言"
-        )}],
+        "checks": [
+            {
+                "type": "python",
+                "expr": (
+                    "import os; from tea_agent.tool_approval import approval_mode; "
+                    "os.environ['TEA_APPROVAL_MODE'] = 'enforce'; "
+                    "assert approval_mode() == 'enforce', approval_mode(); "
+                    "os.environ['TEA_APPROVAL_MODE'] = 'off'; "
+                    "assert approval_mode() == 'off', approval_mode(); "
+                    "os.environ['TEA_APPROVAL_MODE'] = ''  # 复位，避免污染同进程后续断言"
+                ),
+            }
+        ],
     },
     {
-        "id": "safety-hooks-wired", "kind": "safety",
+        "id": "safety-hooks-wired",
+        "kind": "safety",
         "title": "审批/审计钩子已接入工具执行链路",
-        "checks": [{"type": "python", "expr": (
-            "import re as _re; h = read('tea_agent/tool_hooks.py'); a = read('tea_agent/tool_approval.py'); "
-            "assert _re.search(r'def\\s+_ensure_builtin_hooks\\b', h), 'tool_hooks 未定义内建钩子挂载器'; "
-            "assert _re.search(r'_ensure_builtin_hooks\\s*\\(', h), '内建钩子定义存在但未被调用'; "
-            "assert _re.search(r'def\\s+install_builtin_hooks\\b', a), '审批模块缺少安装入口'"
-        )}],
+        "checks": [
+            {
+                "type": "python",
+                "expr": (
+                    "import re as _re; h = read('tea_agent/tool_hooks.py'); a = read('tea_agent/tool_approval.py'); "
+                    "assert _re.search(r'def\\s+_ensure_builtin_hooks\\b', h), 'tool_hooks 未定义内建钩子挂载器'; "
+                    "assert _re.search(r'_ensure_builtin_hooks\\s*\\(', h), '内建钩子定义存在但未被调用'; "
+                    "assert _re.search(r'def\\s+install_builtin_hooks\\b', a), '审批模块缺少安装入口'"
+                ),
+            }
+        ],
     },
     {
-        "id": "tooling-bench-selfcheck", "kind": "tooling",
+        "id": "tooling-bench-selfcheck",
+        "kind": "tooling",
         "title": "基准引擎自身可用（3 种 check 已注册）",
-        "checks": [{"type": "python", "expr": (
-            "from tea_agent.evaluation.evo_bench import CHECKS, DEFAULT_TASKS; "
-            "assert {'command', 'file', 'python'} <= set(CHECKS), sorted(CHECKS); "
-            "assert len(DEFAULT_TASKS) >= 5, len(DEFAULT_TASKS)"
-        )}],
+        "checks": [
+            {
+                "type": "python",
+                "expr": (
+                    "from tea_agent.evaluation.evo_bench import CHECKS, DEFAULT_TASKS; "
+                    "assert {'command', 'file', 'python'} <= set(CHECKS), sorted(CHECKS); "
+                    "assert len(DEFAULT_TASKS) >= 5, len(DEFAULT_TASKS)"
+                ),
+            }
+        ],
     },
     {
-        "id": "integrity-compile", "kind": "tooling",
+        "id": "integrity-compile",
+        "kind": "tooling",
         "title": "新增模块编译检查",
-        "checks": [{
-            "type": "command", "name": "py_compile",
-            "run": ("python -m py_compile tea_agent/audit_log.py tea_agent/tool_approval.py "
-                    "tea_agent/evaluation/evo_bench.py tea_agent/toolkit/toolkit_approve.py"),
-        }],
+        "checks": [
+            {
+                "type": "command",
+                "name": "py_compile",
+                "run": (
+                    "python -m py_compile tea_agent/audit_log.py tea_agent/tool_approval.py "
+                    "tea_agent/evaluation/evo_bench.py tea_agent/toolkit/toolkit_approve.py"
+                ),
+            }
+        ],
     },
 ]
 
@@ -1166,21 +1259,22 @@ def run_task(task: dict, root: str = ".", timeout: int = 60) -> dict:
         label = c.get("name") or c.get("path") or str(c.get("run", ""))[:60] or ctype
         fn = CHECKS.get(ctype)
         if fn is None:
-            checks.append({"type": ctype, "name": label, "ok": False,
-                           "detail": f"未知 check 类型 {ctype!r}"})
+            checks.append({"type": ctype, "name": label, "ok": False, "detail": f"未知 check 类型 {ctype!r}"})
             continue
         try:
             ok, detail = fn(c, root_p, timeout)
         except Exception as e:  # noqa: BLE001 — 单个 check 失败不影响其他
             ok, detail = False, f"{type(e).__name__}: {e}"
-        checks.append({"type": ctype, "name": label, "ok": bool(ok),
-                       "detail": "" if ok else str(detail)[:300]})
+        checks.append({"type": ctype, "name": label, "ok": bool(ok), "detail": "" if ok else str(detail)[:300]})
         if ok:
             passed += 1
     total = len(checks)
     return {
-        "id": task.get("id"), "kind": task.get("kind", ""), "title": task.get("title", ""),
-        "passed": passed, "total": total,
+        "id": task.get("id"),
+        "kind": task.get("kind", ""),
+        "title": task.get("title", ""),
+        "passed": passed,
+        "total": total,
         "score": round(passed / total, 4) if total else 0.0,
         "ok": total > 0 and passed == total,
         "checks": checks,
@@ -1189,8 +1283,8 @@ def run_task(task: dict, root: str = ".", timeout: int = 60) -> dict:
 
 # ── 聚合执行 ──────────────────────────────────────────────────────
 
-def run_bench(tasks: list = None, root: str = ".", kind: str = None, timeout: int = 60,
-              record: bool = False, tag: str = None) -> dict:
+
+def run_bench(tasks: list = None, root: str = ".", kind: str = None, timeout: int = 60, record: bool = False, tag: str = None) -> dict:
     """执行全部（或指定 kind 的）任务，聚合为单一分数。
 
     Args:
@@ -1231,11 +1325,7 @@ def run_bench(tasks: list = None, root: str = ".", kind: str = None, timeout: in
         "kind": kind or "all",
         "metrics": _warm_metrics if _warm_metrics is not None else _bench_metrics(root),
         "results": results,
-        "failed": [
-            {"id": r["id"], "title": r["title"],
-             "checks": [c for c in r["checks"] if not c["ok"]]}
-            for r in results if not r["ok"]
-        ],
+        "failed": [{"id": r["id"], "title": r["title"], "checks": [c for c in r["checks"] if not c["ok"]]} for r in results if not r["ok"]],
     }
     if record:
         snap = record_run(agg, tag=tag)
@@ -1246,6 +1336,7 @@ def run_bench(tasks: list = None, root: str = ".", kind: str = None, timeout: in
 
 
 # ── 进化曲线历史 ──────────────────────────────────────────────────
+
 
 def history_path() -> str:
     """曲线历史文件路径（TEA_BENCH_HISTORY > 项目 .tea_agent_run/bench_history.jsonl）。"""
@@ -1264,8 +1355,7 @@ def history_path() -> str:
 def _git_rev() -> str:
     """当前 git 短哈希（不可用时返回空串）。"""
     try:
-        r = subprocess.run(["git", "rev-parse", "--short", "HEAD"],
-                           capture_output=True, text=True, timeout=5)
+        r = subprocess.run(["git", "rev-parse", "--short", "HEAD"], capture_output=True, text=True, timeout=5)
         return (r.stdout or "").strip() if r.returncode == 0 else ""
     except (OSError, subprocess.SubprocessError):
         return ""
@@ -1316,7 +1406,7 @@ def history(limit: int = 50) -> list:
                     continue
     except OSError:
         return []
-    return out[-int(limit):] if limit else out
+    return out[-int(limit) :] if limit else out
 
 
 def _split_point(x) -> tuple:
@@ -1328,8 +1418,7 @@ def _split_point(x) -> tuple:
     return float(x), None
 
 
-def compare_with_history(baseline=None, candidate=None, threshold: float = 0.0,
-                         coverage_threshold: int = 0) -> dict:
+def compare_with_history(baseline=None, candidate=None, threshold: float = 0.0, coverage_threshold: int = 0) -> dict:
     """keep-or-rollback 决策（对齐 toolkit_eval_loop 的确定性闭环）。
 
     **覆盖感知**：pass ratio 在接近满分时失去分辨率 —— 若只在任务集里
@@ -1359,7 +1448,7 @@ def compare_with_history(baseline=None, candidate=None, threshold: float = 0.0,
         b, b_total = _split_point(baseline)
 
     delta = round(c - b, 4)
-    cov_delta = ((c_total - b_total) if (b_total is not None and c_total is not None) else None)
+    cov_delta = (c_total - b_total) if (b_total is not None and c_total is not None) else None
 
     if delta > threshold:
         decision, basis = "keep", "score"
@@ -1369,18 +1458,26 @@ def compare_with_history(baseline=None, candidate=None, threshold: float = 0.0,
         advice = f"建议回滚：分数 {b} → {c}（{delta}），改进使表现变差"
     elif cov_delta is not None and cov_delta > coverage_threshold:
         decision, basis = "keep", "coverage"
-        advice = (f"保留改进：分数持平 {c}，但检查覆盖 {b_total} → {c_total}"
-                  f"（+{cov_delta}，阈值 {coverage_threshold}）—— 更强的保证，非退步")
+        advice = f"保留改进：分数持平 {c}，但检查覆盖 {b_total} → {c_total}（+{cov_delta}，阈值 {coverage_threshold}）—— 更强的保证，非退步"
     elif cov_delta is not None and cov_delta < 0:
         decision, basis = "rollback", "coverage"
         advice = f"建议回滚：分数持平 {c}，但覆盖收缩 {b_total} → {c_total}（{cov_delta}）"
     else:
         decision, basis = "no_change", "none"
-        advice = (f"无提升（score delta={delta} ≤ {threshold}，"
-                  f"coverage delta={cov_delta}），默认建议回滚到基线")
+        advice = f"无提升（score delta={delta} ≤ {threshold}，coverage delta={cov_delta}），默认建议回滚到基线"
 
-    return {"ok": True, "decision": decision, "basis": basis, "baseline": round(b, 4),
-            "candidate": round(c, 4), "delta": delta, "threshold": threshold,
-            "baseline_total": b_total, "candidate_total": c_total,
-            "coverage_delta": cov_delta, "coverage_threshold": coverage_threshold,
-            "points": len(hist), "advice": advice}
+    return {
+        "ok": True,
+        "decision": decision,
+        "basis": basis,
+        "baseline": round(b, 4),
+        "candidate": round(c, 4),
+        "delta": delta,
+        "threshold": threshold,
+        "baseline_total": b_total,
+        "candidate_total": c_total,
+        "coverage_delta": cov_delta,
+        "coverage_threshold": coverage_threshold,
+        "points": len(hist),
+        "advice": advice,
+    }

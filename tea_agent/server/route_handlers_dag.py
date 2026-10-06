@@ -26,6 +26,7 @@ async def handle_dag_viz(request):
 
     # 回退到 SimpleDagRegistry
     from tea_agent.workflow.dag_registry import SimpleDagRegistry
+
     simple = SimpleDagRegistry._instances.get(viz_id)
     if simple:
         html = get_viz_html(simple, simple.get("title", "DAG"), viz_id=viz_id)
@@ -61,18 +62,21 @@ async def handle_dag_sse(request):
                     node = viz.dag.get_node(nid)
                     yield (
                         "data: "
-                        + json.dumps({
-                            "type": "node_state",
-                            "data": {
-                                "node_id": nid,
-                                "state": nr.state.value,
-                                "label": node.label if node else nid,
-                                "duration": nr.duration,
-                                "error": nr.error,
-                                "started_at": nr.started_at,
+                        + json.dumps(
+                            {
+                                "type": "node_state",
+                                "data": {
+                                    "node_id": nid,
+                                    "state": nr.state.value,
+                                    "label": node.label if node else nid,
+                                    "duration": nr.duration,
+                                    "error": nr.error,
+                                    "started_at": nr.started_at,
+                                },
+                                "timestamp": time.time(),
                             },
-                            "timestamp": time.time(),
-                        }, ensure_ascii=False)
+                            ensure_ascii=False,
+                        )
                         + "\n\n"
                     )
 
@@ -97,6 +101,8 @@ async def handle_dag_sse(request):
             "X-Accel-Buffering": "no",
         },
     )
+
+
 async def handle_dag_status(request):
     """GET /dag/{viz_id}/status — 返回 JSON DAG 状态快照（供轮询）。"""
     viz_id = request.path_params.get("viz_id", "")
@@ -109,6 +115,7 @@ async def handle_dag_status(request):
 
     # 回退到 SimpleDagRegistry
     from tea_agent.workflow.dag_registry import SimpleDagRegistry
+
     simple = SimpleDagRegistry._instances.get(viz_id)
     if simple:
         return JSONResponse(simple)
@@ -142,19 +149,17 @@ async def handle_dag_image(request):
             if fmt == "png":
                 png_data = render_dag_dict_to_png(dag_data)
                 if png_data:
-                    return Response(content=png_data, media_type="image/png",
-                                    headers={"Cache-Control": "no-cache"})
+                    return Response(content=png_data, media_type="image/png", headers={"Cache-Control": "no-cache"})
             svg_data = render_dag_dict_to_svg(dag_data)
             if svg_data:
-                return Response(content=svg_data, media_type="image/svg+xml",
-                                headers={"Cache-Control": "no-cache"})
-            return Response(content=str(dag_data), media_type="text/plain",
-                            status_code=500)
+                return Response(content=svg_data, media_type="image/svg+xml", headers={"Cache-Control": "no-cache"})
+            return Response(content=str(dag_data), media_type="text/plain", status_code=500)
 
     # ── 数据源 2：SimpleDagRegistry ──
     try:
         from tea_agent.workflow.dag_registry import SimpleDagRegistry
-        entry = SimpleDagRegistry._instances.get(viz_id) if hasattr(SimpleDagRegistry, '_instances') else None
+
+        entry = SimpleDagRegistry._instances.get(viz_id) if hasattr(SimpleDagRegistry, "_instances") else None
         if entry:
             dag_dict = {
                 "title": entry.get("title", "DAG"),
@@ -164,25 +169,22 @@ async def handle_dag_image(request):
             if fmt == "png":
                 png_data = render_dag_dict_to_png(dag_dict)
                 if png_data:
-                    return Response(content=png_data, media_type="image/png",
-                                    headers={"Cache-Control": "no-cache"})
+                    return Response(content=png_data, media_type="image/png", headers={"Cache-Control": "no-cache"})
             svg_data = render_dag_dict_to_svg(dag_dict)
             if svg_data:
-                return Response(content=svg_data, media_type="image/svg+xml",
-                                headers={"Cache-Control": "no-cache"})
-            return Response(content=str(dag_dict), media_type="text/plain",
-                            status_code=500)
+                return Response(content=svg_data, media_type="image/svg+xml", headers={"Cache-Control": "no-cache"})
+            return Response(content=str(dag_dict), media_type="text/plain", status_code=500)
     except ImportError:
         pass
 
     # 未找到
-    return JSONResponse({"error": "viz not found", "viz_id": viz_id},
-                        status_code=404)
+    return JSONResponse({"error": "viz not found", "viz_id": viz_id}, status_code=404)
 
 
 # ═══════════════════════════════════════════════
 # DAG 列表端点 — /api/dags
 # ═══════════════════════════════════════════════
+
 
 async def handle_list_dags(request):
     """GET /api/dags — 返回所有活跃 DAG 的摘要列表。
@@ -194,34 +196,40 @@ async def handle_list_dags(request):
     # 1) DagVizRegistry
     try:
         from tea_agent.multi_agent.workflow_viz import DagVizRegistry
+
         for viz_id in DagVizRegistry.list_ids():
             snap = DagVizRegistry.get_status_snapshot(viz_id)
             if snap:
-                result.append({
-                    "viz_id": viz_id,
-                    "title": snap.get("title", viz_id),
-                    "state": snap.get("state", "unknown"),
-                    "progress": snap.get("progress", {}),
-                    "node_count": len(snap.get("nodes", [])),
-                    "edge_count": len(snap.get("edges", [])),
-                    "source": "DagVizRegistry",
-                })
+                result.append(
+                    {
+                        "viz_id": viz_id,
+                        "title": snap.get("title", viz_id),
+                        "state": snap.get("state", "unknown"),
+                        "progress": snap.get("progress", {}),
+                        "node_count": len(snap.get("nodes", [])),
+                        "edge_count": len(snap.get("edges", [])),
+                        "source": "DagVizRegistry",
+                    }
+                )
     except ImportError:
         pass
 
     # 2) SimpleDagRegistry
     try:
         from tea_agent.workflow.dag_registry import SimpleDagRegistry
+
         for entry in SimpleDagRegistry.list_all():
-            result.append({
-                "viz_id": entry.get("viz_id", ""),
-                "title": entry.get("title", "DAG"),
-                "state": entry.get("state", "unknown"),
-                "progress": entry.get("progress", {}),
-                "node_count": len(entry.get("nodes", [])),
-                "edge_count": len(entry.get("edges", [])),
-                "source": "SimpleDagRegistry",
-            })
+            result.append(
+                {
+                    "viz_id": entry.get("viz_id", ""),
+                    "title": entry.get("title", "DAG"),
+                    "state": entry.get("state", "unknown"),
+                    "progress": entry.get("progress", {}),
+                    "node_count": len(entry.get("nodes", [])),
+                    "edge_count": len(entry.get("edges", [])),
+                    "source": "SimpleDagRegistry",
+                }
+            )
     except ImportError:
         pass
 
@@ -241,8 +249,7 @@ async def handle_restart(request):
 
     mode = (request.query_params.get("mode") or "graceful").strip().lower()
     if mode not in ("graceful", "immediate"):
-        return JSONResponse({"ok": False, "error": "mode 仅支持 graceful|immediate"},
-                            status_code=400)
+        return JSONResponse({"ok": False, "error": "mode 仅支持 graceful|immediate"}, status_code=400)
     try:
         wait = float(request.query_params.get("wait", "120") or 120)
     except (TypeError, ValueError):
@@ -255,6 +262,7 @@ async def handle_restart(request):
 # ================================================================
 #  File Tree API
 # ================================================================
+
 
 async def handle_file_tree(request):
     """GET /api/files?path=... — 列出指定目录的文件树。
@@ -289,14 +297,44 @@ async def handle_file_tree(request):
 
     # 忽略的目录模式
     ignored_dirs = {
-        ".git", "node_modules", "__pycache__", ".venv", "venv",
-        ".tea_agent_run", ".svn", ".hg", ".idea", ".vscode",
-        "dist", "build", "build_mini_dist", "build_nuitka_dist",
-        ".egg-info", ".mypy_cache", ".pytest_cache",
+        ".git",
+        "node_modules",
+        "__pycache__",
+        ".venv",
+        "venv",
+        ".tea_agent_run",
+        ".svn",
+        ".hg",
+        ".idea",
+        ".vscode",
+        "dist",
+        "build",
+        "build_mini_dist",
+        "build_nuitka_dist",
+        ".egg-info",
+        ".mypy_cache",
+        ".pytest_cache",
     }
-    ignored_exts = {".pyc", ".pyo", ".egg", ".whl", ".jpg", ".jpeg",
-                    ".png", ".gif", ".ico", ".svg", ".webp", ".mp4",
-                    ".mp3", ".wav", ".ogg", ".pdf", ".zip", ".tar.gz"}
+    ignored_exts = {
+        ".pyc",
+        ".pyo",
+        ".egg",
+        ".whl",
+        ".jpg",
+        ".jpeg",
+        ".png",
+        ".gif",
+        ".ico",
+        ".svg",
+        ".webp",
+        ".mp4",
+        ".mp3",
+        ".wav",
+        ".ogg",
+        ".pdf",
+        ".zip",
+        ".tar.gz",
+    }
 
     items = []
     try:
@@ -325,13 +363,15 @@ async def handle_file_tree(request):
     except PermissionError:
         return JSONResponse({"ok": False, "error": "无权限访问"}, status_code=403)
 
-    return JSONResponse({
-        "ok": True,
-        "path": req_path or "/",
-        "abs_path": str(target.resolve()),
-        "items": items,
-        "parent": str(_Path(req_path).parent) if req_path else None,
-    })
+    return JSONResponse(
+        {
+            "ok": True,
+            "path": req_path or "/",
+            "abs_path": str(target.resolve()),
+            "items": items,
+            "parent": str(_Path(req_path).parent) if req_path else None,
+        }
+    )
 
 
 async def handle_file_read(request):
@@ -361,11 +401,13 @@ async def handle_file_read(request):
 
     try:
         content = target.read_text(encoding="utf-8", errors="replace")
-        return JSONResponse({
-            "ok": True,
-            "path": file_path,
-            "content": content,
-            "size": target.stat().st_size,
-        })
+        return JSONResponse(
+            {
+                "ok": True,
+                "path": file_path,
+                "content": content,
+                "size": target.stat().st_size,
+            }
+        )
     except Exception as e:
         return JSONResponse({"ok": False, "error": str(e)}, status_code=500)

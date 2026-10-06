@@ -103,6 +103,7 @@ def _cross_process_lock(path: str, timeout: float = 3.0):
         with contextlib.suppress(OSError):
             handle.close()
 
+
 # 链首哈希（每条链的第一条记录以此为 prev）
 GENESIS_HASH = "0" * 64
 
@@ -164,8 +165,7 @@ class AuditLog:
     过期则回读文件末行恢复链头；读末行与追加由 <文件>.lock 互斥保护。
     """
 
-    def __init__(self, directory: str | None = None, enabled: bool = True,
-                 max_entries_scan: int = 20000) -> None:
+    def __init__(self, directory: str | None = None, enabled: bool = True, max_entries_scan: int = 20000) -> None:
         self._dir_override = directory
         self._enabled = enabled
         self._max_scan = max_entries_scan
@@ -245,9 +245,18 @@ class AuditLog:
 
     # ── 写入 ──
 
-    def record(self, event: str, tool: str = "", phase: str = "", status: str = "",
-               detail: Any = None, session_id: str = "", actor: str = "agent",
-               duration_ms: int | None = None, **extra: Any) -> dict | None:
+    def record(
+        self,
+        event: str,
+        tool: str = "",
+        phase: str = "",
+        status: str = "",
+        detail: Any = None,
+        session_id: str = "",
+        actor: str = "agent",
+        duration_ms: int | None = None,
+        **extra: Any,
+    ) -> dict | None:
         """追加一条审计记录。
 
         Args:
@@ -297,29 +306,28 @@ class AuditLog:
         # 进程间互斥：必须让「读链头 → 算哈希 → 追加」成为跨进程原子操作，
         # 否则两个并发进程会读到同一个末行、各自算出相同的 prev，追加后直接断链。
         # 先释放进程内锁再拿 OS 锁（OS 锁会阻塞，不可持 Python 锁等待）。
-        with _cross_process_lock(path):
-            with self._lock:
-                prev = self._chain_head(path, day)
-                rec["prev"] = prev
-                rec["h"] = hashlib.sha256((prev + _canonical(rec)).encode("utf-8")).hexdigest()
-                line = json.dumps(rec, ensure_ascii=False, sort_keys=True, default=str)
-                try:
-                    with open(path, "a", encoding="utf-8") as f:
-                        f.write(line + "\n")
-                        # flush 即可让其它进程读到这行（写入 OS 页缓存）；
-                        # 刻意不用 fsync —— 审计在每次工具调用都会写，强制落盘会把
-                        # 崩溃级持久性保证的成本摊到热路径上，而链完整性并不需要它。
-                        f.flush()
-                except OSError as e:  # 审计失败绝不阻断主流程
-                    logger.debug("audit: 写入失败 %s: %s", path, e)
-                    self._last_size = _file_size(path)
-                    return None
-                self._last_hash = rec["h"]
-                self._last_day = day
-                # 必须与 _chain_head 里的 _file_size() 同源取值：若改用 f.tell()
-                # 之类不同口径，两者永不相等 → 每次写入都退化成全文件扫描，
-                # 在千条级审计文件上会把热路径拖成 O(n)。
+        with _cross_process_lock(path), self._lock:
+            prev = self._chain_head(path, day)
+            rec["prev"] = prev
+            rec["h"] = hashlib.sha256((prev + _canonical(rec)).encode("utf-8")).hexdigest()
+            line = json.dumps(rec, ensure_ascii=False, sort_keys=True, default=str)
+            try:
+                with open(path, "a", encoding="utf-8") as f:
+                    f.write(line + "\n")
+                    # flush 即可让其它进程读到这行（写入 OS 页缓存）；
+                    # 刻意不用 fsync —— 审计在每次工具调用都会写，强制落盘会把
+                    # 崩溃级持久性保证的成本摊到热路径上，而链完整性并不需要它。
+                    f.flush()
+            except OSError as e:  # 审计失败绝不阻断主流程
+                logger.debug("audit: 写入失败 %s: %s", path, e)
                 self._last_size = _file_size(path)
+                return None
+            self._last_hash = rec["h"]
+            self._last_day = day
+            # 必须与 _chain_head 里的 _file_size() 同源取值：若改用 f.tell()
+            # 之类不同口径，两者永不相等 → 每次写入都退化成全文件扫描，
+            # 在千条级审计文件上会把热路径拖成 O(n)。
+            self._last_size = _file_size(path)
         return rec
 
     def _chain_head(self, path: str, day: str) -> str:
@@ -469,7 +477,9 @@ class AuditLog:
                 stored_prev = rec.get("prev")
                 if stored_prev != prev:
                     return {
-                        "ok": False, "files": len(targets), "records": total,
+                        "ok": False,
+                        "files": len(targets),
+                        "records": total,
                         "broken_at": f"{os.path.basename(p)}#{idx + 1}",
                         "reason": "prev 链断裂（记录被删除/插入/重排）",
                     }
@@ -477,14 +487,19 @@ class AuditLog:
                 expect = hashlib.sha256((prev + _canonical(body)).encode("utf-8")).hexdigest()
                 if stored_h != expect:
                     return {
-                        "ok": False, "files": len(targets), "records": total,
+                        "ok": False,
+                        "files": len(targets),
+                        "records": total,
                         "broken_at": f"{os.path.basename(p)}#{idx + 1}",
                         "reason": "记录内容哈希不匹配（记录被篡改）",
                     }
                 prev = stored_h
         return {
-            "ok": True, "files": len(targets), "records": total,
-            "broken_at": None, "reason": "链路完整",
+            "ok": True,
+            "files": len(targets),
+            "records": total,
+            "broken_at": None,
+            "reason": "链路完整",
         }
 
     def stats(self) -> dict:

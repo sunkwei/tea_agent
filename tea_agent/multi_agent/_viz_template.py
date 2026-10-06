@@ -1,6 +1,5 @@
 """可视化页面 HTML 模板（由 workflow_viz.py 抽出，纯数据、零依赖）。"""
 
-
 _VIZ_HTML_TEMPLATE = r"""<!DOCTYPE html>
 <html lang="zh">
 <head>

@@ -211,17 +211,19 @@ elif content:
 ```python
 import json
 
+
 def diag_reasoning(messages: list[dict]) -> list[str]:
     """检测相邻重复 assistant 消息 / tool_calls 缺失 reasoning_content。"""
     issues = []
     for i in range(1, len(messages)):
-        if messages[i].get("role") == "assistant" and messages[i-1].get("role") == "assistant":
-            if messages[i].get("content") == messages[i-1].get("content"):
+        if messages[i].get("role") == "assistant" and messages[i - 1].get("role") == "assistant":
+            if messages[i].get("content") == messages[i - 1].get("content"):
                 issues.append(f"相邻重复 assistant 消息 @ {i}")
         tc = messages[i].get("tool_calls")
         if tc and messages[i].get("reasoning_content") is None:
             issues.append(f"tool_calls 消息缺失 reasoning_content @ {i}")
     return issues
+
 
 print(json.dumps(diag_reasoning(messages), ensure_ascii=False, indent=2))
 ```

@@ -62,8 +62,7 @@ _BOOL_FIELDS = {"supports_vision", "supports_reasoning", "supports_tools"}
 _FLOAT_FIELDS = {"temperature", "top_p"}
 _STR_FIELDS = {"note", "reasoning_effort"}
 MODEL_FIELDS = _INT_FIELDS | _BOOL_FIELDS | _FLOAT_FIELDS | _STR_FIELDS
-PROVIDER_FIELDS = {"api_url", "api_key", "api_keys", "default_model", "description",
-                   "supports_vision", "supports_thinking", "source"}
+PROVIDER_FIELDS = {"api_url", "api_key", "api_keys", "default_model", "description", "supports_vision", "supports_thinking", "source"}
 
 NAME_RE = re.compile(r"^[A-Za-z0-9_.:/-]{1,64}$")
 
@@ -99,6 +98,7 @@ def _resolve_path(path: str | Path | None = None) -> Path:
 
 
 # ── 启发式模型能力默认（复用 model_config.guess_model_config 的速查思路，避免循环 import） ──
+
 
 def _blank_model_cfg() -> dict:
     return {
@@ -186,8 +186,7 @@ def _clean_provider(raw: dict) -> dict:
 class ProviderStore:
     """~/.tea_agent/provider.yaml 读写服务（供应商 CRUD + 模型目录 + resolve）。"""
 
-    def __init__(self, path: str | Path | None = None,
-                 agent_dir: str | Path | None = None):
+    def __init__(self, path: str | Path | None = None, agent_dir: str | Path | None = None):
         self._path = _resolve_path(path)
         # 遗留迁移源所在目录（~/.tea_agent）；测试可注入 tmp 隔离
         self.agent_dir = Path(agent_dir) if agent_dir else None
@@ -256,9 +255,7 @@ class ProviderStore:
             except OSError as e:  # pragma: no cover
                 logger.debug("provider_store.py._write_unlocked: OSError 已忽略: %s", e)
         tmp = self._path.with_suffix(".yaml.tmp")
-        tmp.write_text(
-            yaml.safe_dump(data, allow_unicode=True, sort_keys=False), encoding="utf-8"
-        )
+        tmp.write_text(yaml.safe_dump(data, allow_unicode=True, sort_keys=False), encoding="utf-8")
         os.replace(tmp, self._path)
         logger.info("provider.yaml saved: %d providers", len(data.get("providers", {})))
 
@@ -438,33 +435,37 @@ class ProviderStore:
             catalog = []
             for mid in sorted(models, key=str.lower):
                 cfg = models[mid]
-                catalog.append({
-                    "id": mid,
-                    "max_context_tokens": int(cfg.get("max_context_tokens") or 0),
-                    "max_output_tokens": int(cfg.get("max_output_tokens") or 0),
-                    "supports_vision": bool(cfg.get("supports_vision", False)),
-                    "supports_reasoning": bool(cfg.get("supports_reasoning", False)),
-                    "supports_tools": bool(cfg.get("supports_tools", True)),
-                    "reasoning_effort": cfg.get("reasoning_effort", "auto"),
-                    "note": cfg.get("note", ""),
-                })
+                catalog.append(
+                    {
+                        "id": mid,
+                        "max_context_tokens": int(cfg.get("max_context_tokens") or 0),
+                        "max_output_tokens": int(cfg.get("max_output_tokens") or 0),
+                        "supports_vision": bool(cfg.get("supports_vision", False)),
+                        "supports_reasoning": bool(cfg.get("supports_reasoning", False)),
+                        "supports_tools": bool(cfg.get("supports_tools", True)),
+                        "reasoning_effort": cfg.get("reasoning_effort", "auto"),
+                        "note": cfg.get("note", ""),
+                    }
+                )
             keys = list(p.get("api_keys") or [])
             if not keys and p.get("api_key"):
                 keys = [str(p["api_key"])]
-            out.append({
-                "name": name,
-                "api_url": p.get("api_url", ""),
-                "api_key_masked": _mask_key(keys[0] if keys else p.get("api_key", "")),
-                "api_keys_masked": [_mask_key(k) for k in keys if k],
-                "key_count": len(keys),
-                "default_model": p.get("default_model", ""),
-                "description": p.get("description", ""),
-                "source": p.get("source", "builtin"),
-                "supports_vision": bool(p.get("supports_vision", False)),
-                "supports_thinking": bool(p.get("supports_thinking", False)),
-                "catalog": catalog,
-                "model_count": len(catalog),
-            })
+            out.append(
+                {
+                    "name": name,
+                    "api_url": p.get("api_url", ""),
+                    "api_key_masked": _mask_key(keys[0] if keys else p.get("api_key", "")),
+                    "api_keys_masked": [_mask_key(k) for k in keys if k],
+                    "key_count": len(keys),
+                    "default_model": p.get("default_model", ""),
+                    "description": p.get("description", ""),
+                    "source": p.get("source", "builtin"),
+                    "supports_vision": bool(p.get("supports_vision", False)),
+                    "supports_thinking": bool(p.get("supports_thinking", False)),
+                    "catalog": catalog,
+                    "model_count": len(catalog),
+                }
+            )
         return out
 
     def provider_name_for_url(self, api_url: str) -> str:
@@ -581,8 +582,7 @@ class ProviderStore:
         self.save()
         return True
 
-    def upsert_model(self, provider: str, model: str, config: dict | None = None,
-                     strict: bool = False) -> dict:
+    def upsert_model(self, provider: str, model: str, config: dict | None = None, strict: bool = False) -> dict:
         """新增/更新模型条目（config 缺省启发式默认，仅合并白名单字段）。
 
         strict=True 时拒绝含未知字段的 config（面板 PUT 用），避免用户以为
@@ -591,8 +591,7 @@ class ProviderStore:
         if strict and config:
             unknown = set(config) - MODEL_FIELDS
             if unknown:
-                raise ProviderStoreError(
-                    f"unknown config field(s): {sorted(unknown)}", "BAD_REQUEST", 400)
+                raise ProviderStoreError(f"unknown config field(s): {sorted(unknown)}", "BAD_REQUEST", 400)
         model = (model or "").strip()
         provider = (provider or "").strip()
         if not provider or not model:
@@ -610,7 +609,7 @@ class ProviderStore:
             cleaned = _clean_model_entry(config)
             # 只回写调用方显式提供的键（blank 默认不得覆盖既有值）；
             # float(0.0)/bool(False) 是有效采样/能力值，必须可写入
-            #（旧过滤 `v not in ("", [], 0, False)` 会把 0.0/False 当空值丢弃）。
+            # （旧过滤 `v not in ("", [], 0, False)` 会把 0.0/False 当空值丢弃）。
             for k in config:
                 if k not in cleaned:
                     continue
@@ -682,8 +681,7 @@ class ProviderStore:
             return url + "/chat/completions"
         return url + "/v1/chat/completions"
 
-    def query_live_models(self, provider: str, api_key: str = "",
-                          refresh: bool = False, timeout: int = 15) -> dict:
+    def query_live_models(self, provider: str, api_key: str = "", refresh: bool = False, timeout: int = 15) -> dict:
         """实时查询某供应商的 /v1/models 在线模型列表；失败/无 key 时静态 fallback。
 
         Args:
@@ -698,23 +696,28 @@ class ProviderStore:
         """
         p = self.get_provider(provider)
         if p is None:
-            return {"ok": False, "error": f"provider '{provider}' not found",
-                    "code": "NOT_FOUND"}
+            return {"ok": False, "error": f"provider '{provider}' not found", "code": "NOT_FOUND"}
         # 静态目录 fallback 视图（含逐模型能力，来自 models dict）
         models_map = p.get("models") or {}
         static_models = []
         for mid in sorted(models_map, key=str.lower):
             cfg = models_map[mid]
-            static_models.append({
-                "id": mid,
-                "max_context_tokens": int(cfg.get("max_context_tokens") or 0),
-                "max_output_tokens": int(cfg.get("max_output_tokens") or 0),
-                "supports_vision": bool(cfg.get("supports_vision", False)),
-                "supports_reasoning": bool(cfg.get("supports_reasoning", False)),
-                "note": cfg.get("note", ""),
-            })
-        base = {"provider": p["name"], "models": static_models,
-                "total": len(static_models), "endpoint": self._models_endpoint(p.get("api_url") or "")}
+            static_models.append(
+                {
+                    "id": mid,
+                    "max_context_tokens": int(cfg.get("max_context_tokens") or 0),
+                    "max_output_tokens": int(cfg.get("max_output_tokens") or 0),
+                    "supports_vision": bool(cfg.get("supports_vision", False)),
+                    "supports_reasoning": bool(cfg.get("supports_reasoning", False)),
+                    "note": cfg.get("note", ""),
+                }
+            )
+        base = {
+            "provider": p["name"],
+            "models": static_models,
+            "total": len(static_models),
+            "endpoint": self._models_endpoint(p.get("api_url") or ""),
+        }
         key = api_key or (p.get("api_key") or "")
         api_url = p.get("api_url") or ""
         if not key or not api_url:
@@ -739,8 +742,7 @@ class ProviderStore:
 
         req = _req.Request(
             endpoint,
-            headers={"Authorization": f"Bearer {key}",
-                     "Content-Type": "application/json"},
+            headers={"Authorization": f"Bearer {key}", "Content-Type": "application/json"},
         )
         try:
             with _req.urlopen(req, timeout=timeout) as resp:  # noqa: S310
@@ -751,18 +753,15 @@ class ProviderStore:
         live_models = []
         for item in (data.get("data") or []) if isinstance(data, dict) else []:
             if isinstance(item, dict) and item.get("id"):
-                live_models.append({"id": item["id"],
-                                    "owned_by": item.get("owned_by", "")})
+                live_models.append({"id": item["id"], "owned_by": item.get("owned_by", "")})
         if not live_models and isinstance(data, dict) and data.get("error"):
             base.update({"source": "static", "error_hint": str(data["error"])})
             return {"ok": True, **base}
-        result = {"provider": p["name"], "endpoint": endpoint, "source": "live",
-                  "models": live_models, "total": len(live_models)}
+        result = {"provider": p["name"], "endpoint": endpoint, "source": "live", "models": live_models, "total": len(live_models)}
         cache[cache_key] = (now, result)
         return {"ok": True, **result}
 
-    def test_connection(self, provider: str, model: str = "",
-                        api_key: str = "", timeout: int = 15) -> dict:
+    def test_connection(self, provider: str, model: str = "", api_key: str = "", timeout: int = 15) -> dict:
         """最小 chat/completions 请求验证「端点 + key + 模型」三重有效。
 
         Args:
@@ -790,14 +789,11 @@ class ProviderStore:
         import urllib.error as _err
         import urllib.request as _req
 
-        payload = {"model": model or "default",
-                   "messages": [{"role": "user", "content": "ping"}],
-                   "max_tokens": 1, "stream": False}
+        payload = {"model": model or "default", "messages": [{"role": "user", "content": "ping"}], "max_tokens": 1, "stream": False}
         req = _req.Request(
             endpoint,
             data=json.dumps(payload).encode("utf-8"),
-            headers={"Authorization": f"Bearer {key}",
-                     "Content-Type": "application/json"},
+            headers={"Authorization": f"Bearer {key}", "Content-Type": "application/json"},
             method="POST",
         )
         t0 = _time.time()
@@ -806,8 +802,7 @@ class ProviderStore:
                 data = json.loads(resp.read().decode("utf-8"))
         except _err.HTTPError as e:
             body = e.read().decode("utf-8", errors="replace")[:300] if e.fp else ""
-            return {"ok": False, "error": f"HTTP {e.code}: {e.reason}"
-                    + (f" — {body}" if body else "")}
+            return {"ok": False, "error": f"HTTP {e.code}: {e.reason}" + (f" — {body}" if body else "")}
         except Exception as e:
             return {"ok": False, "error": str(e)}
         latency_ms = round((_time.time() - t0) * 1000, 1)
@@ -815,7 +810,6 @@ class ProviderStore:
             return {"ok": False, "error": str(data["error"])}
         reported = str(data.get("model", "")) if isinstance(data, dict) else ""
         return {"ok": True, "latency_ms": latency_ms, "model_reported": reported}
-
 
     # ── 清理：剔除未配置的内置占位 ───────────────────────────
 
@@ -883,9 +877,7 @@ class ProviderStore:
         if not (model or "").strip():
             raise ProviderStoreError("model required", "BAD_REQUEST", 400)
         data = self.load()
-        data.setdefault("roles", {})[role] = {
-            "provider": provider or "", "model": model.strip(),
-            "api_url": api_url or "", "updated_at": _now()}
+        data.setdefault("roles", {})[role] = {"provider": provider or "", "model": model.strip(), "api_url": api_url or "", "updated_at": _now()}
         self.save()
 
     # ── 兼容 ModelConfigStore 的调用面（无独立文件） ──────────
@@ -936,20 +928,21 @@ class ProviderStore:
             rows = []
             for entry in p.get("catalog", []):
                 mid = entry["id"]
-                raw = raw_models.get(mid) or {}
-                rows.append({
-                    "id": mid,
-                    "is_default": mid == default_model,
-                    "config": {
-                        "max_context_tokens": entry.get("max_context_tokens", 0),
-                        "max_output_tokens": entry.get("max_output_tokens", 0),
-                        "supports_thinking": entry.get("supports_reasoning", False),
-                        "supports_vision": entry.get("supports_vision", False),
-                        "supports_tools": entry.get("supports_tools", True),
-                        "note": entry.get("note", ""),
-                        "source": "saved" if mid in raw_models else "heuristic",
-                    },
-                })
+                rows.append(
+                    {
+                        "id": mid,
+                        "is_default": mid == default_model,
+                        "config": {
+                            "max_context_tokens": entry.get("max_context_tokens", 0),
+                            "max_output_tokens": entry.get("max_output_tokens", 0),
+                            "supports_thinking": entry.get("supports_reasoning", False),
+                            "supports_vision": entry.get("supports_vision", False),
+                            "supports_tools": entry.get("supports_tools", True),
+                            "note": entry.get("note", ""),
+                            "source": "saved" if mid in raw_models else "heuristic",
+                        },
+                    }
+                )
             total += len(rows)
             p["models"] = rows
             p["model_count"] = len(rows)
@@ -961,8 +954,7 @@ class ProviderStore:
             "updated_at": self.load().get("updated_at", ""),
             "roles": roles,
             # active.<role> 必须是 dict（面板/前端按 {provider, model, api_url} 读）
-            "active": {r: dict(v) if isinstance(v, dict) else {"model": v}
-                       for r, v in roles.items()},
+            "active": {r: dict(v) if isinstance(v, dict) else {"model": v} for r, v in roles.items()},
             "providers": providers,
             "total_providers": len(providers),
             "total_models": total,
@@ -975,8 +967,7 @@ _store: ProviderStore | None = None
 _store_lock = threading.Lock()
 
 
-def get_provider_store(path: str | Path | None = None,
-                       agent_dir: str | Path | None = None) -> ProviderStore:
+def get_provider_store(path: str | Path | None = None, agent_dir: str | Path | None = None) -> ProviderStore:
     """ProviderStore 单例；path/agent_dir 变化自动重建（测试可用 TEA_PROVIDER_FILE + tmp 目录隔离）。"""
     global _store
     target = _resolve_path(path)

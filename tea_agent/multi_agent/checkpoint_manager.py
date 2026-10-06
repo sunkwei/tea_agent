@@ -48,7 +48,7 @@ class CheckpointManager:
     使用独立 SQLite 数据库，不与其他模块冲突。
     """
 
-    _instances: dict[str, 'CheckpointManager'] = {}
+    _instances: dict[str, "CheckpointManager"] = {}
     _lock = threading.Lock()
 
     def __init__(self, db_path: str | None = None, auto_cleanup: bool = True):
@@ -57,18 +57,16 @@ class CheckpointManager:
             db_path: SQLite 数据库路径，None=~/.tea_agent/checkpoints.db
             auto_cleanup: 初始化时自动清理过期检查点
         """
-        self.db_path = db_path or str(
-            Path.home() / '.tea_agent' / 'checkpoints.db'
-        )
+        self.db_path = db_path or str(Path.home() / ".tea_agent" / "checkpoints.db")
         self._local = threading.local()
         self._init_db()
         if auto_cleanup:
             self.cleanup()
 
     @classmethod
-    def get_instance(cls, db_path: str | None = None) -> 'CheckpointManager':
+    def get_instance(cls, db_path: str | None = None) -> "CheckpointManager":
         """获取共享单例（按 db_path 隔离）。"""
-        key = db_path or 'default'
+        key = db_path or "default"
         if key not in cls._instances:
             with cls._lock:
                 if key not in cls._instances:
@@ -79,7 +77,7 @@ class CheckpointManager:
 
     def _get_conn(self) -> sqlite3.Connection:
         """获取线程本地连接。"""
-        if not hasattr(self._local, 'conn') or self._local.conn is None:
+        if not hasattr(self._local, "conn") or self._local.conn is None:
             Path(self.db_path).parent.mkdir(parents=True, exist_ok=True)
             conn = sqlite3.connect(self.db_path, timeout=10)
             conn.row_factory = sqlite3.Row
@@ -132,33 +130,36 @@ class CheckpointManager:
         Returns:
             created_at (ISO 时间戳，作为版本标识)
         """
-        agent_id = state.get('agent_id', '')
+        agent_id = state.get("agent_id", "")
         if not agent_id:
             raise ValueError("agent_id is required")
 
         now = datetime.now().isoformat()
         conn = self._get_conn()
 
-        conn.execute("""
+        conn.execute(
+            """
             INSERT INTO checkpoints
                 (agent_id, role, goal, task, context, status, result, error,
                  tool_calls, parent_id, trace_id, created_at, updated_at)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        """, (
-            agent_id,
-            state.get('role', ''),
-            state.get('goal', ''),
-            state.get('task', ''),
-            json.dumps(state.get('context', {}), ensure_ascii=False),
-            state.get('status', 'unknown'),
-            state.get('result'),
-            state.get('error'),
-            state.get('tool_calls', 0),
-            state.get('parent_id', ''),
-            state.get('trace_id', ''),
-            now,
-            now,
-        ))
+        """,
+            (
+                agent_id,
+                state.get("role", ""),
+                state.get("goal", ""),
+                state.get("task", ""),
+                json.dumps(state.get("context", {}), ensure_ascii=False),
+                state.get("status", "unknown"),
+                state.get("result"),
+                state.get("error"),
+                state.get("tool_calls", 0),
+                state.get("parent_id", ""),
+                state.get("trace_id", ""),
+                now,
+                now,
+            ),
+        )
         conn.commit()
         return now
 
@@ -199,14 +200,12 @@ class CheckpointManager:
     def list_agents(self) -> list[str]:
         """列出所有有检查点的 Agent ID。"""
         conn = self._get_conn()
-        rows = conn.execute(
-            "SELECT DISTINCT agent_id FROM checkpoints ORDER BY agent_id"
-        ).fetchall()
-        return [r['agent_id'] for r in rows]
+        rows = conn.execute("SELECT DISTINCT agent_id FROM checkpoints ORDER BY agent_id").fetchall()
+        return [r["agent_id"] for r in rows]
 
     def get_failed(self, limit: int = 10) -> list[dict[str, Any]]:
         """获取最近失败的检查点（用于自动恢复尝试）。"""
-        return self.load_by_status('failed', limit)
+        return self.load_by_status("failed", limit)
 
     def get_interrupted(self, limit: int = 10) -> list[dict[str, Any]]:
         """
@@ -216,9 +215,8 @@ class CheckpointManager:
         conn = self._get_conn()
         threshold = (datetime.now() - timedelta(seconds=30)).isoformat()
         rows = conn.execute(
-            "SELECT * FROM checkpoints WHERE status=? AND updated_at < ? "
-            "ORDER BY updated_at DESC LIMIT ?",
-            ('running', threshold, limit),
+            "SELECT * FROM checkpoints WHERE status=? AND updated_at < ? ORDER BY updated_at DESC LIMIT ?",
+            ("running", threshold, limit),
         ).fetchall()
         return [self._row_to_dict(r) for r in rows]
 
@@ -229,7 +227,7 @@ class CheckpointManager:
         updates = ["status=?", "updated_at=?"]
         params = [status, now]
 
-        for key in ['result', 'error', 'tool_calls']:
+        for key in ["result", "error", "tool_calls"]:
             if key in extra:
                 updates.append(f"{key}=?")
                 params.append(extra[key])
@@ -237,10 +235,7 @@ class CheckpointManager:
         params.append(agent_id)
         set_clause = safe_sql_fragment(", ".join(updates))
         conn.execute(
-            f"UPDATE checkpoints SET {set_clause} "
-            "WHERE agent_id=? AND updated_at=("
-            "  SELECT MAX(updated_at) FROM checkpoints WHERE agent_id=?"
-            ")",
+            f"UPDATE checkpoints SET {set_clause} WHERE agent_id=? AND updated_at=(  SELECT MAX(updated_at) FROM checkpoints WHERE agent_id=?)",
             params + [agent_id],
         )
         conn.commit()
@@ -267,12 +262,10 @@ class CheckpointManager:
         """统计检查点数量。"""
         conn = self._get_conn()
         if status:
-            row = conn.execute(
-                "SELECT COUNT(*) as cnt FROM checkpoints WHERE status=?", (status,)
-            ).fetchone()
+            row = conn.execute("SELECT COUNT(*) as cnt FROM checkpoints WHERE status=?", (status,)).fetchone()
         else:
             row = conn.execute("SELECT COUNT(*) as cnt FROM checkpoints").fetchone()
-        return row['cnt'] if row else 0
+        return row["cnt"] if row else 0
 
     # ── 工具方法 ────────────────────────────────────
 
@@ -280,21 +273,21 @@ class CheckpointManager:
     def _row_to_dict(row: sqlite3.Row) -> dict[str, Any]:
         d = dict(row)
         # 解析 context JSON
-        if isinstance(d.get('context'), str):
+        if isinstance(d.get("context"), str):
             with contextlib.suppress(json.JSONDecodeError, TypeError):
-                d['context'] = json.loads(d['context'])
+                d["context"] = json.loads(d["context"])
         return d
 
     def close(self):
         """关闭数据库连接。"""
-        if hasattr(self._local, 'conn') and self._local.conn:
+        if hasattr(self._local, "conn") and self._local.conn:
             self._local.conn.close()
             self._local.conn = None
 
     def __repr__(self):
         total = self.count()
-        failed = self.count('failed')
-        running = self.count('running')
+        failed = self.count("failed")
+        running = self.count("running")
         return f"CheckpointManager(total={total}, failed={failed}, running={running})"
 
 

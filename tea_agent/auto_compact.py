@@ -33,6 +33,7 @@ logger = logging.getLogger("auto_compact")
 
 # ═══ Token 估算 ═════════════════════════════════════════
 
+
 def estimate_tokens(text: str) -> int:
     """估算 token 数。中文~1.5t/字, 英文~4t/字。"""
     if not text:
@@ -107,16 +108,18 @@ def get_max_context_tokens(config) -> int:
 
 # ═══ 配置 ════════════════════════════════════════════════
 
+
 @dataclass
 class CompactionSettings:
     """Compaction 配置 — 借鉴 Pi 的 DEFAULT_COMPACTION_SETTINGS。"""
-    threshold: float = 0.8          # 触发压缩的 token 阈值（占 max_context 的比例）
+
+    threshold: float = 0.8  # 触发压缩的 token 阈值（占 max_context 的比例）
     budget_warn_ratio: float = 0.15  # token_budget 报警阈值（剩余空间占比低于此值即警告）
-    keep_recent: int = 5            # 保留的最新轮次数
+    keep_recent: int = 5  # 保留的最新轮次数
     max_summary_length: int = 1500  # 摘要最大字符数
     min_messages_before_compact: int = 10  # 最少消息数才触发压缩
-    branch_summary_length: int = 800      # 分支摘要最大字符数
-    enabled: bool = True            # 是否启用自动压缩
+    branch_summary_length: int = 800  # 分支摘要最大字符数
+    enabled: bool = True  # 是否启用自动压缩
 
     # 四级水位线（借鉴 MUR AI 方案，对齐社区共识）
     #   ratio < tier1_ratio                → Tier 0：什么都不做
@@ -133,9 +136,9 @@ class CompactionSettings:
     protect_tokens: int = 4096
 
     # 重试配置
-    max_retries: int = 3            # 最大重试次数
-    retry_base_delay: float = 1.0   # 初始重试延迟（秒）
-    retry_max_delay: float = 30.0   # 最大重试延迟（秒）
+    max_retries: int = 3  # 最大重试次数
+    retry_base_delay: float = 1.0  # 初始重试延迟（秒）
+    retry_max_delay: float = 30.0  # 最大重试延迟（秒）
 
     def to_dict(self) -> dict:
         return {
@@ -179,6 +182,7 @@ def waterline_name(tier: int) -> str:
 
 # ═══ 核心压缩逻辑 ═══════════════════════════════════════
 
+
 def should_compact(
     messages: list,
     max_tokens: int,
@@ -203,7 +207,7 @@ def should_compact(
 
     current = estimate_messages_tokens(messages)
     if current >= max_tokens * threshold:
-        logger.warning(f"🔔 Compaction trigger: {current}/{max_tokens} tok ({current/max_tokens*100:.0f}%)")
+        logger.warning(f"🔔 Compaction trigger: {current}/{max_tokens} tok ({current / max_tokens * 100:.0f}%)")
         return True, current
     return False, current
 
@@ -228,8 +232,7 @@ def compact_messages(
         (compressed_messages, new_summary)
     """
     strategy = get_compaction_strategy()
-    return strategy(messages, keep_recent=keep_recent, summary=summary,
-                    max_summary_length=max_summary_length)
+    return strategy(messages, keep_recent=keep_recent, summary=summary, max_summary_length=max_summary_length)
 
 
 # ── 压缩策略契约（借鉴 dsh compaction 引擎可插拔设计） ──────────────────
@@ -267,8 +270,8 @@ def truncate_compact_messages(
     if len(others) <= keep_recent * 2:
         return messages, summary
 
-    recent = others[-keep_recent * 2:] if keep_recent > 0 else []
-    older = others[:-keep_recent * 2] if keep_recent > 0 else others
+    recent = others[-keep_recent * 2 :] if keep_recent > 0 else []
+    older = others[: -keep_recent * 2] if keep_recent > 0 else others
 
     # 构建旧消息摘要
     older_text = ""
@@ -304,6 +307,7 @@ def truncate_compact_messages(
 
 # ═══ 重试机制 ════════════════════════════════════════════
 
+
 def retry_with_backoff(
     func: callable,
     max_retries: int = 3,
@@ -330,11 +334,8 @@ def retry_with_backoff(
         except retryable_exceptions as e:
             last_exception = e
             if attempt < max_retries:
-                delay = min(base_delay * (2 ** attempt) + random.uniform(0, 0.5), max_delay)
-                logger.warning(
-                    f"🔄 Compaction retry {attempt + 1}/{max_retries} "
-                    f"after {delay:.1f}s: {e}"
-                )
+                delay = min(base_delay * (2**attempt) + random.uniform(0, 0.5), max_delay)
+                logger.warning(f"🔄 Compaction retry {attempt + 1}/{max_retries} after {delay:.1f}s: {e}")
                 time.sleep(delay)
             else:
                 logger.error(f"✗ Compaction failed after {max_retries} retries: {e}")
@@ -343,6 +344,7 @@ def retry_with_backoff(
 
 
 # ═══ 分支摘要 ════════════════════════════════════════════
+
 
 def generate_branch_summary(
     messages: list,
@@ -369,10 +371,7 @@ def generate_branch_summary(
         role = m.get("role", "")
         content = m.get("content", "")
         if isinstance(content, list):
-            content = " ".join(
-                p.get("text", "") for p in content
-                if isinstance(p, dict) and p.get("type") == "text"
-            )
+            content = " ".join(p.get("text", "") for p in content if isinstance(p, dict) and p.get("type") == "text")
 
         if role == "user" and content:
             key_points.append(f"用户: {content[:300]}")
@@ -388,6 +387,7 @@ def generate_branch_summary(
 
 
 # ═══ Compaction Pipeline ═════════════════════════════════
+
 
 class CompactionPipeline:
     """可插入 pipeline 的自动压缩管线。
@@ -433,7 +433,8 @@ class CompactionPipeline:
 
         max_tokens = get_max_context_tokens(config) if config else 128000
         needs, cur = should_compact(
-            messages, max_tokens,
+            messages,
+            max_tokens,
             self.settings.threshold if not force else 0.0,
             self.settings.min_messages_before_compact if not force else 0,
         )
@@ -517,6 +518,7 @@ class CompactionPipeline:
 
 # ═══ 兼容旧版 API ═══════════════════════════════════════
 
+
 class AutoCompactStep:
     """兼容旧版的可调用压缩步骤。
 
@@ -530,10 +532,11 @@ class AutoCompactStep:
             settings=CompactionSettings(
                 threshold=threshold,
                 keep_recent=keep_recent,
-        ))
+            )
+        )
 
     def __call__(self, context, messages, **kw):
-        return self._pipeline.run(messages, config=context.config if hasattr(context, 'config') else None)
+        return self._pipeline.run(messages, config=context.config if hasattr(context, "config") else None)
 
     @property
     def summary(self) -> str:

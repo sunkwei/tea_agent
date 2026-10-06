@@ -4,6 +4,7 @@
 注：原「记忆 embedding 存取 + 向量相似度检索」已随向量能力整体下线移除；
 相似度判断改由关键词 Jaccard / content_hash 精确匹配承担。
 """
+
 import hashlib
 import logging
 
@@ -12,15 +13,22 @@ from ._sql_safety import safe_set_clause, safe_where_clause
 
 logger = logging.getLogger("Storage.Memories")
 
+
 class MemoryStore(StoreComponent):
     """长期记忆管理：增删改查、过期清理、CRITICAL FIFO 淘汰。"""
 
     # ── CRUD ──
 
     def add_memory(
-        self, content: str, category: str = "general", priority: int = 2,
-        importance: int = 3, expires_at: str | None = None, tags: str = "",
-        source_topic_id: str | None = None, pinned: int = 0,
+        self,
+        content: str,
+        category: str = "general",
+        priority: int = 2,
+        importance: int = 3,
+        expires_at: str | None = None,
+        tags: str = "",
+        source_topic_id: str | None = None,
+        pinned: int = 0,
     ) -> str:
         """Add a memory (dedup by content_hash).
 
@@ -39,7 +47,7 @@ class MemoryStore(StoreComponent):
         """
         if priority == 0:
             self._enforce_critical_limit(max_critical=30)
-        content_hash = hashlib.sha256(content.encode('utf-8')).hexdigest()[:16]
+        content_hash = hashlib.sha256(content.encode("utf-8")).hexdigest()[:16]
         # 去重：同一内容的活跃记忆已存在则跳过（防止自动提取/评估产生重复垃圾）
         c = self.conn.cursor()
         c.execute(
@@ -59,8 +67,7 @@ class MemoryStore(StoreComponent):
             "created_at, updated_at) "
             "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, "
             "datetime('now', 'localtime'), datetime('now', 'localtime'))",
-            (mid, content, category, priority, importance, expires_at, tags,
-             source_topic_id, pinned, content_hash),
+            (mid, content, category, priority, importance, expires_at, tags, source_topic_id, pinned, content_hash),
         )
         self.conn.commit()
         c.close()
@@ -68,9 +75,7 @@ class MemoryStore(StoreComponent):
 
     def _enforce_critical_limit(self, max_critical: int = 30):
         c = self.conn.cursor()
-        c.execute(
-            "SELECT COUNT(*) FROM memories WHERE is_active = 1 AND priority = 0"
-        )
+        c.execute("SELECT COUNT(*) FROM memories WHERE is_active = 1 AND priority = 0")
         count = c.fetchone()[0]
         if count >= max_critical:
             overflow = count - max_critical + 1
@@ -81,15 +86,20 @@ class MemoryStore(StoreComponent):
                 (overflow,),
             )
             self.conn.commit()
-            logger.info(
-                f"CRITICAL FIFO 淘汰: 软删除 {overflow} 条旧记忆 (阈值={max_critical})"
-            )
+            logger.info(f"CRITICAL FIFO 淘汰: 软删除 {overflow} 条旧记忆 (阈值={max_critical})")
         c.close()
 
     def update_memory(self, memory_id: str, **fields) -> bool:
         allowed = {
-            "content", "category", "priority", "importance",
-            "expires_at", "is_active", "tags", "last_accessed_at", "pinned",
+            "content",
+            "category",
+            "priority",
+            "importance",
+            "expires_at",
+            "is_active",
+            "tags",
+            "last_accessed_at",
+            "pinned",
             "created_at",  # 允许更新创建时间（用于LLM升级重置年龄）
         }
         updates = {k: v for k, v in fields.items() if k in allowed}
@@ -98,16 +108,15 @@ class MemoryStore(StoreComponent):
         if updates.get("priority") == 0:
             self._enforce_critical_limit(max_critical=30)
         from datetime import datetime
-        updates["updated_at"] = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+
+        updates["updated_at"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
         # 列名经 safe_set_clause 校验，值全部参数化
         set_clause = safe_set_clause(updates.keys())
         values = list(updates.values())
 
         c = self.conn.cursor()
-        c.execute(
-            f"UPDATE memories SET {set_clause} WHERE id = ?", values + [memory_id]
-        )
+        c.execute(f"UPDATE memories SET {set_clause} WHERE id = ?", values + [memory_id])
         self.conn.commit()
         affected = c.rowcount
         c.close()
@@ -128,8 +137,7 @@ class MemoryStore(StoreComponent):
         self.cleanup_expired_memories()
         c = self.conn.cursor()
         c.execute(
-            "SELECT * FROM memories WHERE is_active = 1 "
-            "ORDER BY priority ASC, last_accessed_at DESC LIMIT ?",
+            "SELECT * FROM memories WHERE is_active = 1 ORDER BY priority ASC, last_accessed_at DESC LIMIT ?",
             (limit,),
         )
         rows = c.fetchall()
@@ -140,17 +148,18 @@ class MemoryStore(StoreComponent):
         """Get the instructions."""
         self.cleanup_expired_memories()
         c = self.conn.cursor()
-        c.execute(
-            "SELECT * FROM memories WHERE is_active = 1 AND priority = 0 "
-            "ORDER BY last_accessed_at DESC"
-        )
+        c.execute("SELECT * FROM memories WHERE is_active = 1 AND priority = 0 ORDER BY last_accessed_at DESC")
         rows = c.fetchall()
         c.close()
         return [dict(r) for r in rows]
 
     def search_memories(
-        self, query: str = "", category: str = "",
-        tags: list[str] | None = None, min_importance: int = 0, limit: int = 20,
+        self,
+        query: str = "",
+        category: str = "",
+        tags: list[str] | None = None,
+        min_importance: int = 0,
+        limit: int = 20,
     ) -> list[dict]:
         self.cleanup_expired_memories()
         conditions = ["is_active = 1"]
@@ -167,8 +176,7 @@ class MemoryStore(StoreComponent):
         where = safe_where_clause(conditions)
         c = self.conn.cursor()
         c.execute(
-            f"SELECT * FROM memories WHERE {where} "
-            "ORDER BY priority ASC, last_accessed_at DESC LIMIT ?",
+            f"SELECT * FROM memories WHERE {where} ORDER BY priority ASC, last_accessed_at DESC LIMIT ?",
             params + [limit],
         )
         rows = c.fetchall()
@@ -176,10 +184,7 @@ class MemoryStore(StoreComponent):
         results = [dict(r) for r in rows]
         if tags:
             tag_set = {t.lower() for t in tags}
-            results = [
-                r for r in results
-                if tag_set & {t.strip().lower() for t in (r.get("tags", "") or "").split(",")}
-            ]
+            results = [r for r in results if tag_set & {t.strip().lower() for t in (r.get("tags", "") or "").split(",")}]
         return results[:limit]
 
     def cleanup_expired_memories(self) -> int:
@@ -208,14 +213,9 @@ class MemoryStore(StoreComponent):
         c = self.conn.cursor()
         c.execute("SELECT COUNT(*) as total FROM memories WHERE is_active = 1")
         total = c.fetchone()["total"]
-        c.execute(
-            "SELECT category, COUNT(*) as cnt FROM memories WHERE is_active = 1 GROUP BY category"
-        )
+        c.execute("SELECT category, COUNT(*) as cnt FROM memories WHERE is_active = 1 GROUP BY category")
         by_category = {r["category"]: r["cnt"] for r in c.fetchall()}
-        c.execute(
-            "SELECT priority, COUNT(*) as cnt FROM memories WHERE is_active = 1 GROUP BY priority"
-        )
+        c.execute("SELECT priority, COUNT(*) as cnt FROM memories WHERE is_active = 1 GROUP BY priority")
         by_priority = {r["priority"]: r["cnt"] for r in c.fetchall()}
         c.close()
         return {"total": total, "by_category": by_category, "by_priority": by_priority}
-

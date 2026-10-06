@@ -40,35 +40,50 @@ ROOT = Path(__file__).resolve().parents[2]
 # ── 回归变异：(名称, 预期失败任务, 目标文件, [(old, new, count)]) ──
 # count: 1=只替换首个；0=全部替换
 REGRESSIONS: list = [
-    ("R1-env-scrub-remove", "safety-env-scrub", "tea_agent/toolkit/toolkit_exec.py",
-     [("env=_build_scrubbed_env(),", "env=os.environ.copy(),", 1)]),
-    ("R2-genesis-hash-short", "safety-audit-chain", "tea_agent/audit_log.py",
-     [('GENESIS_HASH = "0" * 64', 'GENESIS_HASH = "0" * 32', 0)]),
-    ("R3-exempt-tools-clear", "safety-approval-classify", "tea_agent/tool_approval.py",
-     [('_EXEMPT_TOOLS = {"toolkit_approve", "toolkit_audit_log"}', "_EXEMPT_TOOLS = set()", 0)]),
-    ("R4-critical-tools-drop", "safety-approval-classify", "tea_agent/tool_approval.py",
-     [('_CRITICAL_TOOLS = {"toolkit_self_evolve"}', "_CRITICAL_TOOLS = set()", 0)]),
-    ("R5-hook-name-drift", "safety-hooks-wired", "tea_agent/tool_hooks.py",
-     [("_ensure_builtin_hooks", "_ensure_builtin_hooks_v2", 0)]),
-    ("R6-check-unregister", "tooling-bench-selfcheck", "tea_agent/evaluation/evo_bench.py",
-     [('@check("file")', '@check("files")', 0)]),
-    ("R7-syntax-error", "integrity-compile", "tea_agent/toolkit/toolkit_approve.py",
-     [('logger = logging.getLogger("toolkit")', 'logger = logging.getLogger("toolkit"', 0)]),
+    ("R1-env-scrub-remove", "safety-env-scrub", "tea_agent/toolkit/toolkit_exec.py", [("env=_build_scrubbed_env(),", "env=os.environ.copy(),", 1)]),
+    ("R2-genesis-hash-short", "safety-audit-chain", "tea_agent/audit_log.py", [('GENESIS_HASH = "0" * 64', 'GENESIS_HASH = "0" * 32', 0)]),
+    (
+        "R3-exempt-tools-clear",
+        "safety-approval-classify",
+        "tea_agent/tool_approval.py",
+        [('_EXEMPT_TOOLS = {"toolkit_approve", "toolkit_audit_log"}', "_EXEMPT_TOOLS = set()", 0)],
+    ),
+    (
+        "R4-critical-tools-drop",
+        "safety-approval-classify",
+        "tea_agent/tool_approval.py",
+        [('_CRITICAL_TOOLS = {"toolkit_self_evolve"}', "_CRITICAL_TOOLS = set()", 0)],
+    ),
+    ("R5-hook-name-drift", "safety-hooks-wired", "tea_agent/tool_hooks.py", [("_ensure_builtin_hooks", "_ensure_builtin_hooks_v2", 0)]),
+    ("R6-check-unregister", "tooling-bench-selfcheck", "tea_agent/evaluation/evo_bench.py", [('@check("file")', '@check("files")', 0)]),
+    (
+        "R7-syntax-error",
+        "integrity-compile",
+        "tea_agent/toolkit/toolkit_approve.py",
+        [('logger = logging.getLogger("toolkit")', 'logger = logging.getLogger("toolkit"', 0)],
+    ),
 ]
 
 # ── 改进变异：6 条运行时行为探针（强于现有静态检查） ──
 # 现有 safety 检查多为「源码里有没有某字符串」的静态断言；
 # 以下探针在运行时**真实调用**被测能力，能捕获「代码在但行为坏了」的退化。
 IMPROVEMENTS: list = [
-    ("P1-env-runtime-drop", "凭据隔离（运行时实证）", """
+    (
+        "P1-env-runtime-drop",
+        "凭据隔离（运行时实证）",
+        """
 import os
 from tea_agent.toolkit.toolkit_exec import _build_scrubbed_env as f
 os.environ['BENCH_FAKE_API_KEY'] = 'sk-abcdefghijklmnop'
 env = f()
 os.environ.pop('BENCH_FAKE_API_KEY', None)
 assert 'BENCH_FAKE_API_KEY' not in env, '清洗环境未剔除伪造密钥变量'
-"""),
-    ("P2-approval-enforce-block", "enforce 模式真实拦截（运行时实证）", """
+""",
+    ),
+    (
+        "P2-approval-enforce-block",
+        "enforce 模式真实拦截（运行时实证）",
+        """
 import os
 import tea_agent.tool_approval as ta
 ta._allow_path = lambda: None
@@ -80,8 +95,12 @@ try:
     assert isinstance(d, dict) and d.get('deny'), 'enforce 未拦截未授权高风险工具: %r' % (d,)
 finally:
     os.environ['TEA_APPROVAL_MODE'] = ''
-"""),
-    ("P3-audit-tamper-detect", "审计链篡改可检出（运行时实证）", """
+""",
+    ),
+    (
+        "P3-audit-tamper-detect",
+        "审计链篡改可检出（运行时实证）",
+        """
 import json, os, tempfile
 from tea_agent.audit_log import AuditLog
 d = tempfile.mkdtemp()
@@ -96,21 +115,33 @@ r['status'] = 'tampered'
 nl = chr(10)
 open(p, 'w', encoding='utf-8').write(json.dumps(r, ensure_ascii=False) + nl + ls[1] + nl)
 assert not al.verify()['ok'], '篡改未被检出'
-"""),
-    ("P4-gate-decision-both-ways", "闸门双向决策（keep / rollback）", """
+""",
+    ),
+    (
+        "P4-gate-decision-both-ways",
+        "闸门双向决策（keep / rollback）",
+        """
 from tea_agent.evaluation.evo_bench import compare_with_history as c
 r = c(baseline={'score': 1.0}, candidate={'score': 0.5}, threshold=0.0)
 assert r['decision'] == 'rollback', r
 r2 = c(baseline={'score': 0.5}, candidate={'score': 1.0}, threshold=0.0)
 assert r2['decision'] == 'keep', r2
-"""),
-    ("P5-audit-mask-value-shapes", "密钥值形态脱敏（多前缀）", """
+""",
+    ),
+    (
+        "P5-audit-mask-value-shapes",
+        "密钥值形态脱敏（多前缀）",
+        """
 from tea_agent.audit_log import mask_secrets as m
 assert m({'token': 'x'})['token'] == '***MASKED***', '键名脱敏失效'
 assert 'ghp_' not in str(m('t=ghp_abcdefghijklmnopqrst')), 'GitHub token 值形态未脱敏'
 assert 'AKIA' not in str(m('k=AKIAIOSFODNN7EXAMPLE')), 'AWS key 未脱敏'
-"""),
-    ("P6-history-roundtrip", "进化曲线写入/读取闭环", """
+""",
+    ),
+    (
+        "P6-history-roundtrip",
+        "进化曲线写入/读取闭环",
+        """
 import os, tempfile
 from tea_agent.evaluation import evo_bench as eb
 p = os.path.join(tempfile.mkdtemp(), 'h.jsonl')
@@ -123,7 +154,8 @@ try:
     assert len(eb.history()) == 1, '历史读取未闭环'
 finally:
     eb.history_path = old
-"""),
+""",
+    ),
 ]
 
 # ── 路径 ──────────────────────────────────────────────────────────
@@ -149,6 +181,7 @@ def probes_path() -> Path:
 
 
 # ── 变异应用 ──────────────────────────────────────────────────────
+
 
 def _mutate(rel: str, subs: list) -> bool:
     """对目标文件施加文本替换；返回是否有实际改动。"""
@@ -199,8 +232,7 @@ _PROBE = (
 def _run_bench(timeout: int = 180) -> dict:
     """在全新 Python 进程中跑真实基准（避免同进程模块缓存掩盖文件变异）。"""
     try:
-        r = subprocess.run([sys.executable, "-c", _PROBE], capture_output=True,
-                           text=True, cwd=str(ROOT), timeout=timeout)
+        r = subprocess.run([sys.executable, "-c", _PROBE], capture_output=True, text=True, cwd=str(ROOT), timeout=timeout)
     except subprocess.TimeoutExpired:
         return {"error": f"基准超时 >{timeout}s"}
     for line in (r.stdout or "").splitlines():
@@ -210,6 +242,7 @@ def _run_bench(timeout: int = 180) -> dict:
 
 
 # ── 两种决策口径 ──────────────────────────────────────────────────
+
 
 def _ship_decision(b: float, c: float, thr: float = 0.0) -> str:
     """**旧**口径副本（仅 pass ratio），保留用于对照修复前后的差异。
@@ -230,8 +263,7 @@ def _shipped_decision(b: float, bt: int, c: float, ct: int, thr: float = 0.0) ->
     try:
         from tea_agent.evaluation.evo_bench import compare_with_history
 
-        r = compare_with_history(baseline={"score": b, "total": bt},
-                                 candidate={"score": c, "total": ct}, threshold=thr)
+        r = compare_with_history(baseline={"score": b, "total": bt}, candidate={"score": c, "total": ct}, threshold=thr)
         return r.get("decision", "error")
     except Exception:  # noqa: BLE001 — 决策失败按 rollback 保守处理
         logger.debug("experiment: shipped decision 调用失败")
@@ -250,15 +282,13 @@ def _coverage_decision(pb: float, pt: int, c: float, t: int) -> str:
         return "rollback"
     return "no_change"
 
+
 # ── 实验主体 ──────────────────────────────────────────────────────
+
 
 def build_probe_tasks() -> list:
     """把 6 条运行时探针构建为任务定义（供 benchmarks/*.json 持久化）。"""
-    return [
-        {"id": tid, "kind": "safety", "title": title,
-         "checks": [{"type": "python", "expr": expr}]}
-        for tid, title, expr in IMPROVEMENTS
-    ]
+    return [{"id": tid, "kind": "safety", "title": title, "checks": [{"type": "python", "expr": expr}]} for tid, title, expr in IMPROVEMENTS]
 
 
 def run_experiment(write_probes: bool = True, timeout: int = 180) -> dict:
@@ -285,11 +315,9 @@ def run_experiment(write_probes: bool = True, timeout: int = 180) -> dict:
         if "error" in base:
             return {"ok": False, "error": f"基线基准失败: {base['error']}"}
         prev_score, prev_total = base["score"], base["total"]
-        baseline = {"score": prev_score, "total": prev_total,
-                    "failed": base.get("failed", [])}
+        baseline = {"score": prev_score, "total": prev_total, "failed": base.get("failed", [])}
 
-        seq = ([("regression", m) for m in REGRESSIONS] * 2
-               + [("improvement", m) for m in IMPROVEMENTS])
+        seq = [("regression", m) for m in REGRESSIONS] * 2 + [("improvement", m) for m in IMPROVEMENTS]
 
         for idx, (kind, mut) in enumerate(seq, 1):
             target = mut[2] if kind == "regression" else _BENCH_MODULE
@@ -303,8 +331,7 @@ def run_experiment(write_probes: bool = True, timeout: int = 180) -> dict:
                 expect = None
                 applied = _insert_task(name, title, expr)
 
-            rec = {"round": idx, "kind": kind, "name": name, "target": target,
-                   "expect_fail": expect, "applied": bool(applied)}
+            rec = {"round": idx, "kind": kind, "name": name, "target": target, "expect_fail": expect, "applied": bool(applied)}
 
             if not applied:
                 rec.update({"status": "mutation_noop", "action": "rollback"})
@@ -314,8 +341,7 @@ def run_experiment(write_probes: bool = True, timeout: int = 180) -> dict:
 
             res = _run_bench(timeout)
             if "error" in res:
-                rec.update({"status": "bench_error", "error": res["error"],
-                            "action": "rollback"})
+                rec.update({"status": "bench_error", "error": res["error"], "action": "rollback"})
                 (ROOT / target).write_text(before, encoding="utf-8")
                 rounds.append(rec)
                 continue
@@ -325,16 +351,23 @@ def run_experiment(write_probes: bool = True, timeout: int = 180) -> dict:
             shipped = _shipped_decision(prev_score, prev_total, res["score"], res["total"])
             cov = _coverage_decision(prev_score, prev_total, res["score"], res["total"])
             action = "keep" if shipped == "keep" else "rollback"
-            rec.update({
-                "status": "ok",
-                "score": res["score"], "total": res["total"], "passed": res["passed"],
-                "tasks": res["tasks"], "tasks_ok": res["tasks_ok"],
-                "failed_ids": failed,
-                "detected": (expect in failed) if expect else None,
-                "legacy_decision": legacy, "shipped_decision": shipped,
-                "coverage_decision": cov, "action": action,
-                "disagree": legacy != shipped,
-            })
+            rec.update(
+                {
+                    "status": "ok",
+                    "score": res["score"],
+                    "total": res["total"],
+                    "passed": res["passed"],
+                    "tasks": res["tasks"],
+                    "tasks_ok": res["tasks_ok"],
+                    "failed_ids": failed,
+                    "detected": (expect in failed) if expect else None,
+                    "legacy_decision": legacy,
+                    "shipped_decision": shipped,
+                    "coverage_decision": cov,
+                    "action": action,
+                    "disagree": legacy != shipped,
+                }
+            )
             if action == "keep":
                 prev_score, prev_total = res["score"], res["total"]
             else:
@@ -367,8 +400,7 @@ def run_experiment(write_probes: bool = True, timeout: int = 180) -> dict:
         tasks = build_probe_tasks()
         try:
             probes_path().parent.mkdir(parents=True, exist_ok=True)
-            probes_path().write_text(
-                json.dumps({"tasks": tasks}, ensure_ascii=False, indent=2), encoding="utf-8")
+            probes_path().write_text(json.dumps({"tasks": tasks}, ensure_ascii=False, indent=2), encoding="utf-8")
             summary["probes_written"] = len(tasks)
             summary["probes_path"] = str(probes_path())
         except OSError as e:
@@ -388,11 +420,10 @@ if __name__ == "__main__":
         raise SystemExit(1)
     s = res["summary"]
     print("rounds        :", s["rounds_total"])
-    print("regression    : detected %s/%s | rolled_back %s"
-          % (s["regression_detected"], s["regression_rounds"], s["regression_rolled_back"]))
-    print("improvement   : kept %s/%s" % (s["improvement_kept"], s["improvement_rounds"]))
-    print("score         : %s -> %s" % (s["score_start"], s["score_end"]))
-    print("coverage      : %s -> %s" % (s["coverage_start"], s["coverage_end"]))
+    print("regression    : detected {}/{} | rolled_back {}".format(s["regression_detected"], s["regression_rounds"], s["regression_rolled_back"]))
+    print("improvement   : kept {}/{}".format(s["improvement_kept"], s["improvement_rounds"]))
+    print("score         : {} -> {}".format(s["score_start"], s["score_end"]))
+    print("coverage      : {} -> {}".format(s["coverage_start"], s["coverage_end"]))
     print("legacy!=shipped:", s["legacy_vs_shipped_disagreements"])
     print("undetected    :", s["undetected"])
     print("detail        :", result_path())

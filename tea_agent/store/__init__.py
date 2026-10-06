@@ -1,6 +1,7 @@
 """
 向后兼容导出：from tea_agent.store import Storage, get_storage 保持不变。
 """
+
 from ._core import Storage
 
 __all__ = ["Storage", "get_storage", "peek_storage"]
@@ -8,6 +9,7 @@ __all__ = ["Storage", "get_storage", "peek_storage"]
 # ── 模块级单例 ──
 
 _storage_instance = None
+
 
 def get_storage(db_path: str = "") -> Storage:
     """获取或创建 Storage 单例（供工具函数使用）。
@@ -26,10 +28,9 @@ def get_storage(db_path: str = "") -> Storage:
     if not db_path:
         try:
             from tea_agent.config import get_config
+
             cfg = get_config()
-            db_path = (
-                getattr(cfg.paths, "active_db_path_abs", "") or cfg.paths.db_path_abs
-            )
+            db_path = getattr(cfg.paths, "active_db_path_abs", "") or cfg.paths.db_path_abs
         except Exception:
             from tea_agent.storage_scope import DEFAULT_DB_NAME
 
@@ -45,5 +46,5 @@ def peek_storage():
     Toolkit（无会话、无库）」的进程里因第一次调用工具就建出数据库文件 ——
     改变原有行为，且在只读目录/测试环境下引入无谓失败。统计只在库本来就
     存在时顺带记录。
-"""
+    """
     return _storage_instance

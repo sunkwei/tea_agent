@@ -23,7 +23,7 @@ AUTO_MAX_TOKENS_FLOOR = 8192
 
 
 try:
-    import yaml
+    import yaml  # noqa: F401
 
     HAS_YAML: bool = True
 except ImportError:
@@ -47,9 +47,7 @@ __all__ = [
 # reasoning_effort 合法取值（OpenAI o 系列 / DeepSeek 兼容端点）。
 # "auto" 仅为配置占位值：表示"自动推导、不显式下发该参数"，
 # 不是合法的 API 值（API 只接受 none/minimal/low/medium/high/xhigh/max）。
-REASONING_EFFORT_VALUES: frozenset[str] = frozenset(
-    {"auto", "none", "minimal", "low", "medium", "high", "xhigh", "max"}
-)
+REASONING_EFFORT_VALUES: frozenset[str] = frozenset({"auto", "none", "minimal", "low", "medium", "high", "xhigh", "max"})
 
 # reasoning_effort 强度序（数值越大思考越深），用于值域钳制
 REASONING_EFFORT_RANKS: dict[str, int] = {
@@ -106,7 +104,7 @@ class ModelConfig:
     #         guidance_message / fallback_buffer_tokens / auto_compact_fallback_prompt
     token_budget: dict[str, Any] = field(default_factory=dict)
     # 引用式来源（config*.yaml 只存 p_name + m_name 组合时记录；空=传统完整内嵌块）
-    provider: str = ""   # p_name（provider.yaml 中的供应商名）
+    provider: str = ""  # p_name（provider.yaml 中的供应商名）
     ref_model: str = ""  # m_name（provider.yaml 中该供应商下的模型 id）
 
     @property
@@ -167,9 +165,7 @@ class PathsConfig:
             if os.path.isabs(expanded_data):
                 self._data_dir_abs = os.path.abspath(expanded_data)
             else:
-                self._data_dir_abs = os.path.abspath(
-                    os.path.join(config_dir, expanded_data)
-                )
+                self._data_dir_abs = os.path.abspath(os.path.join(config_dir, expanded_data))
         else:
             self._data_dir_abs = default_root
 
@@ -214,9 +210,7 @@ class PathsConfig:
         if cached is not None:
             return cached
         # 显式自定义存储根（data_dir 或绝对 db_path）→ 尊重用户配置，不自动项目化
-        if self.data_dir or (
-            self.db_path and os.path.isabs(os.path.expanduser(self.db_path))
-        ):
+        if self.data_dir or (self.db_path and os.path.isabs(os.path.expanduser(self.db_path))):
             self._active_db_path_abs = self._db_path_abs
         else:
             from tea_agent.storage_scope import resolve_db_path
@@ -252,14 +246,14 @@ class AgentConfig:
 
     # 任务阶段 → 推荐温度（未显式配置时的智能默认；越低越确定，越高越发散）
     PHASE_DEFAULT_TEMP: ClassVar[dict[str, float]] = {
-        "develop": 0.2,    # 代码生成/实现：确定性优先
-        "test": 0.2,       # 测试调试：精确可复现
-        "review": 0.15,    # 代码审查：事实判断
-        "devops": 0.3,     # 部署发布：严谨
-        "design": 0.45,    # 架构设计：严谨但需创意
-        "docs": 0.5,       # 文档撰写：适中
-        "creative": 0.8,   # 创意发散/进化方向：高随机探索
-        "mixed": 0.6,      # 自动均衡（默认）
+        "develop": 0.2,  # 代码生成/实现：确定性优先
+        "test": 0.2,  # 测试调试：精确可复现
+        "review": 0.15,  # 代码审查：事实判断
+        "devops": 0.3,  # 部署发布：严谨
+        "design": 0.45,  # 架构设计：严谨但需创意
+        "docs": 0.5,  # 文档撰写：适中
+        "creative": 0.8,  # 创意发散/进化方向：高随机探索
+        "mixed": 0.6,  # 自动均衡（默认）
         "pragmatic": 0.2,  # 兼容旧名
     }
 
@@ -274,9 +268,7 @@ class AgentConfig:
                 return m
         return None
 
-    def get_effective_params(
-        self, model_type: str = "main", mode: str = "mixed"
-    ) -> dict[str, Any]:
+    def get_effective_params(self, model_type: str = "main", mode: str = "mixed") -> dict[str, Any]:
         """获取最终生效的模型推理参数。mode_params 覆盖 model 默认值；
         未显式配置 temperature 时按任务阶段使用智能默认。
 
@@ -341,11 +333,11 @@ class AgentConfig:
     rc_keep_steps: int = 8
 
     # API 弹性参数（网络中断 / PC 睡眠恢复等瞬时故障的容错）
-    api_request_timeout: float = 120.0   # 单次请求超时（秒）
-    api_connect_timeout: float = 30.0    # 连接建立超时（秒）
-    api_max_retries: int = 3             # 接口中断最大重试次数（不含首次尝试）
-    api_retry_backoff: float = 2.0       # 指数退避基数（秒）：重试等待 = backoff * 2^n
-    api_sleep_recovery_wait: float = 5.0 # 连接类错误额外等待（睡眠恢复后网络栈重建）
+    api_request_timeout: float = 120.0  # 单次请求超时（秒）
+    api_connect_timeout: float = 30.0  # 连接建立超时（秒）
+    api_max_retries: int = 3  # 接口中断最大重试次数（不含首次尝试）
+    api_retry_backoff: float = 2.0  # 指数退避基数（秒）：重试等待 = backoff * 2^n
+    api_sleep_recovery_wait: float = 5.0  # 连接类错误额外等待（睡眠恢复后网络栈重建）
 
     # 可运行时修改的配置键白名单
     _RUNTIME_CONFIG_KEYS = {
@@ -363,24 +355,24 @@ class AgentConfig:
         "history_l2_max",
         "history_l3_batch",  # 2026-05-20 gen by Tea Agent, L2/L3分层压缩
         "l2_thinking_max_chars",  # L2 单条 thinking 限幅（上下文填充治理）
-        "l2_max_chars",           # L2 总量触发摘要阈值（字符）
-        "rc_keep_steps",          # L1 只保留最近 N 步 reasoning_content 全文
+        "l2_max_chars",  # L2 总量触发摘要阈值（字符）
+        "rc_keep_steps",  # L1 只保留最近 N 步 reasoning_content 全文
     }
 
     # 打断知识闭环配置（M4/M5）
     interruption: dict = field(
         default_factory=lambda: {
-            "enabled": True,             # 总开关
+            "enabled": True,  # 总开关
             # corrected/abandoned 判定阈值。0.25 是针对**关键词 Jaccard** 口径
             # 实测标定的：同话题续说 0.31~0.82、换话题恒为 0.0，两组完全可分。
             # 余弦时代的 0.6 照搬过来会让 corrected 分支近乎不可达。
             # 口径与标定依据见 onlinesession.INTERRUPT_SIMILARITY_THRESHOLD。
             "similarity_threshold": 0.25,
-            "partial_reply_max": 2000,    # 锚点 partial_reply 截断长度
-            "persist_events": True,       # 是否持久化事件表
-            "analyze_interval_h": 1.0,    # 后台分析周期（小时）
-            "keep_days": 30,              # 事件保留天数（超期清理）
-            "skill_min_count": 3,         # M5: 触发行为指导 skill 生成的打断阈值
+            "partial_reply_max": 2000,  # 锚点 partial_reply 截断长度
+            "persist_events": True,  # 是否持久化事件表
+            "analyze_interval_h": 1.0,  # 后台分析周期（小时）
+            "keep_days": 30,  # 事件保留天数（超期清理）
+            "skill_min_count": 3,  # M5: 触发行为指导 skill 生成的打断阈值
         }
     )
 
@@ -436,11 +428,7 @@ class AgentConfig:
                 return False
         elif expected_type:
             try:
-                value = (
-                    value.lower() in ("true", "1", "yes", "on")
-                    if expected_type is bool and isinstance(value, str)
-                    else expected_type(value)
-                )
+                value = value.lower() in ("true", "1", "yes", "on") if expected_type is bool and isinstance(value, str) else expected_type(value)
             except (ValueError, TypeError):
                 return False
 
@@ -467,15 +455,7 @@ class AgentConfig:
                     "key": key,
                     "ok": ok,
                     "new_value": str(getattr(self, key, "")) if ok else "",
-                    "error": (
-                        ""
-                        if ok
-                        else (
-                            f"无效的配置键: {key}"
-                            if key not in self._RUNTIME_CONFIG_KEYS
-                            else f"值类型错误: {value}"
-                        )
-                    ),
+                    "error": ("" if ok else (f"无效的配置键: {key}" if key not in self._RUNTIME_CONFIG_KEYS else f"值类型错误: {value}")),
                 }
             )
         return results
@@ -488,11 +468,7 @@ class AgentConfig:
 
     def to_dict(self) -> dict:
         """导出运行时配置为字典"""
-        return {
-            key: getattr(self, key)
-            for key in self._RUNTIME_CONFIG_KEYS
-            if hasattr(self, key)
-        }
+        return {key: getattr(self, key) for key in self._RUNTIME_CONFIG_KEYS if hasattr(self, key)}
 
     def to_full_dict(self) -> dict:
         """导出所有配置为字典（含模型/路径等完整配置）"""
@@ -579,7 +555,8 @@ def load_config(config_path: str | None = None) -> AgentConfig:
             data["main_model"] = ref
             logger.info(
                 "main_model 兜底: 未配置角色绑定，改用 provider.yaml %s/%s",
-                ref["provider"], ref["model"],
+                ref["provider"],
+                ref["model"],
             )
 
     if data:
@@ -592,6 +569,7 @@ def load_config(config_path: str | None = None) -> AgentConfig:
             _parse_control_params(cfg, data)
         except Exception:
             import traceback
+
             logger.warning(f"provider.yaml settings 解析部分失败，已回退默认值\n{traceback.format_exc(limit=2)}")
 
     # paths 解析兜底：无 settings.paths 时按 ~/.tea_agent 补解析
@@ -756,11 +734,7 @@ def _parse_model_configs(cfg: AgentConfig, data: dict) -> None:
                     target.max_context_tokens = int(resolved["max_context_tokens"])
                 if resolved.get("max_output_tokens"):
                     # 自动填充按窗口比例限幅（显式 max_tokens 在下方覆盖，仍优先）
-                    _ctx_for_cap = int(
-                        resolved.get("max_context_tokens")
-                        or target.max_context_tokens
-                        or 0
-                    )
+                    _ctx_for_cap = int(resolved.get("max_context_tokens") or target.max_context_tokens or 0)
                     _auto_cap = auto_max_tokens_cap(_ctx_for_cap)
                     target.max_tokens = min(int(resolved["max_output_tokens"]), _auto_cap)
                 eff = resolved.get("reasoning_effort") or "auto"
@@ -771,32 +745,24 @@ def _parse_model_configs(cfg: AgentConfig, data: dict) -> None:
                 target.api_key = str(m_data.get("api_key") or "")
                 target.api_url = str(m_data.get("api_url") or "")
                 target.model_name = m_name
-                target.options = (
-                    dict(m_data["options"]) if isinstance(m_data.get("options"), dict) else {}
-                )
+                target.options = dict(m_data["options"]) if isinstance(m_data.get("options"), dict) else {}
         else:
             target.api_key = str(m_data.get("api_key") or "")
             target.api_url = str(m_data.get("api_url") or "")
             target.model_name = str(m_data.get("model_name") or "")
-            target.options = (
-                dict(m_data["options"]) if isinstance(m_data.get("options"), dict) else {}
-            )
+            target.options = dict(m_data["options"]) if isinstance(m_data.get("options"), dict) else {}
 
         target.temperature = float(m_data.get("temperature", target.temperature))
         target.max_tokens = int(m_data.get("max_tokens", target.max_tokens))
         target.top_p = float(m_data.get("top_p", target.top_p))
-        target.max_context_tokens = int(
-            m_data.get("max_context_tokens", target.max_context_tokens)
-        )
+        target.max_context_tokens = int(m_data.get("max_context_tokens", target.max_context_tokens))
         # 工具暴露档位（auto=按窗口推导；显式档位优先）
         tp_val = m_data.get("tool_profile")
         if isinstance(tp_val, str) and tp_val.strip():
             target.tool_profile = tp_val.strip().lower()
         # 引用式下允许内联 options 覆盖（合并而非整体替换，避免丢 resolve 能力标记）
         if is_ref and isinstance(m_data.get("options"), dict):
-            target.options.update(
-                {k: v for k, v in m_data["options"].items() if v is not None}
-            )
+            target.options.update({k: v for k, v in m_data["options"].items() if v is not None})
         # 引用式下内联 api_key/api_url/model_name 显式覆盖（少用；供 provider 未收录时兜底）
         if is_ref:
             if m_data.get("api_key"):
@@ -809,8 +775,10 @@ def _parse_model_configs(cfg: AgentConfig, data: dict) -> None:
         tb = m_data.get("token_budget")
         if isinstance(tb, dict):
             target.token_budget = {
-                k: v for k, v in tb.items()
-                if k in (
+                k: v
+                for k, v in tb.items()
+                if k
+                in (
                     "reminder_threshold",
                     "reminder_message_template",
                     "guidance_message",
@@ -834,11 +802,7 @@ def _parse_mode_params(cfg: AgentConfig, data: dict) -> None:
     for mode_name in ("pragmatic", "creative", "mixed"):
         mode_cfg = mp_data.get(mode_name, {})
         if isinstance(mode_cfg, dict):
-            cfg.mode_params[mode_name] = {
-                k: v
-                for k, v in mode_cfg.items()
-                if k in ("temperature", "max_tokens", "top_p")
-            }
+            cfg.mode_params[mode_name] = {k: v for k, v in mode_cfg.items() if k in ("temperature", "max_tokens", "top_p")}
 
 
 def _parse_paths_config(cfg: AgentConfig, data: dict, yaml_path: str) -> None:
@@ -853,9 +817,7 @@ def _parse_paths_config(cfg: AgentConfig, data: dict, yaml_path: str) -> None:
     if isinstance(paths_data, dict):
         cfg.paths.data_dir = str(paths_data.get("data_dir", cfg.paths.data_dir))
         cfg.paths.db_path = str(paths_data.get("db_path", cfg.paths.db_path))
-        cfg.paths.storage_scope = str(
-            paths_data.get("storage_scope", cfg.paths.storage_scope)
-        ).strip().lower()
+        cfg.paths.storage_scope = str(paths_data.get("storage_scope", cfg.paths.storage_scope)).strip().lower()
         cfg.paths.toolkit_dir = str(paths_data.get("toolkit_dir", cfg.paths.toolkit_dir))
         cfg.paths.kb_dir = str(paths_data.get("kb_dir", cfg.paths.kb_dir))
         cfg.paths.skills_dir = str(paths_data.get("skills_dir", cfg.paths.skills_dir))
@@ -878,9 +840,7 @@ def _parse_session_params(cfg: AgentConfig, data: dict) -> None:
     # 出站附加请求头：{host 模式: {头名: 值}}；非法条目在注入时被丢弃（见 api_headers）
     _raw_headers = data.get("api_headers")
     if isinstance(_raw_headers, dict):
-        cfg.api_headers = {
-            str(pattern): dict(headers) for pattern, headers in _raw_headers.items() if isinstance(headers, dict)
-        }
+        cfg.api_headers = {str(pattern): dict(headers) for pattern, headers in _raw_headers.items() if isinstance(headers, dict)}
     elif _raw_headers is not None:
         logger.warning("config: api_headers 需要是 {host: {header: value}} 映射，已忽略")
 
@@ -910,9 +870,7 @@ def _parse_token_params(cfg: AgentConfig, data: dict) -> None:
     """
     cfg.keep_turns = int(data.get("keep_turns", cfg.keep_turns))
     cfg.max_tool_output = int(data.get("max_tool_output", cfg.max_tool_output))
-    cfg.max_assistant_content = int(
-        data.get("max_assistant_content", cfg.max_assistant_content)
-    )
+    cfg.max_assistant_content = int(data.get("max_assistant_content", cfg.max_assistant_content))
     cfg.rc_keep_steps = int(data.get("rc_keep_steps", cfg.rc_keep_steps))
 
 
@@ -926,34 +884,20 @@ def _parse_control_params(cfg: AgentConfig, data: dict) -> None:
     # 打断知识闭环配置节（M4）：合并 yaml 覆盖默认值
     if isinstance(data.get("interruption"), dict):
         cfg.interruption = {**cfg.interruption, **data["interruption"]}
-    cfg.memory_extraction_threshold = int(
-        data.get("memory_extraction_threshold", cfg.memory_extraction_threshold)
-    )
-    cfg.memory_dedup_threshold = float(
-        data.get("memory_dedup_threshold", cfg.memory_dedup_threshold)
-    )
+    cfg.memory_extraction_threshold = int(data.get("memory_extraction_threshold", cfg.memory_extraction_threshold))
+    cfg.memory_dedup_threshold = float(data.get("memory_dedup_threshold", cfg.memory_dedup_threshold))
     cfg.chat_page_size = int(data.get("chat_page_size", cfg.chat_page_size))
     cfg.history_l2_max = int(data.get("history_l2_max", cfg.history_l2_max))
     cfg.history_l3_batch = int(data.get("history_l3_batch", cfg.history_l3_batch))
-    cfg.l2_thinking_max_chars = int(
-        data.get("l2_thinking_max_chars", cfg.l2_thinking_max_chars)
-    )
+    cfg.l2_thinking_max_chars = int(data.get("l2_thinking_max_chars", cfg.l2_thinking_max_chars))
     cfg.l2_max_chars = int(data.get("l2_max_chars", cfg.l2_max_chars))
 
     # API 弹性参数（网络中断/睡眠恢复容错）
-    cfg.api_request_timeout = float(
-        data.get("api_request_timeout", cfg.api_request_timeout)
-    )
-    cfg.api_connect_timeout = float(
-        data.get("api_connect_timeout", cfg.api_connect_timeout)
-    )
+    cfg.api_request_timeout = float(data.get("api_request_timeout", cfg.api_request_timeout))
+    cfg.api_connect_timeout = float(data.get("api_connect_timeout", cfg.api_connect_timeout))
     cfg.api_max_retries = int(data.get("api_max_retries", cfg.api_max_retries))
-    cfg.api_retry_backoff = float(
-        data.get("api_retry_backoff", cfg.api_retry_backoff)
-    )
-    cfg.api_sleep_recovery_wait = float(
-        data.get("api_sleep_recovery_wait", cfg.api_sleep_recovery_wait)
-    )
+    cfg.api_retry_backoff = float(data.get("api_retry_backoff", cfg.api_retry_backoff))
+    cfg.api_sleep_recovery_wait = float(data.get("api_sleep_recovery_wait", cfg.api_sleep_recovery_wait))
 
 
 def _resolve_save_path(config_path: str | None) -> str:
@@ -967,11 +911,7 @@ def _resolve_save_path(config_path: str | None) -> str:
     """
     global _last_config_path
 
-    return (
-        config_path
-        or _last_config_path
-        or str(Path.home() / ".tea_agent" / "config.yaml")
-    )
+    return config_path or _last_config_path or str(Path.home() / ".tea_agent" / "config.yaml")
 
 
 def ensure_config_dir() -> Path:
@@ -1008,7 +948,7 @@ def save_config(cfg: AgentConfig, config_path: str | None = None) -> str:
             provider, ref = m.provider, m.ref_model
             # 内嵌式配置（如 Web /api/model 热切换）无显式绑定 → 按 api_url 反查补齐；
             # 另：model_name 才是"当前实际模型"，ref_model 陈旧时以它为准
-            #（switch_model 只改 model_name，不清旧 ref_model）
+            # （switch_model 只改 model_name，不清旧 ref_model）
             if not provider and m.api_url:
                 provider = store.provider_name_for_url(m.api_url)
             if m.model_name and ref != m.model_name:
@@ -1125,10 +1065,7 @@ def _prepare_ref_model_data(target: ModelConfig) -> dict | None:
     if target.tool_profile and target.tool_profile != "auto":
         m_data["tool_profile"] = target.tool_profile
     res_opts = resolved.get("options") or {}
-    diff_opts = {
-        k: v for k, v in (target.options or {}).items()
-        if res_opts.get(k) != v
-    }
+    diff_opts = {k: v for k, v in (target.options or {}).items() if res_opts.get(k) != v}
     if diff_opts:
         m_data["options"] = diff_opts
     if target.token_budget:
@@ -1138,9 +1075,7 @@ def _prepare_ref_model_data(target: ModelConfig) -> dict | None:
         try:
             from tea_agent.provider_store import get_provider_store
 
-            get_provider_store().upsert_provider(
-                target.provider, {"api_key": target.api_key}
-            )
+            get_provider_store().upsert_provider(target.provider, {"api_key": target.api_key})
         except Exception as e:
             logger.warning("api_key sync to provider.yaml failed: %s", e)
     return m_data
@@ -1228,12 +1163,8 @@ def get_config(reload: bool = False) -> AgentConfig:
     global _config_cache, _last_config_path, _active_config_path
     with _config_lock:
         current = _last_config_path or _active_config_path
-        cached_src = (
-            getattr(_config_cache, "_config_source", None) if _config_cache else None
-        )
-        path_changed = bool(
-            current and cached_src and os.path.abspath(current) != os.path.abspath(cached_src)
-        )
+        cached_src = getattr(_config_cache, "_config_source", None) if _config_cache else None
+        path_changed = bool(current and cached_src and os.path.abspath(current) != os.path.abspath(cached_src))
         if _config_cache is None or reload or path_changed:
             _config_cache = load_config()
         return _config_cache

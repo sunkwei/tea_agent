@@ -40,7 +40,6 @@ def toolkit_fork_session(source_topic_id: str = "", title: str = "fork", boundar
             topics = storage.topics.list_topics(limit=1) if hasattr(storage.topics, "list_topics") else []
             if not topics:
                 # 回退：从 conversations 找最近 topic
-                rows = storage.conversations.get_recent_conversations("", limit=1) if False else []
                 c = storage.conn.cursor()
                 c.execute("SELECT topic_id FROM conversations ORDER BY stamp DESC LIMIT 1")
                 row = c.fetchone()

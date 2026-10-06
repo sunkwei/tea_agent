@@ -29,6 +29,7 @@ def _get_agent_info() -> dict:
     """获取 Agent 基础信息"""
     try:
         from tea_agent import __init__ as agent_mod
+
         version = getattr(agent_mod, "__version__", "0.10.0")
     except Exception:
         version = "0.10.0"
@@ -178,6 +179,7 @@ def _get_tools_schemas() -> list[dict]:
     """获取所有注册工具的 JSON Schema"""
     try:
         from tea_agent import tlk
+
         toolkit = tlk.toolkit
         if not toolkit:
             return []
@@ -278,6 +280,7 @@ def _get_config_summary() -> dict:
     """获取可配置参数摘要"""
     try:
         from tea_agent.config import load_config
+
         cfg = load_config()
         return {
             "main_model": str(cfg.main_model.model_name) if hasattr(cfg.main_model, "model_name") else "unknown",
@@ -349,6 +352,7 @@ def toolkit_harness_schema(action: str = "generate", format: str = "json") -> di
 
 # ── Meta for toolkit registration ──────────────────────
 
+
 def meta_toolkit_harness_schema() -> dict:
     return {
         "type": "function",
@@ -358,11 +362,7 @@ def meta_toolkit_harness_schema() -> dict:
             "parameters": {
                 "type": "object",
                 "properties": {
-                    "action": {
-                        "type": "string",
-                        "enum": ["generate", "summary", "tools"],
-                        "description": "generate/summary/tools"
-                    },
+                    "action": {"type": "string", "enum": ["generate", "summary", "tools"], "description": "generate/summary/tools"},
                     "format": {"type": "string", "description": "输出格式", "default": "json"},
                 },
                 "required": ["action"],

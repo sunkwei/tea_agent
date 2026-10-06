@@ -36,16 +36,17 @@ logger = logging.getLogger(__name__)
 @dataclass
 class EvalResult:
     """评估结果"""
-    success: bool                        # 任务是否成功
-    quality_score: int = 0               # 质量评分 0-100
-    token_efficiency: float = 0.0        # token 效率 (任务复杂度/token消耗)
-    time_efficiency: float = 0.0         # 时间效率 (任务复杂度/耗时)
-    issues: list[str] = field(default_factory=list)       # 发现的问题
-    lessons: list[str] = field(default_factory=list)      # 经验教训
+
+    success: bool  # 任务是否成功
+    quality_score: int = 0  # 质量评分 0-100
+    token_efficiency: float = 0.0  # token 效率 (任务复杂度/token消耗)
+    time_efficiency: float = 0.0  # 时间效率 (任务复杂度/耗时)
+    issues: list[str] = field(default_factory=list)  # 发现的问题
+    lessons: list[str] = field(default_factory=list)  # 经验教训
     suggestions: list[str] = field(default_factory=list)  # 改进建议
-    should_crystallize: bool = False     # 是否应该结晶为 Skill
-    should_retry: bool = False           # 是否建议重试
-    summary: str = ""                    # 评估摘要
+    should_crystallize: bool = False  # 是否应该结晶为 Skill
+    should_retry: bool = False  # 是否建议重试
+    summary: str = ""  # 评估摘要
 
     def to_dict(self) -> dict:
         return {
@@ -67,24 +68,38 @@ class TaskEvaluator:
 
     # 任务复杂度估算规则
     COMPLEXITY_KEYWORDS = {
-        "high": ["重构", "refactor", "迁移", "migrate", "架构", "architecture",
-                "多文件", "multi-file", "批量", "batch"],
-        "medium": ["添加", "add", "修改", "modify", "修复", "fix", "优化", "optimize",
-                  "测试", "test", "文档", "doc"],
-        "low": ["查看", "view", "读取", "read", "搜索", "search", "查询", "query",
-               "列出", "list", "统计", "count"],
+        "high": ["重构", "refactor", "迁移", "migrate", "架构", "architecture", "多文件", "multi-file", "批量", "batch"],
+        "medium": ["添加", "add", "修改", "modify", "修复", "fix", "优化", "optimize", "测试", "test", "文档", "doc"],
+        "low": ["查看", "view", "读取", "read", "搜索", "search", "查询", "query", "列出", "list", "统计", "count"],
     }
 
     # 成功信号
     SUCCESS_SIGNALS = [
-        "成功", "完成", "通过", "success", "done", "pass",
-        "已添加", "已修改", "已修复", "已创建", "已删除",
+        "成功",
+        "完成",
+        "通过",
+        "success",
+        "done",
+        "pass",
+        "已添加",
+        "已修改",
+        "已修复",
+        "已创建",
+        "已删除",
     ]
 
     # 失败信号
     FAILURE_SIGNALS = [
-        "失败", "错误", "失败", "error", "fail", "exception",
-        "无法", "不能", "unable", "cannot",
+        "失败",
+        "错误",
+        "失败",
+        "error",
+        "fail",
+        "exception",
+        "无法",
+        "不能",
+        "unable",
+        "cannot",
     ]
 
     def __init__(self):
@@ -125,9 +140,7 @@ class TaskEvaluator:
         complexity = self._estimate_complexity(task)
 
         # 3. 计算质量评分
-        quality_score = self._compute_quality_score(
-            success, complexity, rounds, tools_used, token_cost, time_seconds
-        )
+        quality_score = self._compute_quality_score(success, complexity, rounds, tools_used, token_cost, time_seconds)
 
         # 4. 计算效率指标
         token_efficiency = self._compute_token_efficiency(complexity, token_cost)
@@ -140,22 +153,16 @@ class TaskEvaluator:
         lessons = self._extract_lessons(rounds, success, issues)
 
         # 7. 生成改进建议
-        suggestions = self._generate_suggestions(
-            success, quality_score, token_efficiency, time_efficiency, issues
-        )
+        suggestions = self._generate_suggestions(success, quality_score, token_efficiency, time_efficiency, issues)
 
         # 8. 决定是否结晶
-        should_crystallize = self._should_crystallize(
-            success, quality_score, complexity, tools_used
-        )
+        should_crystallize = self._should_crystallize(success, quality_score, complexity, tools_used)
 
         # 9. 决定是否重试
         should_retry = self._should_retry(success, quality_score, issues)
 
         # 10. 生成摘要
-        summary = self._generate_summary(
-            task, success, quality_score, token_cost, time_seconds
-        )
+        summary = self._generate_summary(task, success, quality_score, token_cost, time_seconds)
 
         result = EvalResult(
             success=success,
@@ -170,8 +177,7 @@ class TaskEvaluator:
             summary=summary,
         )
 
-        logger.info(f"📊 评估完成: {'✅' if success else '❌'} "
-                    f"质量={quality_score}, 结晶={'是' if should_crystallize else '否'}")
+        logger.info(f"📊 评估完成: {'✅' if success else '❌'} 质量={quality_score}, 结晶={'是' if should_crystallize else '否'}")
 
         return result
 
@@ -294,22 +300,20 @@ class TaskEvaluator:
 
             # 检查重试
             if "重试" in content or "retry" in content:
-                issues.append(f"第 {i+1} 轮出现重试")
+                issues.append(f"第 {i + 1} 轮出现重试")
 
             # 检查困惑
             if "抱歉" in content or "sorry" in content or "sorry" in content:
-                issues.append(f"第 {i+1} 轮 AI 表示困惑")
+                issues.append(f"第 {i + 1} 轮 AI 表示困惑")
 
             # 检查多次工具调用
             tool_calls = round_data.get("tool_calls", [])
             if len(tool_calls) > 5:
-                issues.append(f"第 {i+1} 轮工具调用过多 ({len(tool_calls)} 次)")
+                issues.append(f"第 {i + 1} 轮工具调用过多 ({len(tool_calls)} 次)")
 
         return issues
 
-    def _extract_lessons(
-        self, rounds: list[dict], success: bool, issues: list[str]
-    ) -> list[str]:
+    def _extract_lessons(self, rounds: list[dict], success: bool, issues: list[str]) -> list[str]:
         """提取经验教训（带具体上下文，避免空泛模板导致记忆库膨胀）。
 
         原则：
@@ -321,9 +325,7 @@ class TaskEvaluator:
 
         if not success:
             # 携带失败上下文（从 issues 中提取具体错误）
-            err_detail = next(
-                (i for i in issues if i.startswith("执行错误")), ""
-            )
+            err_detail = next((i for i in issues if i.startswith("执行错误")), "")
             if err_detail:
                 lessons.append(f"任务失败: {err_detail}")
             else:
@@ -343,12 +345,11 @@ class TaskEvaluator:
         if all_tools:
             # 统计工具使用频率
             from collections import Counter
+
             tool_counts = Counter(all_tools)
             most_used = tool_counts.most_common(1)[0]
             if most_used[1] > 10:
-                lessons.append(
-                    f"本会话 {most_used[0]} 调用 {most_used[1]} 次（高频），考虑封装为 Skill"
-                )
+                lessons.append(f"本会话 {most_used[0]} 调用 {most_used[1]} 次（高频），考虑封装为 Skill")
 
         return lessons
 
@@ -407,9 +408,7 @@ class TaskEvaluator:
         # 至少使用 2 个工具
         return not len(tools_used) < 2
 
-    def _should_retry(
-        self, success: bool, quality_score: int, issues: list[str]
-    ) -> bool:
+    def _should_retry(self, success: bool, quality_score: int, issues: list[str]) -> bool:
         """决定是否建议重试"""
         if success:
             return False
@@ -417,8 +416,8 @@ class TaskEvaluator:
         if quality_score >= 40:
             return True  # 接近成功，可以重试
 
-        if len(issues) <= 2:
-            return True  # 问题不多，可以重试
+        # 问题不多，可以重试
+        return len(issues) <= 2
 
         return False
 
@@ -446,6 +445,6 @@ class TaskEvaluator:
             if time_seconds < 60:
                 parts.append(f"耗时: {time_seconds:.1f}s")
             else:
-                parts.append(f"耗时: {time_seconds/60:.1f}min")
+                parts.append(f"耗时: {time_seconds / 60:.1f}min")
 
         return " | ".join(parts)

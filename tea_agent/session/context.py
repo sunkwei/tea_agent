@@ -2,6 +2,7 @@
 @2026-07-07 gen by tea_agent, Session 共享上下文与基类
 从 onlinesession.py 提取 SessionContext + SessionComponent
 """
+
 import logging
 from abc import ABC, abstractmethod
 from collections.abc import Callable
@@ -14,6 +15,7 @@ from openai import OpenAI
 @dataclass
 class SessionContext:
     """会话共享上下文 — 所有 Component 通过此对象共享状态。"""
+
     # ── 核心状态 ──
     messages: list[dict] = field(default_factory=list)
     model: str = ""
@@ -60,8 +62,8 @@ class SessionContext:
     supports_vision: bool = False
     supports_reasoning: bool = True
     disable_summary: bool = False
-    disable_l3: bool = False          # 仅禁用 Level 3（摘要）
-    disable_l2: bool = False          # 仅禁用 Level 2（相关历史）
+    disable_l3: bool = False  # 仅禁用 Level 3（摘要）
+    disable_l2: bool = False  # 仅禁用 Level 2（相关历史）
     no_stream_chunk: bool = False
 
     # ── 运行时状态 ──
@@ -73,10 +75,15 @@ class SessionContext:
     topic_id: str = ""
     _thinking_supported: bool | None = True
     _cheap_thinking_supported: bool | None = None
-    _last_usage: dict[str, int] = field(default_factory=lambda: {
-        "total_tokens": 0, "prompt_tokens": 0, "completion_tokens": 0,
-        "prompt_cache_hit_tokens": 0, "prompt_cache_miss_tokens": 0,
-    })
+    _last_usage: dict[str, int] = field(
+        default_factory=lambda: {
+            "total_tokens": 0,
+            "prompt_tokens": 0,
+            "completion_tokens": 0,
+            "prompt_cache_hit_tokens": 0,
+            "prompt_cache_miss_tokens": 0,
+        }
+    )
     # S3: 最近一次主模型请求的真实 prompt_tokens（单次值，非累计），
     # 用于校正 token_budget 启发式估算偏差（实际/估算 平滑校正）。
     _last_request_prompt_tokens: int = 0
@@ -101,10 +108,15 @@ class SessionContext:
     # RC 400 自愈标志：本回合曾触发 DeepSeek "reasoning_content must be passed back"
     # 400，剩余请求强制关闭 thinking（reset_session_state 清除）。
     _rc400_recovery: bool = False
-    _last_cheap_usage: dict[str, int] = field(default_factory=lambda: {
-        "total_tokens": 0, "prompt_tokens": 0, "completion_tokens": 0,
-        "prompt_cache_hit_tokens": 0, "prompt_cache_miss_tokens": 0,
-    })
+    _last_cheap_usage: dict[str, int] = field(
+        default_factory=lambda: {
+            "total_tokens": 0,
+            "prompt_tokens": 0,
+            "completion_tokens": 0,
+            "prompt_cache_hit_tokens": 0,
+            "prompt_cache_miss_tokens": 0,
+        }
+    )
     # 解码速度（tok/s）：最近一次主模型流式调用的实测值，由
     # session.decode_rate.record_decode_stats 在流消费结束时写入。
     # 口径 = 本轮输出 token / (首个输出增量 → 流结束)，排除首 token 等待；
@@ -117,7 +129,7 @@ class SessionContext:
     _decode_tps_text: str = ""
     _injected_memories_text: str = ""
     _injected_memories: list[dict] = field(default_factory=list)
-    _last_l0_hash: int = 0            # L0 注入内容 hash，用于去重
+    _last_l0_hash: int = 0  # L0 注入内容 hash，用于去重
     _injected_os_info_text: str = ""
     _os_info_injected: bool = False
     _history_summary: str = ""
@@ -142,12 +154,12 @@ class SessionContext:
     _current_mode: str = "mixed"
 
     # ── 消息队列（Steering/Follow-up） ──
-    message_queue: Any = None          # MessageQueue 实例（延迟初始化）
+    message_queue: Any = None  # MessageQueue 实例（延迟初始化）
     queue_mode: str = "one-at-a-time"  # one-at-a-time / all
 
     # ── 并行执行 ──
-    enable_parallel: bool = True       # 是否启用并行工具执行
-    max_parallel_workers: int = 4      # 最大并行线程数
+    enable_parallel: bool = True  # 是否启用并行工具执行
+    max_parallel_workers: int = 4  # 最大并行线程数
 
     # ── 自进化 ──
     evolution_trigger: Any = None
@@ -183,12 +195,12 @@ class SessionComponent(ABC):
         if not self.ctx.storage:
             return
         try:
-            if hasattr(config, '__dict__'):
+            if hasattr(config, "__dict__"):
                 cfg_dict = {
-                    'max_iterations': getattr(config, 'max_iterations', None),
-                    'keep_turns': getattr(config, 'keep_turns', None),
-                    'max_tool_output': getattr(config, 'max_tool_output', None),
-                    'enable_thinking': getattr(config, 'enable_thinking', None),
+                    "max_iterations": getattr(config, "max_iterations", None),
+                    "keep_turns": getattr(config, "keep_turns", None),
+                    "max_tool_output": getattr(config, "max_tool_output", None),
+                    "enable_thinking": getattr(config, "enable_thinking", None),
                 }
             elif isinstance(config, dict):
                 cfg_dict = config

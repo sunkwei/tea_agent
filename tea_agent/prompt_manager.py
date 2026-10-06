@@ -55,10 +55,7 @@ INTERRUPT_CORRECTED_TMPL = (
 )
 
 # abandoned：上轮方向被弃用（用户转向新话题）→ 防止旧事重提
-INTERRUPT_ABANDONED_TMPL = (
-    "[系统] 上一轮生成的方向已被用户弃用（用户已转向新话题）。"
-    "后续回复请聚焦当前话题，不要主动回到上一轮被打断的内容。"
-)
+INTERRUPT_ABANDONED_TMPL = "[系统] 上一轮生成的方向已被用户弃用（用户已转向新话题）。后续回复请聚焦当前话题，不要主动回到上一轮被打断的内容。"
 
 
 def build_interruption_system_msg(
@@ -80,9 +77,8 @@ def build_interruption_system_msg(
     """
     if classification == "abandoned":
         return INTERRUPT_ABANDONED_TMPL
-    return INTERRUPT_CORRECTED_TMPL.format(
-        tool_name=tool_name or "未知工具", iteration=iteration, followup=followup
-    )
+    return INTERRUPT_CORRECTED_TMPL.format(tool_name=tool_name or "未知工具", iteration=iteration, followup=followup)
+
 
 class SystemPromptManager:
     """系统提示词版本管理器 — 多版本、自动进化、支持回滚。
@@ -206,6 +202,7 @@ class SystemPromptManager:
         recent_reflections = self.storage.get_recent_reflections(limit=5)
         for ref in recent_reflections:
             import json
+
             ref_suggestions = ref.get("suggestions", "[]")
             if isinstance(ref_suggestions, str):
                 try:
@@ -219,25 +216,20 @@ class SystemPromptManager:
         instructions = self.storage.get_instructions()
         memory_text = ""
         if instructions:
-            memory_text = "相关长期记忆:\n" + "\n".join(
-                f"- [{m['category']}] {m['content']}" for m in instructions[:10]
-            )
+            memory_text = "相关长期记忆:\n" + "\n".join(f"- [{m['category']}] {m['content']}" for m in instructions[:10])
 
         user_content = f"""当前提示词：
 ---
 {self._current_prompt}
 ---
 
-{chr(10).join(suggestions) if suggestions else '(无新的反思建议)'}
+{chr(10).join(suggestions) if suggestions else "(无新的反思建议)"}
 
 {memory_text}
 
 请输出优化后的完整系统提示词。"""
 
-        return [
-            {"role": "system", "content": self.EVOLVE_SYSTEM_PROMPT},
-            {"role": "user", "content": user_content}
-        ]
+        return [{"role": "system", "content": self.EVOLVE_SYSTEM_PROMPT}, {"role": "user", "content": user_content}]
 
     def evolve(self, reflection_suggestion: str | None = None) -> int | None:
         """触发提示词进化：调用 LLM 生成新版本并存储到数据库。

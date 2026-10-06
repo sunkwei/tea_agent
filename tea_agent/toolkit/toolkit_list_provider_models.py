@@ -18,6 +18,7 @@ def toolkit_list_provider_models(provider: str = "all", api_url: str = None, api
     # 从配置文件读取
     try:
         from tea_agent.config import load_config
+
         cfg = load_config()
     except Exception as e:
         return {"error": f"加载配置失败: {e}", "hint": "请稍后重试"}

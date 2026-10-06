@@ -31,10 +31,10 @@ from ._component import DB, StoreComponent  # DB 短连接上下文管理器
 from ._conversations import ConversationStore
 from ._events import SessionEventStore
 from ._interruptions import InterruptionStore
-from ._tool_usage import ToolUsageStore
 from ._memories import MemoryStore
 from ._scheduled_tasks import ScheduledTaskStore
 from ._summaries import SummaryStore
+from ._tool_usage import ToolUsageStore
 from ._topics import TopicStore
 from .migration import (
     backup_now,
@@ -53,15 +53,13 @@ logger = logging.getLogger("Storage")
 class ConfigHistoryStore(StoreComponent):
     """配置变更追踪：记录每次配置修改的历史。"""
 
-    def add_config_change(self, key: str, new_value: str, old_value=None,
-                          reason: str = "", source_reflection_id=None) -> str:
+    def add_config_change(self, key: str, new_value: str, old_value=None, reason: str = "", source_reflection_id=None) -> str:
         c = self.conn.cursor()
         cid = self._new_id()
         c.execute(
             "INSERT INTO config_history (id, key, old_value, new_value, reason, source_reflection_id, created_at) "
             "VALUES (?, ?, ?, ?, ?, ?, datetime('now', 'localtime'))",
-            (cid, key, str(old_value) if old_value is not None else None,
-             str(new_value), reason, source_reflection_id),
+            (cid, key, str(old_value) if old_value is not None else None, str(new_value), reason, source_reflection_id),
         )
         c.connection.commit()
         c.close()
@@ -88,17 +86,20 @@ class ConfigHistoryStore(StoreComponent):
 class ReflectionStore(StoreComponent):
     """反思记录：元认知反思的增删查改。"""
 
-    def add_reflection(self, summary: str, details: str = "",
-                       tool_stats=None, suggestions=None,
-                       topic_id=None) -> str:
+    def add_reflection(self, summary: str, details: str = "", tool_stats=None, suggestions=None, topic_id=None) -> str:
         c = self.conn.cursor()
         rid = self._new_id()
         c.execute(
             "INSERT INTO reflections (id, topic_id, summary, details, tool_stats, suggestions, created_at) "
             "VALUES (?, ?, ?, ?, ?, ?, datetime('now', 'localtime'))",
-            (rid, topic_id, summary, details,
-             _json_rs.dumps(tool_stats or {}, ensure_ascii=False),
-             _json_rs.dumps(suggestions or [], ensure_ascii=False)),
+            (
+                rid,
+                topic_id,
+                summary,
+                details,
+                _json_rs.dumps(tool_stats or {}, ensure_ascii=False),
+                _json_rs.dumps(suggestions or [], ensure_ascii=False),
+            ),
         )
         c.connection.commit()
         c.close()
@@ -130,8 +131,7 @@ class ReflectionStore(StoreComponent):
 class PromptStore(StoreComponent):
     """系统提示词版本管理：添加、查询、停用、回滚。"""
 
-    def add_system_prompt(self, content: str, reason: str = "",
-                           source_reflection_id=None) -> str:
+    def add_system_prompt(self, content: str, reason: str = "", source_reflection_id=None) -> str:
         c = self.conn.cursor()
         c.execute("SELECT MAX(CAST(version AS INTEGER)) FROM system_prompts")
         row = c.fetchone()
@@ -257,9 +257,9 @@ class Storage:
         而非直接操作此连接。新代码应通过 DB() context manager 获取短连接。
         """
         tl = StoreComponent._thread_local
-        if not hasattr(tl, 'conn') or tl.conn is None:
+        if not hasattr(tl, "conn") or tl.conn is None:
             with self._conn_lock:
-                if not hasattr(tl, 'conn') or tl.conn is None:
+                if not hasattr(tl, "conn") or tl.conn is None:
                     c = sqlite3.connect(self.db_path)
                     c.row_factory = sqlite3.Row
                     c.execute("PRAGMA journal_mode=WAL")
@@ -319,13 +319,22 @@ class Storage:
 
     # ── Agent Round 操作 ──
     def save_agent_round(
-        self, conversation_id: int, round_num: int, role: str, content: str,
-        tool_calls: list = None, tool_call_id: str = None,
+        self,
+        conversation_id: int,
+        round_num: int,
+        role: str,
+        content: str,
+        tool_calls: list = None,
+        tool_call_id: str = None,
     ):
         """保存 Agent 循环记录。"""
         return self._conversations.save_agent_round(
-            conversation_id, round_num, role, content,
-            tool_calls=tool_calls, tool_call_id=tool_call_id,
+            conversation_id,
+            round_num,
+            role,
+            content,
+            tool_calls=tool_calls,
+            tool_call_id=tool_call_id,
         )
 
     # ── Conversation 操作 ──
@@ -366,20 +375,27 @@ class Storage:
         """
         return self._conversations.cleanup_orphan_images(keep_ids=keep_ids)
 
-    def search_conversations(self, query: str, limit: int = 30,
-                              include_ai: bool = True, include_rounds: bool = True,
-                              date_from: str = "", date_to: str = "") -> list:
+    def search_conversations(
+        self, query: str, limit: int = 30, include_ai: bool = True, include_rounds: bool = True, date_from: str = "", date_to: str = ""
+    ) -> list:
         """全文搜索对话。"""
         return self._conversations.search_conversations(
-            query, limit=limit, include_ai=include_ai,
-            include_rounds=include_rounds, date_from=date_from, date_to=date_to,
+            query,
+            limit=limit,
+            include_ai=include_ai,
+            include_rounds=include_rounds,
+            date_from=date_from,
+            date_to=date_to,
         )
 
     # ── 特殊桥接：save_msg 需要回调其他组件的 update_active ──
     def save_msg(self, topic_id: str, user_msg, ai_msg: str, is_func: bool) -> str:
         """桥接方法：save_msg 需要 update_topic_active 回调。"""
         return self._conversations.save_msg(
-            topic_id, user_msg, ai_msg, is_func,
+            topic_id,
+            user_msg,
+            ai_msg,
+            is_func,
             update_active_cb=self._topics.update_topic_active,
         )
 
@@ -387,23 +403,30 @@ class Storage:
         """回合开始即创建 conversation 行（回合中事件据此归属）。"""
         return self._conversations.create_turn(topic_id, user_msg, status=status)
 
-    def append_round(self, conversation_id: str, round_num: int, role: str,
-                     content: str = "", tool_calls=None, tool_call_id=None,
-                     reasoning_content: str = "") -> bool:
+    def append_round(
+        self, conversation_id: str, round_num: int, role: str, content: str = "", tool_calls=None, tool_call_id=None, reasoning_content: str = ""
+    ) -> bool:
         """实时追加单轮明细（append-only，幂等）。"""
         return self._conversations.append_round(
-            conversation_id, round_num, role, content,
-            tool_calls=tool_calls, tool_call_id=tool_call_id,
+            conversation_id,
+            round_num,
+            role,
+            content,
+            tool_calls=tool_calls,
+            tool_call_id=tool_call_id,
             reasoning_content=reasoning_content,
         )
 
-    def finalize_turn(self, conversation_id: str, ai_msg: str,
-                      is_func_calling: bool = False, rounds: list | None = None,
-                      status: str = "done") -> bool:
+    def finalize_turn(
+        self, conversation_id: str, ai_msg: str, is_func_calling: bool = False, rounds: list | None = None, status: str = "done"
+    ) -> bool:
         """回合结束定稿（补 ai_msg/状态 + 兜底补齐轮次）。"""
         return self._conversations.finalize_turn(
-            conversation_id, ai_msg, is_func_calling=is_func_calling,
-            rounds=rounds, status=status,
+            conversation_id,
+            ai_msg,
+            is_func_calling=is_func_calling,
+            rounds=rounds,
+            status=status,
         )
 
     def get_rounds(self, conversation_id: str) -> list:
@@ -436,25 +459,29 @@ class Storage:
         return self._topics.soft_delete_topic(topic_id)
 
     # ── Memory 操作 ──
-    def add_memory(self, content: str, category: str = "general", priority: int = 2,
-                   importance: int = 3, expires_at: str = None, tags: str = "",
-                   source_topic_id: str = None, pinned: int = 0) -> str:
+    def add_memory(
+        self,
+        content: str,
+        category: str = "general",
+        priority: int = 2,
+        importance: int = 3,
+        expires_at: str = None,
+        tags: str = "",
+        source_topic_id: str = None,
+        pinned: int = 0,
+    ) -> str:
         """添加记忆。"""
-        return self._memories.add_memory(content, category, priority, importance,
-                                         expires_at=expires_at, tags=tags,
-                                         source_topic_id=source_topic_id,
-                                         pinned=pinned)
+        return self._memories.add_memory(
+            content, category, priority, importance, expires_at=expires_at, tags=tags, source_topic_id=source_topic_id, pinned=pinned
+        )
 
     def get_active_memories(self, limit: int = 50) -> list:
         """获取活跃记忆。"""
         return self._memories.get_active_memories(limit)
 
-    def search_memories(self, query: str = "", category: str = "",
-                        tags: list = None, min_importance: int = 0, limit: int = 10) -> list:
+    def search_memories(self, query: str = "", category: str = "", tags: list = None, min_importance: int = 0, limit: int = 10) -> list:
         """搜索记忆。"""
-        return self._memories.search_memories(query, category=category,
-                                              tags=tags, min_importance=min_importance,
-                                              limit=limit)
+        return self._memories.search_memories(query, category=category, tags=tags, min_importance=min_importance, limit=limit)
 
     def get_memory_stats(self) -> dict:
         """获取记忆统计。"""
@@ -489,8 +516,7 @@ class Storage:
         """获取主题摘要。"""
         return self._summaries.get_topic_summary(topic_id)
 
-    def update_topic_summary(self, topic_id: str, summary: str,
-                             last_summarized_id=None):
+    def update_topic_summary(self, topic_id: str, summary: str, last_summarized_id=None):
         """更新主题摘要。"""
         return self._summaries.update_topic_summary(topic_id, summary, last_summarized_id=last_summarized_id)
 
@@ -526,22 +552,37 @@ class Storage:
         """设置 Level 2 对话记录。"""
         return self._summaries.set_level2(topic_id, level2)
 
-    def push_to_level2(self, topic_id: str, user_msg: str, ai_msg: str,
-                       files: list = None, rounds: list = None,
-                       max_level2: int = 50,
-                       thinking_max_chars: int = 6000,
-                       max_level2_chars: int = 120000) -> tuple:
+    def push_to_level2(
+        self,
+        topic_id: str,
+        user_msg: str,
+        ai_msg: str,
+        files: list = None,
+        rounds: list = None,
+        max_level2: int = 50,
+        thinking_max_chars: int = 6000,
+        max_level2_chars: int = 120000,
+    ) -> tuple:
         """将一轮对话推入 Level 2（条数或总字符数超限即溢出至 L3）。"""
         return self._summaries.push_to_level2(
-            topic_id, user_msg, ai_msg,
-            files=files, rounds=rounds, max_level2=max_level2,
+            topic_id,
+            user_msg,
+            ai_msg,
+            files=files,
+            rounds=rounds,
+            max_level2=max_level2,
             thinking_max_chars=thinking_max_chars,
             max_level2_chars=max_level2_chars,
         )
 
     def generate_l2_to_l3_summary(
-        self, topic_id: str, overflow_items: list, existing_l3: str,
-        summarize_client, summarize_model: str, extra_params: dict = None,
+        self,
+        topic_id: str,
+        overflow_items: list,
+        existing_l3: str,
+        summarize_client,
+        summarize_model: str,
+        extra_params: dict = None,
     ) -> tuple:
         """将 L2 溢出条目与现有 L3 摘要合并，生成新的 L3 语义摘要。
 
@@ -551,8 +592,12 @@ class Storage:
         静默失效。纯委托层的参数应与真实实现一一对应。
         """
         return self._summaries.generate_l2_to_l3_summary(
-            topic_id, overflow_items, existing_l3, summarize_client,
-            summarize_model, extra_params=extra_params,
+            topic_id,
+            overflow_items,
+            existing_l3,
+            summarize_client,
+            summarize_model,
+            extra_params=extra_params,
         )
 
     # ── Prompt 操作 ──
@@ -581,8 +626,7 @@ class Storage:
         return self._prompts.get_system_prompt_count()
 
     # ── Reflection 操作 ──
-    def add_reflection(self, summary: str, details: str = "", tool_stats=None,
-                       suggestions=None, topic_id=None) -> str:
+    def add_reflection(self, summary: str, details: str = "", tool_stats=None, suggestions=None, topic_id=None) -> str:
         """添加反思记录。"""
         return self._reflections.add_reflection(summary, details, tool_stats, suggestions, topic_id)
 
@@ -599,8 +643,7 @@ class Storage:
         return self._reflections.get_reflection_stats()
 
     # ── Config History 操作 ──
-    def add_config_change(self, key: str, new_value: str, old_value=None,
-                          reason: str = "", source_reflection_id=None) -> str:
+    def add_config_change(self, key: str, new_value: str, old_value=None, reason: str = "", source_reflection_id=None) -> str:
         """添加配置变更记录。"""
         return self._config_history.add_config_change(key, new_value, old_value, reason, source_reflection_id)
 
@@ -614,17 +657,22 @@ class Storage:
         return self._interruptions.insert_interruption_event(ev)
 
     def update_interruption_classification(
-        self, event_id: str, classification: str, similarity: float | None,
-        followup_msg: str | None, followup_ts: str | None,
+        self,
+        event_id: str,
+        classification: str,
+        similarity: float | None,
+        followup_msg: str | None,
+        followup_ts: str | None,
     ) -> bool:
         """打断事件分类后回写。"""
-        return self._interruptions.update_interruption_classification(
-            event_id, classification, similarity, followup_msg, followup_ts
-        )
+        return self._interruptions.update_interruption_classification(event_id, classification, similarity, followup_msg, followup_ts)
 
     def query_interruptions(
-        self, topic_id: str | None = None, status: str | None = None,
-        since: str | None = None, limit: int = 100,
+        self,
+        topic_id: str | None = None,
+        status: str | None = None,
+        since: str | None = None,
+        limit: int = 100,
     ) -> list:
         """查询打断事件。"""
         return self._interruptions.query_interruptions(topic_id, status, since, limit)

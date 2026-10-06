@@ -9,6 +9,7 @@ Usage:
     python -m tea_agent.protocol --http         # HTTP mode
     python -m tea_agent.protocol --port 8082    # HTTP on custom port
 """
+
 from tea_agent.protocol.acp_agent import AcpAgent
 from tea_agent.protocol.acp_jsonrpc import (
     JsonRpcError,

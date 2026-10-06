@@ -47,13 +47,13 @@ __all__ = [
 ]
 
 # ── 阈值（可调） ──
-NECESSITY_THRESHOLD = 0.30    # 必要性阈值：低于此视为"无关"
+NECESSITY_THRESHOLD = 0.30  # 必要性阈值：低于此视为"无关"
 SUFFICIENCY_THRESHOLD = 0.55  # 充分性阈值：高于此视为"现有工具已够用"
-MAX_LOAD_PER_ROUND = 2        # 每轮最多加载的 skill 数
-EVIDENCE_ROUNDS = 3           # 用最近几轮用户消息作为评估证据
-MIN_EVIDENCE_ROUNDS = 2       # 至少几轮证据才评估
-MAX_INJECT_CHARS = 4000       # 单个 skill 最大注入字符数（防膨胀）
-SCAN_CACHE_TTL = 60           # 扫描缓存秒数
+MAX_LOAD_PER_ROUND = 2  # 每轮最多加载的 skill 数
+EVIDENCE_ROUNDS = 3  # 用最近几轮用户消息作为评估证据
+MIN_EVIDENCE_ROUNDS = 2  # 至少几轮证据才评估
+MAX_INJECT_CHARS = 4000  # 单个 skill 最大注入字符数（防膨胀）
+SCAN_CACHE_TTL = 60  # 扫描缓存秒数
 
 # 内置 skills 目录（相对本文件）
 _DEFAULT_SKILLS_DIR = os.path.join(os.path.dirname(__file__), "skills")
@@ -80,6 +80,7 @@ class SkillDecision:
 
 # ═══ 内置 skill 领域映射：keywords（强词权重2 / 弱词权重1）+ covered_by（现有替代工具）═══
 
+
 @dataclass
 class SkillDomain:
     """skill 领域元数据。
@@ -97,11 +98,22 @@ class SkillDomain:
 
 SKILL_DOMAINS: dict[str, SkillDomain] = {
     "agent-browser": SkillDomain(
-        strong_keywords=["浏览器自动化", "browser automation", "填表", "表单", "点击按钮", "爬取网页",
-                         "scrape", "网页截图", "自动化浏览器", "登录网站", "web 测试", "网页测试"],
+        strong_keywords=[
+            "浏览器自动化",
+            "browser automation",
+            "填表",
+            "表单",
+            "点击按钮",
+            "爬取网页",
+            "scrape",
+            "网页截图",
+            "自动化浏览器",
+            "登录网站",
+            "web 测试",
+            "网页测试",
+        ],
         weak_keywords=["浏览器", "browser", "网页", "website", "web", "网址", "form", "click"],
-        covered_by=["toolkit_browser_tab", "toolkit_js_fetch",
-                    "toolkit_input", "toolkit_screenshot"],
+        covered_by=["toolkit_browser_tab", "toolkit_js_fetch", "toolkit_input", "toolkit_screenshot"],
     ),
     "ai-elements": SkillDomain(
         strong_keywords=["聊天界面组件", "chat ui", "shadcn", "消息组件", "对话组件"],
@@ -320,20 +332,35 @@ class SkillLoadEvaluator:
             necessity = self._necessity(name, dialogue_text)
             sufficiency = self._sufficiency(name, tools)
             if necessity >= self.necessity_threshold and sufficiency < self.sufficiency_threshold:
-                decisions.append(SkillDecision(
-                    name=name, necessity=necessity, sufficiency=sufficiency,
-                    action="load", reason="load",
-                ))
+                decisions.append(
+                    SkillDecision(
+                        name=name,
+                        necessity=necessity,
+                        sufficiency=sufficiency,
+                        action="load",
+                        reason="load",
+                    )
+                )
             elif necessity >= self.necessity_threshold:
-                decisions.append(SkillDecision(
-                    name=name, necessity=necessity, sufficiency=sufficiency,
-                    action="no_load", reason="already_covered",
-                ))
+                decisions.append(
+                    SkillDecision(
+                        name=name,
+                        necessity=necessity,
+                        sufficiency=sufficiency,
+                        action="no_load",
+                        reason="already_covered",
+                    )
+                )
             else:
-                decisions.append(SkillDecision(
-                    name=name, necessity=necessity, sufficiency=sufficiency,
-                    action="no_load", reason="irrelevant",
-                ))
+                decisions.append(
+                    SkillDecision(
+                        name=name,
+                        necessity=necessity,
+                        sufficiency=sufficiency,
+                        action="no_load",
+                        reason="irrelevant",
+                    )
+                )
         decisions.sort(key=lambda d: d.necessity, reverse=True)
         return decisions
 
@@ -390,14 +417,11 @@ class SkillLoadEvaluator:
             if not content:
                 continue
             parts.append(
-                f"<loaded_skill name=\"{dec.name}\" "
-                f"necessity={dec.necessity:.0%} sufficiency={dec.sufficiency:.0%}>\n"
-                f"{content}\n</loaded_skill>"
+                f'<loaded_skill name="{dec.name}" necessity={dec.necessity:.0%} sufficiency={dec.sufficiency:.0%}>\n{content}\n</loaded_skill>'
             )
             loaded.add(dec.name)
             count += 1
-            logger.info(f"🎯 按需加载 skill: {dec.name} "
-                        f"(necessity={dec.necessity:.0%}, sufficiency={dec.sufficiency:.0%})")
+            logger.info(f"🎯 按需加载 skill: {dec.name} (necessity={dec.necessity:.0%}, sufficiency={dec.sufficiency:.0%})")
 
         if loaded:
             context._skill_loaded = loaded
@@ -414,9 +438,7 @@ class SkillLoadEvaluator:
                 continue
             content = msg.get("content", "")
             if isinstance(content, list):
-                content = " ".join(
-                    p.get("text", "") for p in content if p.get("type") == "text"
-                )
+                content = " ".join(p.get("text", "") for p in content if p.get("type") == "text")
             content = str(content).strip()
             if content:
                 user_msgs.append(content)

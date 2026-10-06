@@ -8,13 +8,13 @@ over HTTP + SSE.  Built with Starlette + Uvicorn.
    transport used by vscode-acp.  This HTTP server is kept for backward
    compatibility.
 """
+
 from __future__ import annotations
 
 import asyncio
 import json
 import logging
 import os
-import shutil
 import threading
 import time
 import uuid
@@ -32,7 +32,7 @@ try:
     from starlette.responses import JSONResponse, StreamingResponse
     from starlette.routing import Route
 except ImportError:
-    raise ImportError("pip install starlette uvicorn")
+    raise ImportError("pip install starlette uvicorn") from None
 
 from tea_agent.store import get_storage  # noqa: E402
 
@@ -68,8 +68,7 @@ class ACPProtocolServer:
         # 身份三元组/运行时参数统一来自 provider.yaml；ACP 只需独立会话库，
         # 用 TEA_DB_PATH 环境变量隔离（见 PathsConfig.resolve）。
         home_dir = Path.home()
-        os.environ.setdefault(
-            "TEA_DB_PATH", str(home_dir / ".tea_agent" / "chat_acp.db"))
+        os.environ.setdefault("TEA_DB_PATH", str(home_dir / ".tea_agent" / "chat_acp.db"))
         return None
 
     def _get_storage(self) -> Storage:
@@ -80,16 +79,21 @@ class ACPProtocolServer:
 
     def discover_agents(self) -> dict:
         """Return the list of available agents (always just tea-agent)."""
-        return {"object": "list", "data": [{
-            "id": self._agent_id,
-            "name": "Tea Agent",
-            "description": "Self-evolving AI agent with 60+ built-in tools",
-            "capabilities": {
-                "streaming": True,
-                "tool_execution": True,
-                "session_management": True,
-            },
-        }]}
+        return {
+            "object": "list",
+            "data": [
+                {
+                    "id": self._agent_id,
+                    "name": "Tea Agent",
+                    "description": "Self-evolving AI agent with 60+ built-in tools",
+                    "capabilities": {
+                        "streaming": True,
+                        "tool_execution": True,
+                        "session_management": True,
+                    },
+                }
+            ],
+        }
 
     def get_agent_info(self) -> dict:
         """Return agent metadata including available tools."""
@@ -118,43 +122,43 @@ class ACPProtocolServer:
         """Attempt to enumerate toolkit tools from the Agent."""
         try:
             from tea_agent.agent import Agent
+
             agent = Agent(mode="lightweight", config_path=self._config_path)
             tools = []
             for name, meta in agent.toolkit.meta_map.items():
                 fn = meta.get("function", {})
-                tools.append({
-                    "name": fn.get("name", name),
-                    "description": fn.get("description", ""),
-                    "input_schema": fn.get("parameters", {}),
-                })
+                tools.append(
+                    {
+                        "name": fn.get("name", name),
+                        "description": fn.get("description", ""),
+                        "input_schema": fn.get("parameters", {}),
+                    }
+                )
             return tools
         except Exception:
-            return [{
-                "name": "chat",
-                "description": "Chat with agent",
-                "input_schema": {},
-            }]
+            return [
+                {
+                    "name": "chat",
+                    "description": "Chat with agent",
+                    "input_schema": {},
+                }
+            ]
 
     def _init_agent(self, session_id: str = "") -> Agent:
         """Get (or create) a shared Agent instance, bound to *session_id*."""
         from tea_agent.agent import Agent
+
         if self._agent is None:
-            self._agent = Agent(
-                mode="lightweight", config_path=self._config_path
-            )
+            self._agent = Agent(mode="lightweight", config_path=self._config_path)
         if session_id:
             self._agent.current_topic_id = session_id
         elif not self._agent.current_topic_id:
             with self._lock:
                 if not self._agent.current_topic_id:
-                    self._agent.current_topic_id = (
-                        self._get_storage().create_topic("ACP")
-                    )
+                    self._agent.current_topic_id = self._get_storage().create_topic("ACP")
         return self._agent
 
-    def chat(
-        self, messages: list[dict], session_id: str = ""
-    ) -> dict:
+    def chat(self, messages: list[dict], session_id: str = "") -> dict:
         """Synchronous chat (non-streaming).
 
         Returns the full response at once.
@@ -180,38 +184,34 @@ class ACPProtocolServer:
             return {
                 "id": "chat-" + uuid.uuid4().hex[:12],
                 "agent_id": self._agent_id,
-                "choices": [{
-                    "index": 0,
-                    "message": {
-                        "role": "assistant",
-                        "content": "".join(collected) or ai_msg,
-                    },
-                    "finish_reason": "stop",
-                }],
+                "choices": [
+                    {
+                        "index": 0,
+                        "message": {
+                            "role": "assistant",
+                            "content": "".join(collected) or ai_msg,
+                        },
+                        "finish_reason": "stop",
+                    }
+                ],
                 "tools_used": used or [],
             }
         except Exception as e:
             return {"error": str(e)}
 
-    async def chat_stream(
-        self, messages: list[dict], session_id: str = ""
-    ):
+    async def chat_stream(self, messages: list[dict], session_id: str = ""):
         """Streaming chat via SSE.
 
         Yields ``data:`` lines (JSON) following the SSE protocol,
         ending with ``data: [DONE]``.
         """
         if not messages:
-            yield "data: " + json.dumps(
-                {"error": "messages required"}
-            ) + "\n\n"
+            yield "data: " + json.dumps({"error": "messages required"}) + "\n\n"
             yield "data: [DONE]\n\n"
             return
         user_msg = messages[-1].get("content", "")
         if not user_msg:
-            yield "data: " + json.dumps(
-                {"error": "last message has no content"}
-            ) + "\n\n"
+            yield "data: " + json.dumps({"error": "last message has no content"}) + "\n\n"
             yield "data: [DONE]\n\n"
             return
 
@@ -220,11 +220,9 @@ class ACPProtocolServer:
 
         def put(event: dict):
             try:
-                loop.call_soon_threadsafe(
-                    lambda: queue.put_nowait(event)
-                )
+                loop.call_soon_threadsafe(lambda: queue.put_nowait(event))
             except Exception:
-                logger.exception('op_failed')
+                logger.exception("op_failed")
 
         def cb(text: str):
             if not text or text.startswith("["):
@@ -241,16 +239,20 @@ class ACPProtocolServer:
         now = int(time.time())
         yield (
             "data: "
-            + json.dumps({
-                "id": cid,
-                "object": "chat.chunk",
-                "created": now,
-                "choices": [{
-                    "index": 0,
-                    "delta": {"role": "assistant"},
-                    "finish_reason": None,
-                }],
-            })
+            + json.dumps(
+                {
+                    "id": cid,
+                    "object": "chat.chunk",
+                    "created": now,
+                    "choices": [
+                        {
+                            "index": 0,
+                            "delta": {"role": "assistant"},
+                            "finish_reason": None,
+                        }
+                    ],
+                }
+            )
             + "\n\n"
         )
 
@@ -259,41 +261,45 @@ class ACPProtocolServer:
             if event["type"] == "content":
                 yield (
                     "data: "
-                    + json.dumps({
-                        "id": cid,
-                        "object": "chat.chunk",
-                        "created": now,
-                        "choices": [{
-                            "index": 0,
-                            "delta": {"content": event["text"]},
-                            "finish_reason": None,
-                        }],
-                    })
+                    + json.dumps(
+                        {
+                            "id": cid,
+                            "object": "chat.chunk",
+                            "created": now,
+                            "choices": [
+                                {
+                                    "index": 0,
+                                    "delta": {"content": event["text"]},
+                                    "finish_reason": None,
+                                }
+                            ],
+                        }
+                    )
                     + "\n\n"
                 )
             elif event["type"] == "done":
                 yield (
                     "data: "
-                    + json.dumps({
-                        "id": cid,
-                        "object": "chat.chunk",
-                        "created": now,
-                        "choices": [{
-                            "index": 0,
-                            "delta": {},
-                            "finish_reason": "stop",
-                        }],
-                    })
+                    + json.dumps(
+                        {
+                            "id": cid,
+                            "object": "chat.chunk",
+                            "created": now,
+                            "choices": [
+                                {
+                                    "index": 0,
+                                    "delta": {},
+                                    "finish_reason": "stop",
+                                }
+                            ],
+                        }
+                    )
                     + "\n\n"
                 )
                 yield "data: [DONE]\n\n"
                 break
             elif event["type"] == "error":
-                yield (
-                    "data: "
-                    + json.dumps({"error": event["error"]})
-                    + "\n\n"
-                )
+                yield ("data: " + json.dumps({"error": event["error"]}) + "\n\n")
                 yield "data: [DONE]\n\n"
                 break
 
@@ -352,13 +358,15 @@ class ACPProtocolServer:
         for t in s.list_topics()[:limit]:
             tid = t["topic_id"]
             tk = s.get_topic_tokens(tid)
-            result.append({
-                "id": tid,
-                "title": t.get("title", "") or tid[:8],
-                "created": str(t.get("create_stamp", ""))[:19],
-                "updated": str(t.get("last_update_stamp", ""))[:19],
-                "total_tokens": (tk or {}).get("total_tokens", 0),
-            })
+            result.append(
+                {
+                    "id": tid,
+                    "title": t.get("title", "") or tid[:8],
+                    "created": str(t.get("create_stamp", ""))[:19],
+                    "updated": str(t.get("last_update_stamp", ""))[:19],
+                    "total_tokens": (tk or {}).get("total_tokens", 0),
+                }
+            )
         return {"object": "list", "data": result, "total": len(result)}
 
     def create_session(self, title: str = "ACP") -> dict:
@@ -388,28 +396,32 @@ class ACPProtocolServer:
         except Exception:
             return False
 
-    def get_messages(
-        self, sid: str, limit: int = 50
-    ) -> dict:
+    def get_messages(self, sid: str, limit: int = 50) -> dict:
         """Get messages for a session."""
         s = self._get_storage()
         msgs = []
         for c in s.get_conversations(sid, limit=limit, include_rounds=True):
-            msgs.append({
-                "id": c["id"],
-                "role": "user",
-                "content": c["user_msg"],
-                "stamp": str(c.get("stamp", ""))[:26],
-            })
-            msgs.append({
-                "id": c["id"],
-                "role": "assistant",
-                "content": c["ai_msg"],
-                "stamp": str(c.get("stamp", ""))[:26],
-            })
+            msgs.append(
+                {
+                    "id": c["id"],
+                    "role": "user",
+                    "content": c["user_msg"],
+                    "stamp": str(c.get("stamp", ""))[:26],
+                }
+            )
+            msgs.append(
+                {
+                    "id": c["id"],
+                    "role": "assistant",
+                    "content": c["ai_msg"],
+                    "stamp": str(c.get("stamp", ""))[:26],
+                }
+            )
         return {"object": "list", "data": msgs, "total": len(msgs)}
 
+
 _server_instance = None
+
 
 def get_server():
     global _server_instance
@@ -417,14 +429,18 @@ def get_server():
         _server_instance = ACPProtocolServer()
     return _server_instance
 
+
 async def handle_health(request):
     return JSONResponse({"status": "ok", "server": "tea-agent-acp", "version": __version__})
+
 
 async def handle_discover_agents(request):
     return JSONResponse(get_server().discover_agents())
 
+
 async def handle_agent_info(request):
     return JSONResponse(get_server().get_agent_info())
+
 
 async def handle_session_steering(request):
     """POST /v1/sessions/{session_id}/steering — 会话进行期间插话入队（steering）。
@@ -449,12 +465,14 @@ async def handle_session_steering(request):
     from tea_agent.server.modules.state import queue_add, queue_list
 
     item_id = queue_add(session_id, message, [])
-    return JSONResponse({
-        "ok": True,
-        "item_id": item_id,
-        "position": len(queue_list(session_id)),
-        "session_id": session_id,
-    })
+    return JSONResponse(
+        {
+            "ok": True,
+            "item_id": item_id,
+            "position": len(queue_list(session_id)),
+            "session_id": session_id,
+        }
+    )
 
 
 async def handle_agent_chat(request):
@@ -465,17 +483,22 @@ async def handle_agent_chat(request):
     if not messages:
         return JSONResponse({"error": "messages required"}, status_code=400)
     if stream:
-        return StreamingResponse(get_server().chat_stream(messages, session_id=sid),
+        return StreamingResponse(
+            get_server().chat_stream(messages, session_id=sid),
             media_type="text/event-stream",
-            headers={"X-Accel-Buffering": "no", "Cache-Control": "no-cache"})
+            headers={"X-Accel-Buffering": "no", "Cache-Control": "no-cache"},
+        )
     return JSONResponse(get_server().chat(messages, session_id=sid))
+
 
 async def handle_list_sessions(request):
     return JSONResponse(get_server().list_sessions())
 
+
 async def handle_create_session(request):
     body = await request.json()
-    return JSONResponse(get_server().create_session(body.get("title","ACP")), status_code=201)
+    return JSONResponse(get_server().create_session(body.get("title", "ACP")), status_code=201)
+
 
 async def handle_get_session(request):
     s = get_server().get_session(request.path_params.get("session_id", ""))
@@ -483,13 +506,14 @@ async def handle_get_session(request):
         return JSONResponse({"error": "Not found"}, status_code=404)
     return JSONResponse(s)
 
+
 async def handle_delete_session(request):
     return JSONResponse({"deleted": get_server().delete_session(request.path_params.get("session_id", ""))})
 
+
 async def handle_get_messages(request):
-    return JSONResponse(get_server().get_messages(
-        request.path_params.get("session_id", ""),
-        int(request.query_params.get("limit", 50))))
+    return JSONResponse(get_server().get_messages(request.path_params.get("session_id", ""), int(request.query_params.get("limit", 50))))
+
 
 def create_app(config_path=None):
     global _server_instance
@@ -508,23 +532,27 @@ def create_app(config_path=None):
     ]
     return Starlette(debug=False, routes=routes)
 
+
 def run_server(host="127.0.0.1", port=8082, config_path=None):
     try:
         import uvicorn
     except ImportError:
-        raise ImportError("pip install uvicorn")
+        raise ImportError("pip install uvicorn") from None
     app = create_app(config_path=config_path)
     logger.info(f"ACP Server: http://{host}:{port}")
     uvicorn.run(app, host=host, port=port, log_level="info")
 
+
 def main():
     import argparse
+
     p = argparse.ArgumentParser()
     p.add_argument("--host", default="127.0.0.1")
     p.add_argument("--port", type=int, default=8082)
     p.add_argument("--config", default=None)
     args = p.parse_args()
     run_server(host=args.host, port=args.port, config_path=args.config)
+
 
 if __name__ == "__main__":
     main()

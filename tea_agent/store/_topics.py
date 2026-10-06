@@ -1,5 +1,5 @@
-"""
-"""
+""" """
+
 import logging
 
 from ._component import StoreComponent
@@ -35,10 +35,13 @@ class TopicStore(StoreComponent):
     def create_topic(self, title: str, topic_id: str = None) -> str:
         # 使用临时连接
         with self._get_connection() as conn:
-            conn.row_factory = __import__('sqlite3').Row
+            conn.row_factory = __import__("sqlite3").Row
             c = conn.cursor()
             tid = topic_id or self._new_id()
-            c.execute("INSERT INTO topics (topic_id, title, create_stamp, last_update_stamp) VALUES (?, ?, datetime('now', 'localtime'), datetime('now', 'localtime'))", (tid, title))
+            c.execute(
+                "INSERT INTO topics (topic_id, title, create_stamp, last_update_stamp) VALUES (?, ?, datetime('now', 'localtime'), datetime('now', 'localtime'))",
+                (tid, title),
+            )
             conn.commit()
             return tid
 
@@ -121,22 +124,16 @@ class TopicStore(StoreComponent):
         """
         c = self.conn.cursor()
         try:
-            row = c.execute(
-                "SELECT 1 FROM topics WHERE topic_id = ? AND deleted_at IS NULL",
-                (topic_id,)).fetchone()
+            row = c.execute("SELECT 1 FROM topics WHERE topic_id = ? AND deleted_at IS NULL", (topic_id,)).fetchone()
             if not row:
                 return False
             now = "datetime('now', 'localtime')"
-            c.execute(f"UPDATE topics SET deleted_at = {now}, is_active = 0 WHERE topic_id = ?",
-                      (topic_id,))
-            c.execute(f"UPDATE conversations SET deleted_at = {now} WHERE topic_id = ?",
-                      (topic_id,))
+            c.execute(f"UPDATE topics SET deleted_at = {now}, is_active = 0 WHERE topic_id = ?", (topic_id,))
+            c.execute(f"UPDATE conversations SET deleted_at = {now} WHERE topic_id = ?", (topic_id,))
             c.execute(
-                f"UPDATE agent_rounds SET deleted_at = {now} WHERE conversation_id IN "
-                "(SELECT id FROM conversations WHERE topic_id = ?)", (topic_id,))
-            c.execute(
-                f"UPDATE images SET deleted_at = {now} WHERE conversation_id IN "
-                "(SELECT id FROM conversations WHERE topic_id = ?)", (topic_id,))
+                f"UPDATE agent_rounds SET deleted_at = {now} WHERE conversation_id IN (SELECT id FROM conversations WHERE topic_id = ?)", (topic_id,)
+            )
+            c.execute(f"UPDATE images SET deleted_at = {now} WHERE conversation_id IN (SELECT id FROM conversations WHERE topic_id = ?)", (topic_id,))
             self.conn.commit()
             return True
         except Exception:
@@ -212,7 +209,7 @@ class TopicStore(StoreComponent):
     def list_topics(self) -> list[dict]:
         """列出主题（仅未删除的）。"""
         c = self.conn.cursor()
-        c.execute('''
+        c.execute("""
             SELECT t.*,
                    COALESCE(s.total_tokens, 0) as total_tokens,
                    COALESCE(s.conversation_count, 0) as conversation_count
@@ -220,7 +217,7 @@ class TopicStore(StoreComponent):
             LEFT JOIN topic_token_stats s ON t.topic_id = s.topic_id
             WHERE t.is_active = 1 AND t.deleted_at IS NULL
             ORDER BY t.last_update_stamp DESC
-        ''')
+        """)
         rows = c.fetchall()
         c.close()
         return [dict(r) for r in rows]
@@ -228,9 +225,14 @@ class TopicStore(StoreComponent):
     # ── Token 统计 ──
 
     def add_topic_tokens(
-        self, topic_id: str,
-        total_tokens: int = 0, prompt_tokens: int = 0, completion_tokens: int = 0,
-        cheap_tokens: int = 0, cheap_prompt_tokens: int = 0, cheap_completion_tokens: int = 0,
+        self,
+        topic_id: str,
+        total_tokens: int = 0,
+        prompt_tokens: int = 0,
+        completion_tokens: int = 0,
+        cheap_tokens: int = 0,
+        cheap_prompt_tokens: int = 0,
+        cheap_completion_tokens: int = 0,
     ):
         """累加主题 token 统计（主模型 / 便宜模型两路）。
 
@@ -242,7 +244,8 @@ class TopicStore(StoreComponent):
         if not has_main and not has_cheap:
             return
         c = self.conn.cursor()
-        c.execute('''
+        c.execute(
+            """
             INSERT INTO topic_token_stats (
                 topic_id, total_tokens, total_prompt_tokens, total_completion_tokens,
                 total_cheap_tokens, total_cheap_prompt_tokens, total_cheap_completion_tokens,
@@ -257,14 +260,16 @@ class TopicStore(StoreComponent):
                 total_cheap_completion_tokens = total_cheap_completion_tokens + excluded.total_cheap_completion_tokens,
                 conversation_count = conversation_count + 1,
                 last_update = datetime('now', 'localtime')
-        ''', (topic_id, total_tokens, prompt_tokens, completion_tokens,
-              cheap_tokens, cheap_prompt_tokens, cheap_completion_tokens))
+        """,
+            (topic_id, total_tokens, prompt_tokens, completion_tokens, cheap_tokens, cheap_prompt_tokens, cheap_completion_tokens),
+        )
         self.conn.commit()
         c.close()
 
     def accumulate_pending_cheap_tokens(self, topic_id: str, usage: dict):
         """累加待显示的便宜模型 token（异步摘要完成后调用，下一轮显示的轮合并）。"""
         import json as _json_pt
+
         if not usage or usage.get("total_tokens", 0) <= 0:
             return
         # 读取已有 pending
@@ -274,7 +279,7 @@ class TopicStore(StoreComponent):
             try:
                 prev = _json_pt.loads(existing)
             except Exception:
-                logger.exception('op_failed')
+                logger.exception("op_failed")
 
         # 合并
         for k in ("total_tokens", "prompt_tokens", "completion_tokens"):
@@ -292,6 +297,7 @@ class TopicStore(StoreComponent):
     def get_and_clear_pending_cheap_tokens(self, topic_id: str) -> dict:
         """读取并清零待显示的便宜模型 token。返回 {'total_tokens': N, ...}。"""
         import json as _json_pt
+
         row = self.get_topic_tokens(topic_id)
         existing = row.get("pending_cheap_tokens_json", "")
         result = {}
@@ -299,7 +305,7 @@ class TopicStore(StoreComponent):
             try:
                 result = _json_pt.loads(existing)
             except Exception:
-                logger.exception('op_failed')
+                logger.exception("op_failed")
 
         # 清零
         c = self.conn.cursor()
@@ -322,7 +328,11 @@ class TopicStore(StoreComponent):
             return dict(row)
         return {
             "topic_id": topic_id,
-            "total_tokens": 0, "total_prompt_tokens": 0, "total_completion_tokens": 0,
-            "total_cheap_tokens": 0, "total_cheap_prompt_tokens": 0, "total_cheap_completion_tokens": 0,
+            "total_tokens": 0,
+            "total_prompt_tokens": 0,
+            "total_completion_tokens": 0,
+            "total_cheap_tokens": 0,
+            "total_cheap_prompt_tokens": 0,
+            "total_cheap_completion_tokens": 0,
             "conversation_count": 0,
         }

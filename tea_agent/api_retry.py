@@ -156,7 +156,10 @@ def call_with_retry(
                 param_adapted += 1
                 logger.warning(
                     "API 参数超限，自适应降参第 %d/%d 次: %s → max_tokens=%s",
-                    param_adapted, _PARAM_ADAPT_MAX, str(e)[:150], kwargs.get("max_tokens"),
+                    param_adapted,
+                    _PARAM_ADAPT_MAX,
+                    str(e)[:150],
+                    kwargs.get("max_tokens"),
                 )
                 continue
             if attempt >= max_retries or not _is_retryable(e):
@@ -170,6 +173,10 @@ def call_with_retry(
                     on_retry(attempt, e, wait)
             logger.warning(
                 "API 调用失败，第 %d/%d 次重试: %s: %s，等待 %.1fs",
-                attempt, max_retries, type(e).__name__, str(e)[:150], wait,
+                attempt,
+                max_retries,
+                type(e).__name__,
+                str(e)[:150],
+                wait,
             )
             time.sleep(wait)

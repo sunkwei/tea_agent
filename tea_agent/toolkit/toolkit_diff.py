@@ -26,13 +26,15 @@ logger = logging.getLogger("toolkit")
 
 # ── Diff 生成 ────────────────────────────────────────────
 
+
 def _generate_unified_diff(old: str, new: str, filename: str = "file", context_lines: int = 3) -> str:
     """生成 unified diff 格式的差异"""
     import difflib
+
     old_lines = old.splitlines(keepends=True)
     new_lines = new.splitlines(keepends=True)
     diff = difflib.unified_diff(old_lines, new_lines, fromfile=filename, tofile=filename, n=context_lines)
-    return ''.join(diff)
+    return "".join(diff)
 
 
 def _colorize_diff(diff_text: str) -> str:
@@ -51,32 +53,34 @@ def _colorize_diff(diff_text: str) -> str:
     lines = diff_text.splitlines(keepends=True)
     result = []
     for line in lines:
-        if line.startswith('---') or line.startswith('+++'):
+        if line.startswith("---") or line.startswith("+++"):
             # 文件头 - 青色加粗
-            result.append(f'\033[36;1m{line.rstrip()}\033[0m\n')
-        elif line.startswith('@@'):
+            result.append(f"\033[36;1m{line.rstrip()}\033[0m\n")
+        elif line.startswith("@@"):
             # 行号信息 - 紫色
-            result.append(f'\033[35m{line.rstrip()}\033[0m\n')
-        elif line.startswith('-'):
+            result.append(f"\033[35m{line.rstrip()}\033[0m\n")
+        elif line.startswith("-"):
             # 删除行 - 红色
-            result.append(f'\033[41;97m{line.rstrip()}\033[0m\n')
-        elif line.startswith('+'):
+            result.append(f"\033[41;97m{line.rstrip()}\033[0m\n")
+        elif line.startswith("+"):
             # 新增行 - 绿色
-            result.append(f'\033[42;97m{line.rstrip()}\033[0m\n')
+            result.append(f"\033[42;97m{line.rstrip()}\033[0m\n")
         else:
             result.append(line)
-    return ''.join(result)
+    return "".join(result)
 
 
 def _generate_diff_stats(diff_text: str) -> dict:
     """统计 diff 的变更行数。"""
     if not diff_text:
         return {"additions": 0, "deletions": 0, "changes": 0}
-    additions = sum(1 for line in diff_text.split('\n') if line.startswith('+') and not line.startswith('+++'))
-    deletions = sum(1 for line in diff_text.split('\n') if line.startswith('-') and not line.startswith('---'))
+    additions = sum(1 for line in diff_text.split("\n") if line.startswith("+") and not line.startswith("+++"))
+    deletions = sum(1 for line in diff_text.split("\n") if line.startswith("-") and not line.startswith("---"))
     return {"additions": additions, "deletions": deletions, "changes": additions + deletions}
 
+
 # ── Git Stash 集成 ──────────────────────────────────────
+
 
 def _git_stash_push(cwd: str, files: list[str] | None = None) -> tuple[bool, str]:
     """暂存本次编辑的文件到 stash，返回 (ok, stash_ref)。
@@ -96,6 +100,7 @@ def _git_stash_push(cwd: str, files: list[str] | None = None) -> tuple[bool, str
     except Exception as e:
         return False, str(e)
 
+
 def _git_stash_pop(cwd: str) -> tuple[bool, str]:
     """恢复最近一次 stash"""
     try:
@@ -103,6 +108,7 @@ def _git_stash_pop(cwd: str) -> tuple[bool, str]:
         return r.returncode == 0, r.stderr or r.stdout
     except Exception as e:
         return False, str(e)
+
 
 def _git_stash_drop(cwd: str) -> bool:
     """丢弃最近一次 stash（确认成功）"""
@@ -112,7 +118,9 @@ def _git_stash_drop(cwd: str) -> bool:
     except Exception:
         return False
 
+
 # ── 冲突检测 ────────────────────────────────────────────
+
 
 def _resolve_within(cwd: str, file_path: str) -> str:
     """将 file_path 安全解析为 cwd 内的绝对路径；拒绝 `..` 逃逸与外部绝对路径。"""
@@ -139,7 +147,9 @@ def _check_conflict(file_path: str, old_code: str, cwd: str) -> str | None:
         return f"冲突: old_code 在 {file_path} 中出现 {content.count(old_code)} 次（无法唯一确定）"
     return None
 
+
 # ── 验证 ────────────────────────────────────────────────
+
 
 def _verify_all(files: list[str], cwd: str, run_tests: bool = True) -> dict:
     """批量编译+lint 验证，可选测试"""
@@ -147,6 +157,7 @@ def _verify_all(files: list[str], cwd: str, run_tests: bool = True) -> dict:
 
     # py_compile
     import py_compile
+
     for fp in files:
         full = os.path.join(cwd, fp)
         if fp.endswith(".py") and os.path.exists(full):
@@ -160,8 +171,7 @@ def _verify_all(files: list[str], cwd: str, run_tests: bool = True) -> dict:
     for fp in files:
         full = os.path.join(cwd, fp)
         if fp.endswith(".py") and os.path.exists(full):
-            r = subprocess.run(["ruff", "check", "--output-format", "json", full],
-                               capture_output=True, text=True, timeout=20, cwd=cwd)
+            r = subprocess.run(["ruff", "check", "--output-format", "json", full], capture_output=True, text=True, timeout=20, cwd=cwd)
             diags = json.loads(r.stdout) if r.stdout.strip() else []
             results["lint"][fp] = len(diags) if diags else 0
         elif os.path.exists(full):
@@ -174,6 +184,7 @@ def _verify_all(files: list[str], cwd: str, run_tests: bool = True) -> dict:
         if fp.endswith(".py") and os.path.exists(full):
             try:
                 from tea_agent.lsp.lsp_engine import semantic_diagnose
+
                 sd = semantic_diagnose(cwd, full)
                 results["semantic"][fp] = sd
             except Exception:
@@ -187,7 +198,10 @@ def _verify_all(files: list[str], cwd: str, run_tests: bool = True) -> dict:
             if test_files:
                 r = subprocess.run(
                     [os.sys.executable, "-m", "pytest", *test_files, "-q", "--tb=short"],
-                    capture_output=True, text=True, timeout=60, cwd=cwd,
+                    capture_output=True,
+                    text=True,
+                    timeout=60,
+                    cwd=cwd,
                 )
                 output = r.stdout + r.stderr
                 results["test"] = {
@@ -208,6 +222,7 @@ def _verify_all(files: list[str], cwd: str, run_tests: bool = True) -> dict:
         and (results["test"] is None or results["test"].get("returncode") == 0)
     )
     return results
+
 
 # ── 单文件应用 ──────────────────────────────────────────
 def _apply_one(file_path: str, old_code: str, new_code: str, cwd: str, description: str = "") -> dict:
@@ -237,9 +252,9 @@ def _apply_one(file_path: str, old_code: str, new_code: str, cwd: str, descripti
         with open(full, encoding="utf-8") as f:
             content = f.read()
         # 归一化换行符，确保只使用 \n
-        content = content.replace('\r\n', '\n').replace('\r', '\n')
-        new_code_norm = new_code.replace('\r\n', '\n').replace('\r', '\n')
-        old_code_norm = old_code.replace('\r\n', '\n').replace('\r', '\n')
+        content = content.replace("\r\n", "\n").replace("\r", "\n")
+        new_code_norm = new_code.replace("\r\n", "\n").replace("\r", "\n")
+        old_code_norm = old_code.replace("\r\n", "\n").replace("\r", "\n")
         new_content = content.replace(old_code_norm, new_code_norm, 1)
         with open(full, "w", encoding="utf-8") as f:
             f.write(new_content)
@@ -250,7 +265,9 @@ def _apply_one(file_path: str, old_code: str, new_code: str, cwd: str, descripti
             shutil.copy2(bak, full)
         return {"ok": False, "file": file_path, "error": f"写入失败: {e}"}
 
+
 # ── 主入口 ──────────────────────────────────────────────
+
 
 def toolkit_diff(
     action: str,
@@ -272,6 +289,7 @@ def toolkit_diff(
     files: [{"file_path": "...", "old_code": "...", "new_code": "..."}, ...]
     """
     import os as _os
+
     cwd = cwd or _os.getcwd()
 
     try:
@@ -285,8 +303,7 @@ def toolkit_diff(
                 stats = _generate_diff_stats(d)
                 diffs.append({"file": f["file_path"], "diff": d, "colored_diff": colored, "stats": stats})
             combined = "\n".join(d["diff"] for d in diffs)
-            return {"ok": True, "diffs": diffs, "combined": combined,
-                    "file_count": len(diffs)}
+            return {"ok": True, "diffs": diffs, "combined": combined, "file_count": len(diffs)}
 
         if action == "preview":
             if not files:
@@ -298,15 +315,17 @@ def toolkit_diff(
                 colored = _colorize_diff(diff)
                 conflict = _check_conflict(f["file_path"], f["old_code"], cwd)
                 stats = _generate_diff_stats(diff)
-                previews.append({
-                    "file": f["file_path"],
-                    "diff": diff,
-                    "colored_diff": colored,
-                    "conflict": conflict,
-                    "safe": conflict is None,
-                    "change_lines": diff.count('\n') if diff else 0,
-                    "stats": stats,
-                })
+                previews.append(
+                    {
+                        "file": f["file_path"],
+                        "diff": diff,
+                        "colored_diff": colored,
+                        "conflict": conflict,
+                        "safe": conflict is None,
+                        "change_lines": diff.count("\n") if diff else 0,
+                        "stats": stats,
+                    }
+                )
                 if conflict:
                     conflicts.append(f["file_path"])
             all_safe = len(conflicts) == 0
@@ -351,6 +370,7 @@ def toolkit_diff(
                     for r in results:
                         if r.get("bak_path") and os.path.exists(r["bak_path"]):
                             import shutil
+
                             shutil.copy2(r["bak_path"], os.path.join(cwd, r["file"]))
                     if stashed:
                         _git_stash_pop(cwd)
@@ -371,6 +391,7 @@ def toolkit_diff(
                     for r in results:
                         if r.get("bak_path") and os.path.exists(r["bak_path"]):
                             import shutil
+
                             shutil.copy2(r["bak_path"], os.path.join(cwd, r["file"]))
                     if stashed:
                         _git_stash_pop(cwd)
@@ -388,6 +409,7 @@ def toolkit_diff(
                 snap_hash = ""
                 try:
                     from tea_agent.toolkit._git_snapshot import maybe_snapshot
+
                     snap = maybe_snapshot(modified_files, description)
                     if snap.get("snapshotted"):
                         snap_hash = snap.get("hash", "")
@@ -412,6 +434,7 @@ def toolkit_diff(
             if files:
                 # 从 .bak.<ts> 备份恢复（apply 已不使用 git stash）
                 import shutil
+
                 restored, errors = [], []
                 for f in files:
                     fp = f.get("file_path") if isinstance(f, dict) else f
@@ -428,9 +451,12 @@ def toolkit_diff(
                         restored.append(fp)
                     else:
                         errors.append(f"无备份可恢复: {fp}")
-                return {"ok": len(errors) == 0, "restored": restored,
-                        "errors": errors,
-                        "hint": f"已恢复 {len(restored)} 个文件" if restored else "无备份可恢复"}
+                return {
+                    "ok": len(errors) == 0,
+                    "restored": restored,
+                    "errors": errors,
+                    "hint": f"已恢复 {len(restored)} 个文件" if restored else "无备份可恢复",
+                }
             ok, msg = _git_stash_pop(cwd)
             return {"ok": ok, "message": msg, "hint": "git stash pop 完成" if ok else "stash 恢复失败"}
 
@@ -454,44 +480,58 @@ def toolkit_diff(
 
 TOOL_CATEGORIES = {
     "文件操作": [
-        "toolkit_file", "toolkit_explr",
+        "toolkit_file",
+        "toolkit_explr",
     ],
     "代码编辑": [
-        "toolkit_edit", "toolkit_diff",
+        "toolkit_edit",
+        "toolkit_diff",
         "toolkit_self_evolve",
         "toolkit_format_code",
     ],
     "搜索": [
-        "toolkit_search", "toolkit_lsp", "toolkit_query_chat_history",
+        "toolkit_search",
+        "toolkit_lsp",
+        "toolkit_query_chat_history",
         "toolkit_js_fetch",
     ],
     "截图与视觉": [
-        "toolkit_screenshot", "toolkit_vision_analyze",
+        "toolkit_screenshot",
+        "toolkit_vision_analyze",
     ],
     "系统操作": [
-        "toolkit_exec", "toolkit_config",
-        "toolkit_input", "toolkit_clipboard",
+        "toolkit_exec",
+        "toolkit_config",
+        "toolkit_input",
+        "toolkit_clipboard",
     ],
     "包管理": [
-        "toolkit_pkg", "toolkit_build",
+        "toolkit_pkg",
+        "toolkit_build",
     ],
     "测试": [
         "toolkit_run_tests",
     ],
     "记忆与知识": [
-        "toolkit_memory", "toolkit_kb",
+        "toolkit_memory",
+        "toolkit_kb",
         "toolkit_proactive",
     ],
     "多Agent协作": [
-        "toolkit_parallel_subtasks", "toolkit_subagent",
+        "toolkit_parallel_subtasks",
+        "toolkit_subagent",
         "toolkit_subagent_msg",
     ],
     "计划与任务": [
-        "toolkit_plan", "toolkit_todo", "toolkit_scheduler",
+        "toolkit_plan",
+        "toolkit_todo",
+        "toolkit_scheduler",
         "toolkit_task_resume",
     ],
     "Web与网络": [
-        "toolkit_browser_tab", "toolkit_js_fetch", "toolkit_mcp",
+        "toolkit_browser_tab",
+        "toolkit_js_fetch",
+        "toolkit_mcp",
     ],
     "自进化": [
         "toolkit_self_evolve",
@@ -533,6 +573,7 @@ def toolkit_get_categorized_tools() -> dict:
 
 # ── Meta ────────────────────────────────────────────────
 
+
 def meta_toolkit_diff():
     """Meta toolkit diff."""
     return {
@@ -543,8 +584,24 @@ def meta_toolkit_diff():
             "parameters": {
                 "type": "object",
                 "properties": {
-                    "action": {"type": "string", "enum": ["generate", "preview", "apply", "undo", "verify"], "description": "generate=仅生成 unified diff（不改文件）; preview=生成 diff+冲突检测（不改文件）; apply=多文件原子应用修改并做编译/lint/可选 pytest 验证,失败自动回滚; undo=从 .bak 备份恢复已应用的文件; verify=仅运行编译/lint/test 验证"},
-                    "files": {"type": "array", "items": {"type": "object", "properties": {"file_path": {"type": "string", "description": "目标文件路径"}, "old_code": {"type": "string", "description": "要替换的旧代码（必须精确匹配）"}, "new_code": {"type": "string", "description": "替换后的新代码"}}, "required": ["file_path", "old_code", "new_code"]}, "description": "文件修改列表: [{'file_path': '路径', 'old_code': '旧代码', 'new_code': '新代码'}]"},
+                    "action": {
+                        "type": "string",
+                        "enum": ["generate", "preview", "apply", "undo", "verify"],
+                        "description": "generate=仅生成 unified diff（不改文件）; preview=生成 diff+冲突检测（不改文件）; apply=多文件原子应用修改并做编译/lint/可选 pytest 验证,失败自动回滚; undo=从 .bak 备份恢复已应用的文件; verify=仅运行编译/lint/test 验证",
+                    },
+                    "files": {
+                        "type": "array",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "file_path": {"type": "string", "description": "目标文件路径"},
+                                "old_code": {"type": "string", "description": "要替换的旧代码（必须精确匹配）"},
+                                "new_code": {"type": "string", "description": "替换后的新代码"},
+                            },
+                            "required": ["file_path", "old_code", "new_code"],
+                        },
+                        "description": "文件修改列表: [{'file_path': '路径', 'old_code': '旧代码', 'new_code': '新代码'}]",
+                    },
                     "run_tests": {"type": "boolean", "description": "apply/verify 时是否运行 pytest，默认 true"},
                     "description": {"type": "string", "description": "本次修改的描述（apply 时用于 git 快照记录）"},
                 },

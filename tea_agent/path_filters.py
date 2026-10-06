@@ -34,20 +34,42 @@ import fnmatch
 import os
 
 #: 默认排除的目录名（按名字匹配，任意层级）
-PRUNE_DIRS: frozenset[str] = frozenset({
-    # 版本控制 / 缓存 / 运行产物
-    ".git", ".hg", ".svn", "__pycache__", ".pytest_cache", ".mypy_cache",
-    ".ruff_cache", ".tea_agent_run", ".tox", ".noxtest",
-    # 虚拟环境
-    ".venv", "venv", "env", ".env",
-    # 第三方依赖
-    "node_modules", "site-packages", "bower_components",
-    # 构建产物
-    "build", "build_mini_dist", "build_nuitka_dist", "dist", "target",
-    "out", "output", ".eggs",
-    # 其它
-    "tmp", ".cache",
-})
+PRUNE_DIRS: frozenset[str] = frozenset(
+    {
+        # 版本控制 / 缓存 / 运行产物
+        ".git",
+        ".hg",
+        ".svn",
+        "__pycache__",
+        ".pytest_cache",
+        ".mypy_cache",
+        ".ruff_cache",
+        ".tea_agent_run",
+        ".tox",
+        ".noxtest",
+        # 虚拟环境
+        ".venv",
+        "venv",
+        "env",
+        ".env",
+        # 第三方依赖
+        "node_modules",
+        "site-packages",
+        "bower_components",
+        # 构建产物
+        "build",
+        "build_mini_dist",
+        "build_nuitka_dist",
+        "dist",
+        "target",
+        "out",
+        "output",
+        ".eggs",
+        # 其它
+        "tmp",
+        ".cache",
+    }
+)
 
 
 def prune_dirs(dirs, extra=()) -> None:

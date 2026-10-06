@@ -75,8 +75,7 @@ async def handle_web_fork_topic(request):
     )
     if not result.get("ok"):
         return JSONResponse(result, status_code=400)
-    logger.info("web fork: %s -> %s (boundary=%s)", topic_id,
-                result.get("target_topic_id"), boundary or "-")
+    logger.info("web fork: %s -> %s (boundary=%s)", topic_id, result.get("target_topic_id"), boundary or "-")
     return JSONResponse(result)
 
 
@@ -109,13 +108,14 @@ async def handle_web_topic_todos(request):
         return JSONResponse({"error": "topic_id required"}, status_code=400)
     try:
         from tea_agent.toolkit.toolkit_todo import _restore_from_db, _restored, _todos
+
         # 确保从 DB 恢复
         if not _restored:
             _restore_from_db()
         # 从 DB 直接读取
         server = get_server()
         storage = server._get_storage()
-        if storage and hasattr(storage, 'conn'):
+        if storage and hasattr(storage, "conn"):
             c = storage.conn.cursor()
             c.execute(
                 "SELECT idx, desc, done FROM todo_items WHERE topic_id=? ORDER BY idx ASC",
@@ -148,7 +148,7 @@ async def handle_web_topic_todo_update(request):
         done = bool(body.get("done", True))
         server = get_server()
         storage = server._get_storage()
-        if storage and hasattr(storage, 'conn'):
+        if storage and hasattr(storage, "conn"):
             c = storage.conn.cursor()
             c.execute(
                 "UPDATE todo_items SET done=? WHERE topic_id=? AND idx=?",
@@ -159,6 +159,7 @@ async def handle_web_topic_todo_update(request):
         # Also sync toolkit_todo memory cache
         try:
             from tea_agent.toolkit.toolkit_todo import _sync_item, _todos
+
             if 0 <= idx < len(_todos):
                 _todos[idx]["done"] = done
             _sync_item(idx, done)
@@ -192,7 +193,12 @@ async def handle_web_topic_plans(request):
                     p = json.load(f)
                 if p.get("topic_id") == topic_id or p.get("topic_id") == "" or not topic_id:
                     plan_status = (p.get("status") or "").lower()
-                    if status_filter == "all" or (status_filter == "done" and plan_status == "done") or (status_filter == "failed" and plan_status == "failed") or (status_filter == "active" and plan_status not in ("done", "failed")):
+                    if (
+                        status_filter == "all"
+                        or (status_filter == "done" and plan_status == "done")
+                        or (status_filter == "failed" and plan_status == "failed")
+                        or (status_filter == "active" and plan_status not in ("done", "failed"))
+                    ):
                         plans.append(p)
     except Exception as e:
         logger.warning(f"handle_web_topic_plans failed: {e}")
@@ -209,11 +215,13 @@ async def handle_web_topic_status(request):
     topic_id = request.path_params.get("topic_id", "")
     if not topic_id:
         return JSONResponse({"error": "topic_id required"}, status_code=400)
-    return JSONResponse({
-        "topic_id": topic_id,
-        "background": topic_id in _background_sessions,
-        "active": topic_id in _active_sessions,
-    })
+    return JSONResponse(
+        {
+            "topic_id": topic_id,
+            "background": topic_id in _background_sessions,
+            "active": topic_id in _active_sessions,
+        }
+    )
 
 
 async def handle_web_topic_stream_buffer(request):
@@ -283,8 +291,6 @@ async def handle_web_topic_conversations(request):
         return JSONResponse({"error": str(e)}, status_code=500)
 
 
-
-
 async def handle_web_topic_trajectory(request):
     """GET /api/topic/{topic_id}/trajectory — 轨迹时间线（Agent 工作过程可视化）。
 
@@ -333,11 +339,13 @@ async def handle_web_interruptions(request):
             return JSONResponse({"stats": [], "recent": [], "total": 0})
         stats = storage.stats_interruptions(since or None)
         recent = storage.query_interruptions(since=since or None, limit=limit)
-        return JSONResponse({
-            "stats": stats,
-            "recent": recent,
-            "total": len(recent),
-            "count": sum(int(s.get("count", 0)) for s in stats),
-        })
+        return JSONResponse(
+            {
+                "stats": stats,
+                "recent": recent,
+                "total": len(recent),
+                "count": sum(int(s.get("count", 0)) for s in stats),
+            }
+        )
     except Exception as e:
         return JSONResponse({"error": str(e)}, status_code=503)

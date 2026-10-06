@@ -6,6 +6,7 @@ streaming updates, it calls these client-side methods via JSON-RPC.
 All methods use the transport's ``send_request`` / ``send_notification``
 to communicate with the client (VS Code).
 """
+
 import logging
 from typing import Any
 
@@ -165,10 +166,13 @@ class AcpClientMethods:
         config_options: list[dict],
     ):
         """Send session/update_config to update available config options."""
-        self._transport.send_notification("session/update_config", {
-            "sessionId": session_id,
-            "configOptions": config_options,
-        })
+        self._transport.send_notification(
+            "session/update_config",
+            {
+                "sessionId": session_id,
+                "configOptions": config_options,
+            },
+        )
 
     def update_commands(
         self,
@@ -176,10 +180,13 @@ class AcpClientMethods:
         commands: list[dict],
     ):
         """Send session/update_commands to update available commands."""
-        self._transport.send_notification("session/update_commands", {
-            "sessionId": session_id,
-            "availableCommands": commands,
-        })
+        self._transport.send_notification(
+            "session/update_commands",
+            {
+                "sessionId": session_id,
+                "availableCommands": commands,
+            },
+        )
 
     def info_update(
         self,
@@ -220,9 +227,7 @@ class AcpClientMethods:
         )
         return result or {}
 
-    def terminal_output(
-        self, terminal_id: str
-    ) -> str:
+    def terminal_output(self, terminal_id: str) -> str:
         """Read terminal output."""
         result = self._transport.send_request(
             "terminal/output",
@@ -231,9 +236,7 @@ class AcpClientMethods:
         )
         return result.get("output", "") if result else ""
 
-    def wait_for_terminal_exit(
-        self, terminal_id: str, timeout: float = 60
-    ) -> dict:
+    def wait_for_terminal_exit(self, terminal_id: str, timeout: float = 60) -> dict:
         """Wait for terminal to exit and return exit status."""
         result = self._transport.send_request(
             "terminal/wait_for_exit",

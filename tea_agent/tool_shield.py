@@ -38,19 +38,21 @@ _MAX_IDLE_DAYS = 36500
 
 # 自愈通路：改配置、建/重载/回滚工具、审批闸门。屏蔽它们等于拆掉解除屏蔽的梯子。
 # 另加 exec/file —— 屏蔽后连"读代码改代码"都做不到，属于必须存在的最小能力集。
-ALWAYS_PINNED = frozenset({
-    "toolkit_exec",
-    "toolkit_file",
-    "toolkit_edit",
-    "toolkit_diff",
-    "toolkit_reload",
-    "toolkit_save",
-    "toolkit_config",
-    "toolkit_approve",
-    "toolkit_tool_usage",   # 本功能的观测/解除入口，屏蔽它自己就再也开不回来
-    "toolkit_list_versions",
-    "toolkit_rollback",
-})
+ALWAYS_PINNED = frozenset(
+    {
+        "toolkit_exec",
+        "toolkit_file",
+        "toolkit_edit",
+        "toolkit_diff",
+        "toolkit_reload",
+        "toolkit_save",
+        "toolkit_config",
+        "toolkit_approve",
+        "toolkit_tool_usage",  # 本功能的观测/解除入口，屏蔽它自己就再也开不回来
+        "toolkit_list_versions",
+        "toolkit_rollback",
+    }
+)
 
 
 def _env_days() -> int:
@@ -62,18 +64,15 @@ def _env_days() -> int:
     except (ValueError, OverflowError):
         # OverflowError 不是可选捕获：float("1e999") == inf，int(inf) 直接抛。
         # 漏掉它会让一个写错的环境变量值在**每次构建工具列表时**抛异常。
-        logger.warning("TEA_TOOL_SHIELD_IDLE_DAYS 非数值 (%r)，回退 %d",
-                       raw, DEFAULT_IDLE_DAYS)
+        logger.warning("TEA_TOOL_SHIELD_IDLE_DAYS 非数值 (%r)，回退 %d", raw, DEFAULT_IDLE_DAYS)
         return DEFAULT_IDLE_DAYS
     if d <= 0:
-        logger.warning("TEA_TOOL_SHIELD_IDLE_DAYS 必须为正数 (%r)，回退 %d",
-                       raw, DEFAULT_IDLE_DAYS)
+        logger.warning("TEA_TOOL_SHIELD_IDLE_DAYS 必须为正数 (%r)，回退 %d", raw, DEFAULT_IDLE_DAYS)
         return DEFAULT_IDLE_DAYS
     if d > _MAX_IDLE_DAYS:
         # 超出百年基本是手误（多打几个 0）。刻意不静默接受：判定会永远不屏蔽，
         # 与"关掉屏蔽"难以区分，回退默认值并告警更容易发现配置错误。
-        logger.warning("TEA_TOOL_SHIELD_IDLE_DAYS 超出合理上限 %d (%r)，回退 %d",
-                       _MAX_IDLE_DAYS, raw, DEFAULT_IDLE_DAYS)
+        logger.warning("TEA_TOOL_SHIELD_IDLE_DAYS 超出合理上限 %d (%r)，回退 %d", _MAX_IDLE_DAYS, raw, DEFAULT_IDLE_DAYS)
         return DEFAULT_IDLE_DAYS
     return d
 
@@ -81,7 +80,10 @@ def _env_days() -> int:
 def shield_enabled() -> bool:
     """自动屏蔽是否生效（默认开；TEA_TOOL_SHIELD=0 关闭）。"""
     return os.environ.get("TEA_TOOL_SHIELD", "").strip().lower() not in (
-        "0", "false", "no", "off",
+        "0",
+        "false",
+        "no",
+        "off",
     )
 
 
@@ -97,9 +99,15 @@ def _parse_ts(value: str | None) -> datetime | None:
     return dt
 
 
-def evaluate(usage: dict[str, dict], *, known_tools, idle_days: int | None = None,
-             now: datetime | None = None, oldest_observed: str | None = None,
-             enabled: bool | None = None) -> dict:
+def evaluate(
+    usage: dict[str, dict],
+    *,
+    known_tools,
+    idle_days: int | None = None,
+    now: datetime | None = None,
+    oldest_observed: str | None = None,
+    enabled: bool | None = None,
+) -> dict:
     """纯函数策略求解（不碰 DB，便于单测覆盖边界）。
 
     Args:
@@ -123,17 +131,14 @@ def evaluate(usage: dict[str, dict], *, known_tools, idle_days: int | None = Non
     kept: dict[str, str] = {}
 
     if not on:
-        return {"shielded": {}, "kept": {}, "idle_days": days,
-                "reason": "自动屏蔽已关闭（TEA_TOOL_SHIELD=0）"}
+        return {"shielded": {}, "kept": {}, "idle_days": days, "reason": "自动屏蔽已关闭（TEA_TOOL_SHIELD=0）"}
     if not usage:
         # 不变式 1：还没有任何观测数据
-        return {"shielded": {}, "kept": {}, "idle_days": days,
-                "reason": f"{USAGE_TABLE} 表为空，尚无使用数据，不做屏蔽"}
+        return {"shielded": {}, "kept": {}, "idle_days": days, "reason": f"{USAGE_TABLE} 表为空，尚无使用数据，不做屏蔽"}
 
     # 不变式 2：观测期是否已满（以最早使用记录为准）
     observed_since = _parse_ts(oldest_observed) or min(
-        (_parse_ts(v.get("first_used")) for v in usage.values()
-         if _parse_ts(v.get("first_used"))),
+        (_parse_ts(v.get("first_used")) for v in usage.values() if _parse_ts(v.get("first_used"))),
         default=None,
     )
     observation_full = observed_since is not None and observed_since <= cutoff
@@ -153,7 +158,7 @@ def evaluate(usage: dict[str, dict], *, known_tools, idle_days: int | None = Non
         if row is None:
             # 注册表里有、但从未被调用过（也没有行）
             if observation_full:
-                shielded[tool] = (f"观测已满 {days} 天且从未使用")
+                shielded[tool] = f"观测已满 {days} 天且从未使用"
             else:
                 kept[tool] = "尚无使用记录，且观测期未满，暂不屏蔽"
             continue
@@ -202,8 +207,7 @@ def shielded_tools(known_tools, storage=None) -> set[str]:
     try:
         store = st.tool_usage
         usage = store.all_usage()
-        verdict = evaluate(usage, known_tools=known_tools,
-                           oldest_observed=store.oldest_observed())
+        verdict = evaluate(usage, known_tools=known_tools, oldest_observed=store.oldest_observed())
     except Exception as e:  # noqa: BLE001
         logger.warning("tool_shield: 判定失败，本次不屏蔽任何工具: %s", e)
         return set()
@@ -212,31 +216,27 @@ def shielded_tools(known_tools, storage=None) -> set[str]:
     return set(verdict["shielded"])
 
 
-def apply_shield(tools: list[dict], known_names=None, storage=None,
-                 log: bool = True) -> tuple[list[dict], set[str]]:
+def apply_shield(tools: list[dict], known_names=None, storage=None, log: bool = True) -> tuple[list[dict], set[str]]:
     """从工具定义列表剔除被屏蔽者。返回 (保留列表, 屏蔽名集合)。
 
     tools 元素为 OpenAI function schema；known_names 缺省时从 tools 自身提取。
     """
     if not tools:
         return tools, set()
-    names = set(known_names) if known_names is not None else {
-        t.get("function", {}).get("name") for t in tools
-    }
+    names = set(known_names) if known_names is not None else {t.get("function", {}).get("name") for t in tools}
     hidden = shielded_tools(names, storage=storage)
     if not hidden:
         return tools, set()
-    kept = [t for t in tools
-            if t.get("function", {}).get("name") not in hidden]
+    kept = [t for t in tools if t.get("function", {}).get("name") not in hidden]
     if log:
-        logger.info("tool_shield: 屏蔽 %d/%d 个长期未使用工具: %s",
-                    len(hidden), len(tools), ", ".join(sorted(hidden)))
+        logger.info("tool_shield: 屏蔽 %d/%d 个长期未使用工具: %s", len(hidden), len(tools), ", ".join(sorted(hidden)))
     return kept, hidden
 
 
 # ═════════════ 运行时不变式（注册进 tea_agent.invariants，见该模块说明）═════════════
 # 文档里的"三条不可妥协"升级为可安装断言：evaluate 的输出必须继续满足它们，
 # 一旦被将来的改动破坏，_guard_shield_verdict 会整体回退成"不屏蔽"并大声记日志。
+
 
 def _check_no_data_no_shield(*, verdict: dict, usage, **_) -> str | None:
     """不变式 1：无数据 = 不屏蔽。"""
@@ -277,14 +277,10 @@ def _check_self_heal_registered(*, registered, **_) -> str | None:
     return f"自愈最小集缺席注册表: {missing}" if missing else None
 
 
-_invariants.install("tool_shield.no_data_no_shield", "tool_shield.evaluate",
-                    _check_no_data_no_shield, "无数据 = 不屏蔽")
-_invariants.install("tool_shield.observation_window", "tool_shield.evaluate",
-                    _check_observation_window, "观测期未满不屏蔽零使用工具")
-_invariants.install("tool_shield.self_heal_never_shielded", "tool_shield.evaluate",
-                    _check_self_heal_never_shielded, "自愈通路永不屏蔽")
-_invariants.install("tool_shield.self_heal_registered", "toolkit.call_tool",
-                    _check_self_heal_registered, "自愈最小集必须已注册")
+_invariants.install("tool_shield.no_data_no_shield", "tool_shield.evaluate", _check_no_data_no_shield, "无数据 = 不屏蔽")
+_invariants.install("tool_shield.observation_window", "tool_shield.evaluate", _check_observation_window, "观测期未满不屏蔽零使用工具")
+_invariants.install("tool_shield.self_heal_never_shielded", "tool_shield.evaluate", _check_self_heal_never_shielded, "自愈通路永不屏蔽")
+_invariants.install("tool_shield.self_heal_registered", "toolkit.call_tool", _check_self_heal_registered, "自愈最小集必须已注册")
 
 
 def _guard_shield_verdict(verdict: dict, *, usage, observation_full: bool) -> dict:
@@ -294,12 +290,10 @@ def _guard_shield_verdict(verdict: dict, *, usage, observation_full: bool) -> di
     能力，多暴露只是多花点 token。回退时把被屏蔽者并回 kept，保留可观测理由。
     """
     try:
-        violations = _invariants.run("tool_shield.evaluate", verdict=verdict,
-                                     usage=usage, observation_full=observation_full)
+        violations = _invariants.run("tool_shield.evaluate", verdict=verdict, usage=usage, observation_full=observation_full)
     except Exception as e:  # noqa: BLE001 — run 内部已兜底，这里是双保险
         logger.error("tool_shield: 不变式检查异常，按违例处理: %s", e)
-        violations = [InvariantViolation("tool_shield.check_crashed",
-                                         "tool_shield.evaluate", str(e))]
+        violations = [InvariantViolation("tool_shield.check_crashed", "tool_shield.evaluate", str(e))]
     if not violations:
         return verdict
     for v in violations:
@@ -308,5 +302,4 @@ def _guard_shield_verdict(verdict: dict, *, usage, observation_full: bool) -> di
     for tool in sorted(verdict.get("shielded") or {}):
         kept[tool] = "不变式违例，安全回退：不屏蔽"
     names = ", ".join(sorted({v.invariant for v in violations}))
-    return {"shielded": {}, "kept": kept, "idle_days": verdict.get("idle_days"),
-            "reason": f"不变式违例（{names}），本次不屏蔽任何工具"}
+    return {"shielded": {}, "kept": kept, "idle_days": verdict.get("idle_days"), "reason": f"不变式违例（{names}），本次不屏蔽任何工具"}

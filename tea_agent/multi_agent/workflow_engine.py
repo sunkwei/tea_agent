@@ -42,16 +42,18 @@ logger = logging.getLogger(__name__)
 
 class NodeType(str, enum.Enum):
     """工作流节点类型。"""
-    TASK = "task"               # 普通任务
-    CONDITION = "condition"     # 条件分支（if/elif/else）
-    LOOP = "loop"              # 循环（for-each / while）
-    PARALLEL = "parallel"      # 并行扇出（fan-out + fan-in）
-    WAIT = "wait"              # 等待（定时 / 条件满足后继续）
-    END = "end"                # 工作流终止节点
+
+    TASK = "task"  # 普通任务
+    CONDITION = "condition"  # 条件分支（if/elif/else）
+    LOOP = "loop"  # 循环（for-each / while）
+    PARALLEL = "parallel"  # 并行扇出（fan-out + fan-in）
+    WAIT = "wait"  # 等待（定时 / 条件满足后继续）
+    END = "end"  # 工作流终止节点
 
 
 class NodeState(str, enum.Enum):
     """节点执行状态。"""
+
     PENDING = "pending"
     READY = "ready"
     RUNNING = "running"
@@ -63,6 +65,7 @@ class NodeState(str, enum.Enum):
 
 class WorkflowState(str, enum.Enum):
     """工作流状态。"""
+
     PENDING = "pending"
     RUNNING = "running"
     COMPLETED = "completed"
@@ -73,6 +76,7 @@ class WorkflowState(str, enum.Enum):
 @dataclass
 class NodeResult:
     """单节点执行结果。"""
+
     node_id: str
     state: NodeState = NodeState.PENDING
     output: dict | None = None
@@ -112,6 +116,7 @@ class WorkflowNode:
         timeout: 执行超时（秒）
         retry_policy: {"max_retries":3, "base_delay":1.0}
     """
+
     node_id: str
     type: NodeType
     label: str = ""
@@ -165,8 +170,7 @@ class WorkflowDAG:
         if node_id not in self._nodes:
             return False
         del self._nodes[node_id]
-        self._edges = [e for e in self._edges
-                       if e["from"] != node_id and e["to"] != node_id]
+        self._edges = [e for e in self._edges if e["from"] != node_id and e["to"] != node_id]
         return True
 
     @property
@@ -179,8 +183,7 @@ class WorkflowDAG:
 
     # ── 边管理 ───────────────────────────────
 
-    def add_edge(self, from_id: str, to_id: str,
-                 condition_key: str | None = None) -> dict:
+    def add_edge(self, from_id: str, to_id: str, condition_key: str | None = None) -> dict:
         """
         添加有向边。
 
@@ -198,13 +201,11 @@ class WorkflowDAG:
         self._edges.append(edge)
         return edge
 
-    def get_edges_from(self, node_id: str,
-                       condition_key: str | None = None) -> list[dict]:
+    def get_edges_from(self, node_id: str, condition_key: str | None = None) -> list[dict]:
         """获取从某节点出发的边（可选按条件过滤）。"""
         results = [e for e in self._edges if e["from"] == node_id]
         if condition_key is not None:
-            results = [e for e in results
-                       if e.get("condition_key") == condition_key]
+            results = [e for e in results if e.get("condition_key") == condition_key]
         return results
 
     def get_edges_to(self, node_id: str) -> list[dict]:
@@ -243,17 +244,13 @@ class WorkflowDAG:
         if len(sorted_nodes) != len(self._nodes):
             # 尝试找出包含条件边的环 — 条件边的环可能合法（运行时解开）
             # 只检查无条件边的环
-            non_cond_nodes = {e["from"] for e in self._edges
-                              if not e.get("condition_key")}
-            non_cond_nodes |= {e["to"] for e in self._edges
-                               if not e.get("condition_key")}
+            non_cond_nodes = {e["from"] for e in self._edges if not e.get("condition_key")}
+            non_cond_nodes |= {e["to"] for e in self._edges if not e.get("condition_key")}
             cycles = non_cond_nodes - set(sorted_nodes)
             if cycles:
-                raise ValueError(
-                    f"DAG 存在环，涉及节点: {cycles}")
+                raise ValueError(f"DAG 存在环，涉及节点: {cycles}")
             # 剩余节点可能仅通过条件边连接，视为合法
-            sorted_nodes.extend(nid for nid in self._nodes
-                                if nid not in sorted_nodes)
+            sorted_nodes.extend(nid for nid in self._nodes if nid not in sorted_nodes)
 
         return sorted_nodes
 
@@ -275,10 +272,8 @@ class WorkflowDAG:
 
             elif node.type == NodeType.CONDITION:
                 # 条件节点必须有 true/false 分支
-                has_true = any(e.get("condition_key") == "true"
-                               for e in out_edges)
-                has_false = any(e.get("condition_key") == "false"
-                                for e in out_edges)
+                has_true = any(e.get("condition_key") == "true" for e in out_edges)
+                has_false = any(e.get("condition_key") == "false" for e in out_edges)
                 if not has_true:
                     errors.append(f"CONDITION 节点 '{nid}' 缺少 'true' 分支")
                 if not has_false:
@@ -292,14 +287,17 @@ class WorkflowDAG:
         return {
             "workflow_id": self.workflow_id,
             "metadata": self._metadata,
-            "nodes": {nid: {
-                "node_id": n.node_id,
-                "type": n.type.value,
-                "label": n.label,
-                "config": n.config,
-                "timeout": n.timeout,
-                "retry_policy": n.retry_policy,
-            } for nid, n in self._nodes.items()},
+            "nodes": {
+                nid: {
+                    "node_id": n.node_id,
+                    "type": n.type.value,
+                    "label": n.label,
+                    "config": n.config,
+                    "timeout": n.timeout,
+                    "retry_policy": n.retry_policy,
+                }
+                for nid, n in self._nodes.items()
+            },
             "edges": self._edges,
         }
 
@@ -320,8 +318,7 @@ class WorkflowDAG:
         return dag
 
     def __repr__(self) -> str:
-        return (f"WorkflowDAG(wf={self.workflow_id}, "
-                f"nodes={len(self._nodes)}, edges={len(self._edges)})")
+        return f"WorkflowDAG(wf={self.workflow_id}, nodes={len(self._nodes)}, edges={len(self._edges)})"
 
 
 # ═══════════════════════════════════════════════
@@ -349,10 +346,7 @@ class WorkflowExec:
         self.dag = dag
         self.pool = pool or get_execution_pool(pool_name=f"wf-{dag.workflow_id}")
         self.context: dict = context or {}
-        self._node_results: dict[str, NodeResult] = {
-            nid: NodeResult(node_id=nid)
-            for nid in dag.nodes
-        }
+        self._node_results: dict[str, NodeResult] = {nid: NodeResult(node_id=nid) for nid in dag.nodes}
         self._state: WorkflowState = WorkflowState.PENDING
         self._started_at: float | None = None
         self._finished_at: float | None = None
@@ -448,9 +442,7 @@ class WorkflowExec:
                     try:
                         output = self._execute_node(node)
                         # LOOP 节点循环未完成 → 留在 completed 外，下次重跑
-                        if (node.type == NodeType.LOOP
-                                and isinstance(output, dict)
-                                and not output.get("_loop_done", True)):
+                        if node.type == NodeType.LOOP and isinstance(output, dict) and not output.get("_loop_done", True):
                             self._node_results[nid].state = NodeState.RUNNING
                             progress = True
                             continue
@@ -463,8 +455,7 @@ class WorkflowExec:
                         logger.error(f"❌ 节点 '{nid}' 失败: {e}")
 
                         # 如果是条件/循环/并行节点内部错误，传播
-                        if node.type in (NodeType.CONDITION, NodeType.LOOP,
-                                         NodeType.PARALLEL):
+                        if node.type in (NodeType.CONDITION, NodeType.LOOP, NodeType.PARALLEL):
                             self._set_state(WorkflowState.FAILED)
                             return self
 
@@ -482,14 +473,13 @@ class WorkflowExec:
                     reachable = self._find_reachable_from_start(completed)
                     unreachable = stuck - reachable
                     if unreachable:
-                        logger.error(
-                            f"🛑 死锁: 节点不可达 {unreachable}")
+                        logger.error(f"🛑 死锁: 节点不可达 {unreachable}")
                         for nid in unreachable:
                             self._node_results[nid].state = NodeState.SKIPPED
                             completed.add(nid)
                         continue
                     # 防止无限循环 — 每 3 秒输出一次日志
-                    if not hasattr(self, '_deadlock_log_ts'):
+                    if not hasattr(self, "_deadlock_log_ts"):
                         self._deadlock_log_ts = 0
                     if not self._cancelled:
                         now = time.time()
@@ -502,14 +492,8 @@ class WorkflowExec:
             if self._cancelled:
                 self._set_state(WorkflowState.CANCELLED)
             else:
-                has_failed = any(
-                    r.state == NodeState.FAILED
-                    for r in self._node_results.values()
-                )
-                self._set_state(
-                    WorkflowState.FAILED if has_failed
-                    else WorkflowState.COMPLETED
-                )
+                has_failed = any(r.state == NodeState.FAILED for r in self._node_results.values())
+                self._set_state(WorkflowState.FAILED if has_failed else WorkflowState.COMPLETED)
 
         except Exception as e:
             logger.error(f"💥 工作流执行异常: {e}")
@@ -531,8 +515,7 @@ class WorkflowExec:
 
     # ── 前置条件检查 ──────────────────────────
 
-    def _prerequisites_met(self, nid: str,
-                           completed: set[str]) -> bool | None:
+    def _prerequisites_met(self, nid: str, completed: set[str]) -> bool | None:
         """
         检查节点的前置条件是否满足。
 
@@ -724,8 +707,7 @@ class WorkflowExec:
             if iterator_key:
                 self.context[iterator_key] = item
 
-            return {"_loop_item": item, "_loop_index": current_index,
-                    "_loop_done": False, "_loop_total": len(items)}
+            return {"_loop_item": item, "_loop_index": current_index, "_loop_done": False, "_loop_total": len(items)}
 
         if should_continue:
             self._loop_counts[node.node_id] = iteration_count + 1
@@ -772,7 +754,8 @@ class WorkflowExec:
         futures = []
         for child in children:
             f = self.pool.submit(
-                _run_child, child,
+                _run_child,
+                child,
                 name=f"parallel-{child.node_id}",
                 timeout=timeout,
             )
@@ -790,9 +773,7 @@ class WorkflowExec:
                 results["_error"] = str(e)
 
         # 清理已完成的 future
-        self._parallel_futures = [
-            f for f in self._parallel_futures if not f.done()
-        ]
+        self._parallel_futures = [f for f in self._parallel_futures if not f.done()]
 
         return {"_parallel_results": results, "_parallel_count": len(results)}
 
@@ -891,8 +872,7 @@ class WorkflowTemplate:
     _store: dict[str, dict] = {}
 
     @classmethod
-    def save(cls, name: str, dag: WorkflowDAG,
-             description: str = "", tags: list[str] | None = None) -> str:
+    def save(cls, name: str, dag: WorkflowDAG, description: str = "", tags: list[str] | None = None) -> str:
         """保存工作流为模板。"""
         cls._store[name] = {
             "name": name,
@@ -917,11 +897,7 @@ class WorkflowTemplate:
         """列出模板。"""
         results = list(cls._store.values())
         if query:
-            results = [
-                r for r in results
-                if query.lower() in r["name"].lower()
-                or query.lower() in r["description"].lower()
-            ]
+            results = [r for r in results if query.lower() in r["name"].lower() or query.lower() in r["description"].lower()]
         return results
 
     @classmethod
@@ -932,8 +908,7 @@ class WorkflowTemplate:
         return False
 
     @classmethod
-    def instantiate(cls, name: str,
-                    variables: dict | None = None) -> WorkflowDAG | None:
+    def instantiate(cls, name: str, variables: dict | None = None) -> WorkflowDAG | None:
         """
         实例化模板（替换占位符 {{var}}）。
 

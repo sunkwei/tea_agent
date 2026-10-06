@@ -138,6 +138,7 @@ def auto_summary(
     try:
         from tea_agent.store._topics import is_title_protected
     except Exception:  # 极端环境下退化为内联判定，不阻断摘要主流程
+
         def is_title_protected(_t: str | None) -> bool:
             return (_t or "").startswith(("※", "#分叉"))
 
@@ -148,9 +149,7 @@ def auto_summary(
         return None, _empty_usage()
     try:
         cli, mdl = agent._sess._get_summarize_client()
-        summary, usage = generate_topic_summary(
-            client=cli, model=mdl, conversations=recent
-        )
+        summary, usage = generate_topic_summary(client=cli, model=mdl, conversations=recent)
         if summary:
             agent._db.update_topic_title(topic_id, summary)
             logger.info(f"📝 主题摘要更新: {summary}")

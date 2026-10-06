@@ -119,8 +119,7 @@ class ImageStoreMixin:
         try:
             c = self.conn.cursor()
             c.execute(
-                "UPDATE images SET conversation_id = ? "
-                "WHERE id = ? AND conversation_id = '' AND deleted_at IS NULL",
+                "UPDATE images SET conversation_id = ? WHERE id = ? AND conversation_id = '' AND deleted_at IS NULL",
                 (conv_id, img_id),
             )
             self.conn.commit()
@@ -179,7 +178,7 @@ class ImageStoreMixin:
         try:
             # 分批查询，避免 SQLite 变量数上限（默认 999）
             for i in range(0, len(ids), 500):
-                chunk = ids[i:i + 500]
+                chunk = ids[i : i + 500]
                 ph = safe_placeholders(len(chunk))
                 c.execute(
                     f"SELECT id, conversation_id, image_blob, mime_type FROM images "
@@ -187,11 +186,13 @@ class ImageStoreMixin:
                     chunk,
                 )
                 for row in c.fetchall():
-                    grouped.setdefault(row["conversation_id"], []).append({
-                        "id": row["id"],
-                        "mime_type": row["mime_type"] or "image/png",
-                        "blob": bytes(row["image_blob"] or b""),
-                    })
+                    grouped.setdefault(row["conversation_id"], []).append(
+                        {
+                            "id": row["id"],
+                            "mime_type": row["mime_type"] or "image/png",
+                            "blob": bytes(row["image_blob"] or b""),
+                        }
+                    )
         finally:
             c.close()
         return grouped
@@ -210,8 +211,7 @@ class ImageStoreMixin:
         c = self.conn.cursor()
         try:
             c.execute(
-                "SELECT id, conversation_id, image_blob, mime_type FROM images "
-                "WHERE id = ? AND deleted_at IS NULL",
+                "SELECT id, conversation_id, image_blob, mime_type FROM images WHERE id = ? AND deleted_at IS NULL",
                 (int(image_id),),
             )
             row = c.fetchone()

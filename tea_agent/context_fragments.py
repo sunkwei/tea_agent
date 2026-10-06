@@ -156,6 +156,7 @@ def list_fragments() -> list[str]:
 
 # ═══ 内置片段 ═══════════════════════════════════════════
 
+
 def _estimate_context_tokens(context: Any) -> int | None:
     """估算当前上下文 token 用量（消息 + tools 定义 + 已注入富化文本）。
 
@@ -291,22 +292,11 @@ def _frag_token_budget(context: Any) -> ContextFragment | None:
                 # 置不上标志 → 强制压缩不会触发，上下文会继续超额增长。
                 # 这是**行为性故障**（不只是少统计一个数），不能静默。
                 logger.debug("置 _token_exhausted 失败，强制压缩可能不触发", exc_info=True)
-            body = (
-                f"⚠️ 上下文已用尽（{used}/{max_tokens} token）。"
-                "系统将自动压缩历史，请立即总结关键决策后继续。"
-            )
+            body = f"⚠️ 上下文已用尽（{used}/{max_tokens} token）。系统将自动压缩历史，请立即总结关键决策后继续。"
         elif remaining < max_tokens * warn_ratio:
-            body = (
-                f"⚠️ 上下文剩余不足 {warn_ratio * 100:.0f}%"
-                f"（已用 {used}/{max_tokens} token，剩余 {remaining}）。"
-                "建议先总结已完成的工作，再继续。"
-            )
+            body = f"⚠️ 上下文剩余不足 {warn_ratio * 100:.0f}%（已用 {used}/{max_tokens} token，剩余 {remaining}）。建议先总结已完成的工作，再继续。"
         else:
-            body = (
-                f"当前上下文已用约 {used}/{max_tokens} token"
-                f"（{pct:.0f}%，剩余约 {remaining}）。"
-                "当剩余空间不足时，请主动总结并提示压缩。"
-            )
+            body = f"当前上下文已用约 {used}/{max_tokens} token（{pct:.0f}%，剩余约 {remaining}）。当剩余空间不足时，请主动总结并提示压缩。"
     else:
         body = f"当前上下文已用约 {used} token（模型窗口未知，按需节制使用）。"
 
@@ -401,6 +391,7 @@ def _frag_agents_md(context: Any) -> ContextFragment | None:
 
 # ═══ 注册内置片段 ═══════════════════════════════════════
 
+
 def _init_builtin_fragments() -> None:
     """注册内置片段（幂等）。"""
     builtin = {
@@ -419,6 +410,7 @@ _init_builtin_fragments()
 
 
 # ═══ 组装器 ═════════════════════════════════════════════
+
 
 def assemble_fragments(
     context: Any,

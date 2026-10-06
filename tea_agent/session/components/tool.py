@@ -11,6 +11,7 @@ from tea_agent.tool_hooks import tool_hooks
 
 logger = logging.getLogger("session")
 
+
 def _summarize_json(value: Any, limit: int = 800) -> str:
     """工具事件摘要：任意值 → 紧凑 JSON 字符串并截断（审计用途，防事件表膨胀）。
 
@@ -61,7 +62,9 @@ def _collect_round(ctx, entry: dict) -> None:
         if idx < 0:
             return
         storage.append_round(
-            conv_id, idx, entry.get("role", ""),
+            conv_id,
+            idx,
+            entry.get("role", ""),
             entry.get("content", "") or "",
             tool_calls=entry.get("tool_calls"),
             tool_call_id=entry.get("tool_call_id"),
@@ -170,9 +173,7 @@ class ToolComponent(SessionComponent):
             args = relaxed_json_loads(call.function.arguments)
         except json.JSONDecodeError:
             err = "错误：参数解析失败"
-            logger.warning(
-                f"tool call failed: JSON decode error, func={func_name}, raw_args={call.function.arguments[:300]}"
-            )
+            logger.warning(f"tool call failed: JSON decode error, func={func_name}, raw_args={call.function.arguments[:300]}")
             self.add_tool_result(call_id, err)
             self._record_tool_to_trace(func_name, False, err, start_time)
             self._log_tool_event(
@@ -196,17 +197,13 @@ class ToolComponent(SessionComponent):
             allow, deny_reason = tool_hooks.run_pre(func_name, args)
             if not allow:
                 result = f"⛔ 工具被拒绝执行: {deny_reason}"
-                logger.warning(
-                    f"tool blocked by pre-hook: {func_name}, reason={deny_reason}"
-                )
+                logger.warning(f"tool blocked by pre-hook: {func_name}, reason={deny_reason}")
                 success = False
                 error_msg = deny_reason
             else:
                 result = self.ctx.toolkit.call_tool(func_name, **args)
                 # ── post-execute 瀑布（结果改写 + additionalContexts） ──
-                final_result, extra_contexts = tool_hooks.run_post(
-                    func_name, args, result
-                )
+                final_result, extra_contexts = tool_hooks.run_post(func_name, args, result)
                 if extra_contexts:
                     for ctx in extra_contexts:
                         tool_hooks.inject_context(ctx)
@@ -260,9 +257,7 @@ class ToolComponent(SessionComponent):
                 tail_text = raw[tail_start:].decode("utf-8", errors="replace")
 
             result_str = f"{head_text}\n\n... [工具输出截断: {result_bytes}B → {len(head_text.encode('utf-8')) + len(tail_text.encode('utf-8'))}B] ...\n\n{tail_text}"
-            logger.info(
-                f"tool output truncated: {func_name}, {result_bytes}B → {len(result_str.encode('utf-8'))}B"
-            )
+            logger.info(f"tool output truncated: {func_name}, {result_bytes}B → {len(result_str.encode('utf-8'))}B")
 
         # P2 事件溯源：记录工具结果（成功标志/错误/结果摘要/耗时）
         self._log_tool_event(
@@ -282,14 +277,10 @@ class ToolComponent(SessionComponent):
         # 进化触发器：采集工具调用信号
         evolution_trigger = getattr(self.ctx, "evolution_trigger", None)
         if evolution_trigger:
-            evolution_trigger.on_tool_result(
-                func_name, result, time.time() - start_time
-            )
+            evolution_trigger.on_tool_result(func_name, result, time.time() - start_time)
         return call_id, func_name, result_str
 
-    def _record_tool_to_trace(
-        self, func_name: str, success: bool, error_msg: str, start_time: float
-    ):
+    def _record_tool_to_trace(self, func_name: str, success: bool, error_msg: str, start_time: float):
         import time
 
         trace = self.ctx._current_trace
@@ -299,9 +290,7 @@ class ToolComponent(SessionComponent):
         if reflection_mgr is None:
             return
         duration_ms = (time.time() - start_time) * 1000
-        reflection_mgr.record_tool_call(
-            trace, func_name, success, error_msg, duration_ms
-        )
+        reflection_mgr.record_tool_call(trace, func_name, success, error_msg, duration_ms)
 
     def _log_tool_event(self, event_type: str, payload: dict) -> None:
         """P2 事件溯源：记录 tool/call 或 tool/result 事件（异常隔离，不影响主流程）。
@@ -323,9 +312,7 @@ class ToolComponent(SessionComponent):
         try:
             ctx = getattr(self, "ctx", None)
             # 主源：共享上下文（Component 唯一持有的状态载体）
-            topic_id = getattr(ctx, "topic_id", "") or getattr(
-                self, "current_topic_id", None
-            )
+            topic_id = getattr(ctx, "topic_id", "") or getattr(self, "current_topic_id", None)
             storage = getattr(ctx, "storage", None)
             if not (topic_id and storage):
                 return
@@ -336,7 +323,9 @@ class ToolComponent(SessionComponent):
             # 使工具事件能归属到具体轮次。此前不传 → 实测 tool/call 的
             # conversation_id **100% 为 NULL**（404/404），轮次级审计失效。
             events.append_event(
-                topic_id, event_type, payload,
+                topic_id,
+                event_type,
+                payload,
                 conversation_id=getattr(ctx, "conversation_id", "") or "",
             )
         except Exception:
@@ -352,25 +341,22 @@ class ToolComponent(SessionComponent):
             from tea_agent.session.history_builder import get_tool_prune_threshold
 
             max_chars = get_tool_prune_threshold(self.ctx)
-            content = BaseChatSession._compress_tool_content(
-                content, max_chars=max_chars
-            )
+            content = BaseChatSession._compress_tool_content(content, max_chars=max_chars)
         except Exception:
             logger.debug("tool content compression failed, keeping raw", exc_info=True)
-        self.ctx.messages.append(
-            {"role": "tool", "tool_call_id": tool_call_id, "content": content}
-        )
+        self.ctx.messages.append({"role": "tool", "tool_call_id": tool_call_id, "content": content})
 
     def collect_tool_call_round(self, call_id: str, result_str: str):
-        _collect_round(self.ctx, {
-            "role": "tool",
-            "content": result_str,
-            "tool_call_id": call_id,
-        })
+        _collect_round(
+            self.ctx,
+            {
+                "role": "tool",
+                "content": result_str,
+                "tool_call_id": call_id,
+            },
+        )
 
-    def collect_assistant_tool_calls_round(
-        self, content: str, tool_calls: list, reasoning_content: str = ""
-    ):
+    def collect_assistant_tool_calls_round(self, content: str, tool_calls: list, reasoning_content: str = ""):
         tc_list_for_collector = [
             {
                 "id": tc.id,
@@ -404,22 +390,31 @@ class ToolComponent(SessionComponent):
         _collect_round(self.ctx, entry)
 
     def collect_api_error_round(self, content: str):
-        _collect_round(self.ctx, {
-            "role": "assistant",
-            "content": content,
-        })
+        _collect_round(
+            self.ctx,
+            {
+                "role": "assistant",
+                "content": content,
+            },
+        )
 
     def collect_max_iterations_round(self, content: str):
-        _collect_round(self.ctx, {
-            "role": "assistant",
-            "content": content,
-        })
+        _collect_round(
+            self.ctx,
+            {
+                "role": "assistant",
+                "content": content,
+            },
+        )
 
     def collect_interruption_round(self, content: str):
-        _collect_round(self.ctx, {
-            "role": "assistant",
-            "content": content,
-        })
+        _collect_round(
+            self.ctx,
+            {
+                "role": "assistant",
+                "content": content,
+            },
+        )
 
     def parse_tool_calls_from_stream(self, tool_calls_data: list[dict]) -> list:
         from tea_agent.session.json_sanitizer import normalize_tool_args

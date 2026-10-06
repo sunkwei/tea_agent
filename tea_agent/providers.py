@@ -20,7 +20,6 @@ from __future__ import annotations
 
 from typing import Any
 
-
 # ── 模型条目小工具 ──────────────────────────────────────────
 
 

@@ -17,7 +17,7 @@ from __future__ import annotations
 import sqlite3
 import threading
 import uuid
-from contextlib import contextmanager
+from contextlib import contextmanager, suppress
 
 __all__ = [
     "DB",
@@ -107,10 +107,8 @@ class StoreComponent:
         cur_path = getattr(tl, "conn_db_path", None)
         if cur is None or cur_path != self.db_path:
             if cur is not None:
-                try:
+                with suppress(Exception):
                     cur.close()
-                except Exception:
-                    pass
             c = sqlite3.connect(self.db_path)
             c.row_factory = sqlite3.Row
             c.execute("PRAGMA journal_mode=WAL")
@@ -121,7 +119,7 @@ class StoreComponent:
     @classmethod
     def close_thread_conn(cls):
         """Close the thread-local connection. Called by Storage.close()."""
-        conn = getattr(cls._thread_local, 'conn', None)
+        conn = getattr(cls._thread_local, "conn", None)
         if conn:
             try:
                 conn.commit()

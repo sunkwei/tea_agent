@@ -31,6 +31,7 @@ def get_cheap_params(section: str = "api") -> dict[str, Any]:
     defaults = _DEFAULTS.get(section, _DEFAULTS["api"])
     try:
         from ..config import get_config
+
         eff = get_config().get_effective_params("cheap", "mixed")
         return {
             "temperature": eff.get("temperature", defaults["temperature"]),

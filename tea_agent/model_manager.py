@@ -73,9 +73,7 @@ class BuiltinProviderError(ProviderError):
     """内置供应商不可修改/删除。"""
 
     def __init__(self, name: str):
-        super().__init__(
-            f"provider '{name}' is builtin and cannot be modified", "BUILTIN", 403
-        )
+        super().__init__(f"provider '{name}' is builtin and cannot be modified", "BUILTIN", 403)
 
 
 def _normalize_url(url: str) -> str:
@@ -176,9 +174,7 @@ class ProviderService:
         import yaml
 
         payload = {"version": 1, "providers": providers}
-        fpath.write_text(
-            yaml.safe_dump(payload, allow_unicode=True, sort_keys=False), encoding="utf-8"
-        )
+        fpath.write_text(yaml.safe_dump(payload, allow_unicode=True, sort_keys=False), encoding="utf-8")
         with self._lock:
             self._custom_cache = providers
             try:
@@ -228,12 +224,8 @@ class ProviderService:
                 out[str(mid)] = {
                     "context_window": int(cfg.get("max_context_tokens") or 0),
                     "max_output_tokens": int(cfg.get("max_output_tokens") or 0),
-                    "supports_vision": bool(
-                        cfg.get("supports_vision", p.get("supports_vision", False))
-                    ),
-                    "supports_thinking": bool(
-                        cfg.get("supports_reasoning", p.get("supports_thinking", False))
-                    ),
+                    "supports_vision": bool(cfg.get("supports_vision", p.get("supports_vision", False))),
+                    "supports_thinking": bool(cfg.get("supports_reasoning", p.get("supports_thinking", False))),
                     "description": str(cfg.get("note") or "") or "",
                 }
             return out
@@ -261,25 +253,16 @@ class ProviderService:
         for entry in model_entries(info):
             mid = entry["id"]
             y = yaml_cat.get(mid) or {}
-            out.append({
-                "id": mid,
-                "context_window": y.get("context_window")
-                                  or (entry.get("context_window") or 0),
-                "max_output_tokens": y.get("max_output_tokens")
-                                     or (entry.get("max_output_tokens") or 0),
-                "supports_vision": bool(
-                    y.get("supports_vision",
-                          entry.get("supports_vision",
-                                    info.get("supports_vision", False)))
-                ),
-                "supports_thinking": bool(
-                    y.get("supports_thinking",
-                          entry.get("supports_thinking",
-                                    info.get("supports_thinking", False)))
-                ),
-                "description": y.get("description")
-                               or (entry.get("description") or ""),
-            })
+            out.append(
+                {
+                    "id": mid,
+                    "context_window": y.get("context_window") or (entry.get("context_window") or 0),
+                    "max_output_tokens": y.get("max_output_tokens") or (entry.get("max_output_tokens") or 0),
+                    "supports_vision": bool(y.get("supports_vision", entry.get("supports_vision", info.get("supports_vision", False)))),
+                    "supports_thinking": bool(y.get("supports_thinking", entry.get("supports_thinking", info.get("supports_thinking", False)))),
+                    "description": y.get("description") or (entry.get("description") or ""),
+                }
+            )
         return out
 
     def list_providers(self) -> dict:
@@ -311,9 +294,7 @@ class ProviderService:
                     "supports_thinking": any(m.get("supports_thinking") for m in catalog),
                     "supports_vision": any(m.get("supports_vision") for m in catalog),
                     "description": info.get("description", ""),
-                    "is_configured": bool(
-                        main_url and main_url == _normalize_url(info.get("api_url", ""))
-                    ),
+                    "is_configured": bool(main_url and main_url == _normalize_url(info.get("api_url", ""))),
                 }
             )
         return {"providers": providers, "total": len(providers), "active": active}
@@ -401,9 +382,7 @@ class ProviderService:
                     entry["description"] = str(item["description"]).strip()
                 out.append(entry)
                 continue
-            raise ProviderError(
-                "model entries must be strings or dicts with 'id'", "BAD_REQUEST", 400
-            )
+            raise ProviderError("model entries must be strings or dicts with 'id'", "BAD_REQUEST", 400)
         return out
 
     def _validate_payload(self, data: dict, partial: bool = False) -> dict:
@@ -587,9 +566,7 @@ class ProviderService:
                 return hit
 
         # 目录元数据索引：id -> 富条目，供实时列表补齐 context_window/能力等字段
-        catalog_by_id: dict[str, dict] = {
-            m["id"]: m for m in static_models if isinstance(m, dict) and m.get("id")
-        }
+        catalog_by_id: dict[str, dict] = {m["id"]: m for m in static_models if isinstance(m, dict) and m.get("id")}
         live = self._query_live(api_url, api_key)
         if live.get("ok"):
             result["source"] = "live"
@@ -714,14 +691,10 @@ class ProviderService:
             target.top_p = float(top_p)
         # 目录中该模型的元数据（窗口/输出上限/能力）。来自富目录 _catalog，
         # 其已实现「模型级显式值覆盖、缺省继承提供商级」，故 per-model 能力以 meta 为准。
-        meta: dict = {
-            m["id"]: m for m in self._catalog(provider) if isinstance(m, dict) and m.get("id")
-        }.get(model) or {}
+        meta: dict = {m["id"]: m for m in self._catalog(provider) if isinstance(m, dict) and m.get("id")}.get(model) or {}
         # 目录自动填充：显式传入 > 模型目录默认
         eff_max_tokens = (
-            int(max_tokens)
-            if max_tokens is not None
-            else (int(meta["max_output_tokens"]) if meta.get("max_output_tokens") else target.max_tokens)
+            int(max_tokens) if max_tokens is not None else (int(meta["max_output_tokens"]) if meta.get("max_output_tokens") else target.max_tokens)
         )
         eff_max_context = (
             int(max_context_tokens)
@@ -739,15 +712,11 @@ class ProviderService:
         # 供应商级仍叫 supports_thinking；两处都得读，否则能力恒 False（实测踩过）。
         model_thinking = bool(mcfg.get("supports_reasoning") or mcfg.get("supports_thinking"))
         if meta:
-            merged_options["supports_vision"] = bool(
-                meta.get("supports_vision") or mcfg.get("supports_vision"))
-            merged_options["supports_reasoning"] = bool(
-                meta.get("supports_thinking") or model_thinking)
+            merged_options["supports_vision"] = bool(meta.get("supports_vision") or mcfg.get("supports_vision"))
+            merged_options["supports_reasoning"] = bool(meta.get("supports_thinking") or model_thinking)
         else:
-            merged_options["supports_vision"] = bool(
-                provider.get("supports_vision", False) or mcfg.get("supports_vision"))
-            merged_options["supports_reasoning"] = bool(
-                provider.get("supports_thinking", False) or model_thinking)
+            merged_options["supports_vision"] = bool(provider.get("supports_vision", False) or mcfg.get("supports_vision"))
+            merged_options["supports_reasoning"] = bool(provider.get("supports_thinking", False) or model_thinking)
         target.options = merged_options
 
         save_config(cfg, cfg_path)

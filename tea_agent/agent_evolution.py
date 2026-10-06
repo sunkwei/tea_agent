@@ -8,6 +8,7 @@
 - 不自建循环，不搞后台线程，不阻塞主交互流程
 """
 
+import contextlib
 import json
 import logging
 import os
@@ -17,8 +18,7 @@ from typing import Any
 logger = logging.getLogger("agent.evolution")
 
 # 进化日志：可用环境变量 TEA_AGENT_EVOLUTION_LOG 覆盖路径（测试/自定义用）
-_EVOLUTION_LOG_DEFAULT = os.path.join(
-    os.path.expanduser("~"), ".tea_agent", "evolution_log.json")
+_EVOLUTION_LOG_DEFAULT = os.path.join(os.path.expanduser("~"), ".tea_agent", "evolution_log.json")
 _EVOLUTION_LOG_MAX = 100  # 日志保留条数上限
 
 
@@ -68,12 +68,14 @@ def _prune_evolution_log(keep: int) -> dict:
 def _rmtree(path: str) -> None:
     """递归删除目录（跨平台）。"""
     import shutil
+
     shutil.rmtree(path)
 
 
 # ═══════════════════════════════════════════════════════════════
 #  Trigger — 轻量信号采集
 # ═══════════════════════════════════════════════════════════════
+
 
 class EvolutionTrigger:
     """自进化触发器 — 采集工具调用信号，不调 LLM。
@@ -113,15 +115,17 @@ class EvolutionTrigger:
         if ok:
             return
 
-        recent = [e for e in self.tool_call_log if e["tool"] == tool_name][-self.consecutive_failure_threshold:]
+        recent = [e for e in self.tool_call_log if e["tool"] == tool_name][-self.consecutive_failure_threshold :]
         if len(recent) >= self.consecutive_failure_threshold and all(not e["ok"] for e in recent):
-            self.evolution_events.append({
-                "type": "tool_failure",
-                "tool": tool_name,
-                "recent_errors": [e["error"] for e in recent],
-                "count": len(recent),
-                "ts": time.time(),
-            })
+            self.evolution_events.append(
+                {
+                    "type": "tool_failure",
+                    "tool": tool_name,
+                    "recent_errors": [e["error"] for e in recent],
+                    "count": len(recent),
+                    "ts": time.time(),
+                }
+            )
             logger.info(f"evolution: 检测到 {tool_name} 连续 {self.consecutive_failure_threshold} 次失败")
 
     def get_pending_events(self) -> list[dict]:
@@ -134,6 +138,7 @@ class EvolutionTrigger:
 # ═══════════════════════════════════════════════════════════════
 #  Analyze — 用廉价 LLM 分析信号，产出行动建议
 # ═══════════════════════════════════════════════════════════════
+
 
 class EvolutionAnalyzer:
     """进化分析器 — 会话结束后分析信号，输出行动建议。"""
@@ -201,6 +206,7 @@ rubric 格式（规则项支持 match: regex/contains/line/line_contains）：
 #  Act — 执行进化行动
 # ═══════════════════════════════════════════════════════════════
 
+
 class EvolutionActor:
     """进化执行器 — 调用已有 toolkit_* 工具执行分析建议。
 
@@ -233,19 +239,20 @@ class EvolutionActor:
                 ok = False
                 logger.warning(f"evolution: 执行 {action_type} 失败: {e}")
             # B: 记录每次进化行动到持久化日志（可审查）
-            self._record_evolution({
-                "timestamp": time.time(),
-                "action": action_type,
-                "target": target,
-                "reason": reason[:120],
-                "ok": ok,
-                "error": result.get("error", "")[:200],
-                "detail": result.get("detail", ""),
-                "decision": result.get("decision", ""),
-                "delta": result.get("delta"),
-            })
-            results.append({"action": action_type, "target": target, "ok": ok,
-                            "error": result.get("error", "")[:200]})
+            self._record_evolution(
+                {
+                    "timestamp": time.time(),
+                    "action": action_type,
+                    "target": target,
+                    "reason": reason[:120],
+                    "ok": ok,
+                    "error": result.get("error", "")[:200],
+                    "detail": result.get("detail", ""),
+                    "decision": result.get("decision", ""),
+                    "delta": result.get("delta"),
+                }
+            )
+            results.append({"action": action_type, "target": target, "ok": ok, "error": result.get("error", "")[:200]})
             logger.info(f"evolution: 执行 {action_type} -> {target}: ok={ok}")
 
         return results
@@ -348,7 +355,8 @@ class EvolutionActor:
         """优化提示词 — 委托给 toolkit_prompt_evolve。"""
         if not self.tk or "toolkit_prompt_evolve" not in self.tk.func_map:
             return {"ok": False, "error": "toolkit_prompt_evolve 不可用"}
-        return self.tk.call_tool("toolkit_prompt_evolve",
+        return self.tk.call_tool(
+            "toolkit_prompt_evolve",
             action="evolve",
         )
 
@@ -356,7 +364,8 @@ class EvolutionActor:
         """固化经验 — 委托给 toolkit_experience_solidify。"""
         if not self.tk or "toolkit_experience_solidify" not in self.tk.func_map:
             return {"ok": False, "error": "toolkit_experience_solidify 不可用"}
-        return self.tk.call_tool("toolkit_experience_solidify",
+        return self.tk.call_tool(
+            "toolkit_experience_solidify",
             action="auto",
             task=task,
             success=True,
@@ -493,18 +502,13 @@ class EvolutionActor:
         """
         import os
 
-        skills_dir = os.environ.get(
-            "TEA_AGENT_SKILLS_DIR",
-            os.path.join(os.path.expanduser("~"), ".tea_agent", "skills"))
+        skills_dir = os.environ.get("TEA_AGENT_SKILLS_DIR", os.path.join(os.path.expanduser("~"), ".tea_agent", "skills"))
         if not os.path.isdir(skills_dir):
             return {"ok": True, "pruned": 0, "detail": "技能目录不存在"}
         removed = 0
         removed_names = []
         try:
-            auto_dirs = sorted(
-                d for d in os.listdir(skills_dir)
-                if d.startswith("interrupt-avoid-")
-                and os.path.isdir(os.path.join(skills_dir, d)))
+            auto_dirs = sorted(d for d in os.listdir(skills_dir) if d.startswith("interrupt-avoid-") and os.path.isdir(os.path.join(skills_dir, d)))
             if not auto_dirs:
                 return {"ok": True, "pruned": 0, "detail": "无自动打断技能"}
             # 保留最近 keep 个（按名字序 = 创建序近似），删除更早的
@@ -520,14 +524,11 @@ class EvolutionActor:
             for d in os.listdir(skills_dir):
                 full = os.path.join(skills_dir, d)
                 if os.path.isdir(full) and not os.listdir(full):
-                    try:
+                    with contextlib.suppress(OSError):
                         os.rmdir(full)
-                    except OSError:
-                        pass
         except Exception as e:
             return {"ok": False, "error": f"prune_skills 失败: {e}"}
-        return {"ok": True, "pruned": removed, "removed": removed_names,
-                "detail": f"清理自动打断技能保留最近 {keep} 份"}
+        return {"ok": True, "pruned": removed, "removed": removed_names, "detail": f"清理自动打断技能保留最近 {keep} 份"}
 
     # ── B: 进化可观测 — 结构化记录每次进化行动 ──
     def _record_evolution(self, entry: dict) -> dict:
@@ -547,6 +548,7 @@ class EvolutionActor:
 # ═══════════════════════════════════════════════════════════════
 #  Evaluate — 评分闭环（借鉴 PenguinHarness self-evolve 机制）
 # ═══════════════════════════════════════════════════════════════
+
 
 class EvolutionEvaluator:
     """进化评估器 — 在 Analyze → Act 之间插入 Evaluate 阶段。
@@ -580,10 +582,7 @@ class EvolutionEvaluator:
 
     def extract_eval_actions(self, actions: list[dict]) -> list[dict]:
         """从行动列表中提取带 rubric 的可评估行动（有 target + rubric）。"""
-        return [
-            a for a in actions
-            if a.get("action") not in ("none", "") and a.get("target") and a.get("rubric")
-        ]
+        return [a for a in actions if a.get("action") not in ("none", "") and a.get("target") and a.get("rubric")]
 
     def evaluate_target(self, target: str, rules, runs: int = 3) -> dict | None:
         """读取目标文件内容并用 rubric 评分（改进前后通用）。
@@ -614,16 +613,23 @@ class EvolutionEvaluator:
         """回滚目标文件到改进前（git checkout）。优先当前目录，失败则尝试目标目录。"""
         try:
             import subprocess
+
             r = subprocess.run(
                 ["git", "checkout", "--", target],
-                capture_output=True, text=True, timeout=30,
+                capture_output=True,
+                text=True,
+                timeout=30,
             )
             if r.returncode != 0:
                 import os
+
                 d = os.path.dirname(os.path.abspath(target))
                 r = subprocess.run(
                     ["git", "checkout", "--", os.path.basename(target)],
-                    capture_output=True, text=True, timeout=30, cwd=d,
+                    capture_output=True,
+                    text=True,
+                    timeout=30,
+                    cwd=d,
                 )
             return r.returncode == 0
         except Exception as e:

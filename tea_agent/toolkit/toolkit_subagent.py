@@ -74,6 +74,7 @@ def _get_executor(min_workers: int = 0) -> ThreadPoolExecutor:
                 old.shutdown(wait=False)
         return _executor
 
+
 # 自动唤醒通知: {parent_session_id: [sub_agent_id, ...]}
 _pending_notifications: dict[str, list[str]] = {}
 _notification_lock = threading.Lock()
@@ -91,8 +92,9 @@ def _get_db():
     """获取数据库连接（延迟初始化）。"""
     try:
         from tea_agent.store.localstore import get_or_create_localstore
+
         store = get_or_create_localstore()
-        return store.db if hasattr(store, 'db') else None
+        return store.db if hasattr(store, "db") else None
     except Exception:
         return None
 
@@ -104,15 +106,11 @@ def _save_to_db():
         return False
     try:
         with _registry_lock:
-            data = {
-                aid: {k: v for k, v in entry.items() if k != 'future'}
-                for aid, entry in _subagent_registry.items()
-            }
+            data = {aid: {k: v for k, v in entry.items() if k != "future"} for aid, entry in _subagent_registry.items()}
         blob = json.dumps(data, ensure_ascii=False, default=str)
         # upsert
         db.execute(
-            f"INSERT OR REPLACE INTO {_PERSIST_TABLE} (key, value, updated_at) VALUES (?, ?, ?)",
-            ("registry", blob, datetime.now().isoformat())
+            f"INSERT OR REPLACE INTO {_PERSIST_TABLE} (key, value, updated_at) VALUES (?, ?, ?)", ("registry", blob, datetime.now().isoformat())
         )
         db.commit()
         return True
@@ -131,15 +129,10 @@ def _load_from_db():
         return False
     try:
         # 确保表存在
-        db.execute(
-            f"CREATE TABLE IF NOT EXISTS {_PERSIST_TABLE} ("
-            "key TEXT PRIMARY KEY, value TEXT, updated_at TEXT)"
-        )
+        db.execute(f"CREATE TABLE IF NOT EXISTS {_PERSIST_TABLE} (key TEXT PRIMARY KEY, value TEXT, updated_at TEXT)")
         db.commit()
 
-        row = db.execute(
-            f"SELECT value FROM {_PERSIST_TABLE} WHERE key=?", ("registry",)
-        ).fetchone()
+        row = db.execute(f"SELECT value FROM {_PERSIST_TABLE} WHERE key=?", ("registry",)).fetchone()
         if row and row[0]:
             data = json.loads(row[0])
             with _registry_lock:
@@ -178,13 +171,15 @@ def check_notifications(session_id: str = "") -> dict:
     with _registry_lock:
         for aid in notifications:
             entry = _subagent_registry.get(aid, {})
-            details.append({
-                "agent_id": aid,
-                "status": entry.get("status", "unknown"),
-                "goal": entry.get("goal", ""),
-                "result": (entry.get("result") or "")[:200],
-                "error": entry.get("error"),
-            })
+            details.append(
+                {
+                    "agent_id": aid,
+                    "status": entry.get("status", "unknown"),
+                    "goal": entry.get("goal", ""),
+                    "result": (entry.get("result") or "")[:200],
+                    "error": entry.get("error"),
+                }
+            )
     return {"notifications": details, "count": len(details)}
 
 
@@ -197,13 +192,15 @@ def _ensure_toolkit_loaded():
     """确保 toolkit_subagent_msg 已注册到全局 toolkit。"""
     try:
         from tea_agent import tlk
-        if not hasattr(tlk, 'toolkit') or tlk.toolkit is None:
+
+        if not hasattr(tlk, "toolkit") or tlk.toolkit is None:
             return
         if "toolkit_subagent_msg" not in tlk.toolkit.func_map:
             from tea_agent.toolkit.toolkit_subagent_msg import (
                 meta_toolkit_subagent_msg,
                 toolkit_subagent_msg,
             )
+
             tlk.toolkit.register(
                 "toolkit_subagent_msg",
                 toolkit_subagent_msg,
@@ -322,14 +319,16 @@ def _execute_subagent(
         # 更新注册表
         with _registry_lock:
             if agent_id in _subagent_registry:
-                _subagent_registry[agent_id].update({
-                    "status": "completed" if not error else "failed",
-                    "result": assistant,
-                    "error": error,
-                    "tool_calls": tool_calls,
-                    "elapsed": elapsed,
-                    "completed_at": datetime.now().isoformat(),
-                })
+                _subagent_registry[agent_id].update(
+                    {
+                        "status": "completed" if not error else "failed",
+                        "result": assistant,
+                        "error": error,
+                        "tool_calls": tool_calls,
+                        "elapsed": elapsed,
+                        "completed_at": datetime.now().isoformat(),
+                    }
+                )
                 _save_to_db()
 
         # Auto-wake: 通知父 Agent
@@ -337,20 +336,21 @@ def _execute_subagent(
             _add_notification(agent_id, parent_session_id)
 
         logger.info(f"Sub-agent {agent_id} completed ({elapsed:.1f}s, {tool_calls} tools)")
-        return {"agent_id": agent_id, "status": "completed" if not error else "failed",
-                "result": assistant, "elapsed": elapsed}
+        return {"agent_id": agent_id, "status": "completed" if not error else "failed", "result": assistant, "elapsed": elapsed}
 
     except Exception as e:
         elapsed = round(time.time() - start, 2)
         logger.error(f"Sub-agent {agent_id} failed: {e}")
         with _registry_lock:
             if agent_id in _subagent_registry:
-                _subagent_registry[agent_id].update({
-                    "status": "failed",
-                    "error": str(e),
-                    "elapsed": elapsed,
-                    "completed_at": datetime.now().isoformat(),
-                })
+                _subagent_registry[agent_id].update(
+                    {
+                        "status": "failed",
+                        "error": str(e),
+                        "elapsed": elapsed,
+                        "completed_at": datetime.now().isoformat(),
+                    }
+                )
                 _save_to_db()
 
         # Auto-wake: 即使失败也通知
@@ -410,17 +410,14 @@ def toolkit_subagent(
         _load_from_db()
 
     # ── 嵌套深度计算 ──────────────────────────────
-    caller_depth = getattr(_thread_local, 'subagent_depth', -1)
+    caller_depth = getattr(_thread_local, "subagent_depth", -1)
     new_depth = caller_depth + 1
-    caller_max_depth = getattr(_thread_local, 'subagent_max_depth', None)
+    caller_max_depth = getattr(_thread_local, "subagent_max_depth", None)
     effective_max_depth = max_depth if max_depth is not None else (caller_max_depth or DEFAULT_MAX_DEPTH)
 
     # ── 深度检查 ──────────────────────────────────
     if new_depth > effective_max_depth:
-        msg = (
-            f"Sub-agent nesting depth exceeded: depth={new_depth}, max={effective_max_depth}. "
-            f"Cannot spawn sub-agent at level {new_depth}."
-        )
+        msg = f"Sub-agent nesting depth exceeded: depth={new_depth}, max={effective_max_depth}. Cannot spawn sub-agent at level {new_depth}."
         if caller_depth >= 0:
             msg += f" Current sub-agent (depth {caller_depth}) may not spawn deeper agents."
         return {"error": msg, "depth": new_depth, "max_depth": effective_max_depth}
@@ -454,10 +451,18 @@ def toolkit_subagent(
 
         # 提交到线程池（max_concurrent 只扩容不缩容，见 _get_executor）
         future = _get_executor(max_concurrent).submit(
-            _execute_subagent, agent_id, goal, context,
-            max_iterations, enable_thinking, timeout,
-            allowed_tools, denied_tools, parent_session_id,
-            new_depth, effective_max_depth,
+            _execute_subagent,
+            agent_id,
+            goal,
+            context,
+            max_iterations,
+            enable_thinking,
+            timeout,
+            allowed_tools,
+            denied_tools,
+            parent_session_id,
+            new_depth,
+            effective_max_depth,
         )
 
         with _registry_lock:
@@ -499,10 +504,17 @@ def toolkit_subagent(
             _save_to_db()
 
         result = _execute_subagent(
-            agent_id, goal, context, max_iterations,
-            enable_thinking, timeout,
-            allowed_tools, denied_tools, parent_session_id,
-            new_depth, effective_max_depth,
+            agent_id,
+            goal,
+            context,
+            max_iterations,
+            enable_thinking,
+            timeout,
+            allowed_tools,
+            denied_tools,
+            parent_session_id,
+            new_depth,
+            effective_max_depth,
         )
         return result
 
@@ -597,8 +609,7 @@ def toolkit_subagent(
             if not entry:
                 return {"error": f"Sub-agent not found: {agent_id}"}
             if entry.get("status") not in ("pending", "running"):
-                return {"agent_id": agent_id, "status": entry["status"],
-                        "message": "Sub-agent already finished"}
+                return {"agent_id": agent_id, "status": entry["status"], "message": "Sub-agent already finished"}
 
             future = entry.get("future")
             if future and not future.done():
@@ -621,10 +632,7 @@ def toolkit_subagent(
         """Remove old completed sub-agents from registry."""
         with _registry_lock:
             before = len(_subagent_registry)
-            to_remove = [
-                aid for aid, entry in _subagent_registry.items()
-                if entry.get("status") in ("completed", "failed", "cancelled")
-            ]
+            to_remove = [aid for aid, entry in _subagent_registry.items() if entry.get("status") in ("completed", "failed", "cancelled")]
             for aid in to_remove:
                 del _subagent_registry[aid]
             _save_to_db()
@@ -648,48 +656,24 @@ def meta_toolkit_subagent() -> dict:
                     "action": {
                         "type": "string",
                         "enum": ["spawn", "spawn_sync", "list", "status", "collect", "cancel", "check_notifications", "cleanup"],
-                        "description": "spawn(异步)/spawn_sync(同步)/list(列表)/status(状态)/collect(收集)/cancel(取消)/check_notifications(检查通知)/cleanup(清理)"
+                        "description": "spawn(异步)/spawn_sync(同步)/list(列表)/status(状态)/collect(收集)/cancel(取消)/check_notifications(检查通知)/cleanup(清理)",
                     },
-                    "goal": {
-                        "type": "string",
-                        "description": "Sub-agent task description"
-                    },
-                    "context": {
-                        "type": "object",
-                        "description": "Injected context dict (key=title, value=content)"
-                    },
-                    "max_iterations": {
-                        "type": "integer",
-                        "description": "Max tool iterations",
-                        "default": 20
-                    },
-                    "enable_thinking": {
-                        "type": "boolean",
-                        "description": "Enable reasoning",
-                        "default": False
-                    },
-                    "timeout": {
-                        "type": "integer",
-                        "description": "Timeout in seconds",
-                        "default": 120
-                    },
+                    "goal": {"type": "string", "description": "Sub-agent task description"},
+                    "context": {"type": "object", "description": "Injected context dict (key=title, value=content)"},
+                    "max_iterations": {"type": "integer", "description": "Max tool iterations", "default": 20},
+                    "enable_thinking": {"type": "boolean", "description": "Enable reasoning", "default": False},
+                    "timeout": {"type": "integer", "description": "Timeout in seconds", "default": 120},
                     "max_concurrent": {
                         "type": "integer",
                         "description": "Max concurrent agents (pool scales up, never down; initial size via TEA_SUBAGENT_WORKERS, default 5, clamp [1,64])",
-                        "default": 5
+                        "default": 5,
                     },
-                    "agent_id": {
-                        "type": "string",
-                        "description": "Sub-agent ID"
-                    },
-                    "parent_session_id": {
-                        "type": "string",
-                        "description": "Parent session ID for auto-wake notifications"
-                    },
+                    "agent_id": {"type": "string", "description": "Sub-agent ID"},
+                    "parent_session_id": {"type": "string", "description": "Parent session ID for auto-wake notifications"},
                     "max_depth": {
                         "type": "integer",
                         "description": "Max nesting depth. 0=no nesting, 1=parent→child only (default). Inherited from parent if not set.",
-                        "default": 1
+                        "default": 1,
                     },
                 },
                 "required": ["action"],

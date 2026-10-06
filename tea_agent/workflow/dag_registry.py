@@ -34,17 +34,15 @@ class SimpleDagRegistry:
     _lock = threading.Lock()
 
     @classmethod
-    def register(cls, title: str, nodes: list[dict],
-                 edges: list[dict] | None = None,
-                 viz_id: str | None = None) -> str:
+    def register(cls, title: str, nodes: list[dict], edges: list[dict] | None = None, viz_id: str | None = None) -> str:
         """注册简易 DAG。返回 viz_id。"""
         import uuid
+
         if viz_id is None:
             viz_id = f"simple-{uuid.uuid4().hex[:8]}"
 
         total = len(nodes)
-        completed = sum(1 for n in nodes if n.get("state") in
-                        ("completed", "failed", "skipped"))
+        completed = sum(1 for n in nodes if n.get("state") in ("completed", "failed", "skipped"))
 
         cls._instances[viz_id] = {
             "viz_id": viz_id,
@@ -61,10 +59,7 @@ class SimpleDagRegistry:
         return viz_id
 
     @classmethod
-    def update_node(cls, viz_id: str, node_id: str,
-                    state: str | None = None,
-                    error: str | None = None,
-                    duration: float | None = None):
+    def update_node(cls, viz_id: str, node_id: str, state: str | None = None, error: str | None = None, duration: float | None = None):
         """更新单个节点状态并重新计算进度。"""
         entry = cls._instances.get(viz_id)
         if not entry:
@@ -79,8 +74,7 @@ class SimpleDagRegistry:
                     n["duration"] = duration
                 break
         total = len(entry["nodes"])
-        completed = sum(1 for n in entry["nodes"] if n.get("state") in
-                        ("completed", "failed", "skipped"))
+        completed = sum(1 for n in entry["nodes"] if n.get("state") in ("completed", "failed", "skipped"))
         entry["progress"] = {"completed": completed, "total": total}
         if completed >= total:
             has_failed = any(n.get("state") == "failed" for n in entry["nodes"])
@@ -96,8 +90,7 @@ class SimpleDagRegistry:
     def list_all(cls) -> list[dict]:
         """列出所有简易 DAG（清理过期条目）。"""
         now = time.time()
-        stale = [vid for vid, entry in cls._instances.items()
-                 if now - entry.get("_created_at", 0) > 1800]
+        stale = [vid for vid, entry in cls._instances.items() if now - entry.get("_created_at", 0) > 1800]
         for vid in stale:
             cls._instances.pop(vid, None)
         return list(cls._instances.values())

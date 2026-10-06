@@ -20,6 +20,8 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
+from tea_agent.session.message_queue import attach_steering_provider
+
 from ..module import HotReloadModule, ModuleRegistry, _module_path_for
 from .state import (
     active_sessions,
@@ -27,14 +29,11 @@ from .state import (
     config_cache,
     max_iter_pending,
     question_pending,
+    queue_pop,
 )
 from .state import (
     clear_all as clear_all_state,
 )
-from .state import (
-    queue_pop,
-)
-from tea_agent.session.message_queue import attach_steering_provider
 
 logger = logging.getLogger("hot_reload.agent")
 
@@ -49,9 +48,7 @@ def _server_round_summary(model: str, user_msg, tool_names: list, ai_msg: str) -
         ai_msg: AI 最终回复
     """
     try:
-        _user = user_msg if isinstance(user_msg, str) else (
-            (user_msg or {}).get("text", "") if isinstance(user_msg, dict) else str(user_msg)
-        )
+        _user = user_msg if isinstance(user_msg, str) else ((user_msg or {}).get("text", "") if isinstance(user_msg, dict) else str(user_msg))
         _user = (_user or "").replace("\n", " ")[:64]
         _tools = ",".join(tool_names or [])
         _ai = (ai_msg or "").replace("\n", " ")[:64]
@@ -118,10 +115,7 @@ def _compute_context_usage(context: Any, prompt_tokens: int) -> dict:
     if max_tokens > 0:
         pct = round(min(100.0, used / max_tokens * 100.0), 1)
 
-    if max_tokens > 0:
-        text = f"上下文已用 {pct}% ({used:,}/{max_tokens:,} tok)"
-    else:
-        text = f"上下文已用 {used:,} tok"
+    text = f"上下文已用 {pct}% ({used:,}/{max_tokens:,} tok)" if max_tokens > 0 else f"上下文已用 {used:,} tok"
     return {
         "context_used_tokens": used,
         "context_max_tokens": max_tokens,
@@ -258,18 +252,18 @@ class AgentModule(HotReloadModule):
         # FileWatcher 触发 AgentModule.reload → 此处按依赖链深度 reload
         # 确保所有 import 拿到最新代码。
         _core_modules = [
-            'tea_agent.session.context',
-            'tea_agent.session.history_builder',
-            'tea_agent.session.decode_speed',
-            'tea_agent.session.os_info_injector',
-            'tea_agent.session.params',
-            'tea_agent.session.prompts',
-            'tea_agent.session.tool_loop_runner',
-            'tea_agent.basesession',
-            'tea_agent.session_pipeline',
-            'tea_agent.onlinesession',
-            'tea_agent.agent',
-            'tea_agent.agent_pipeline',
+            "tea_agent.session.context",
+            "tea_agent.session.history_builder",
+            "tea_agent.session.decode_speed",
+            "tea_agent.session.os_info_injector",
+            "tea_agent.session.params",
+            "tea_agent.session.prompts",
+            "tea_agent.session.tool_loop_runner",
+            "tea_agent.basesession",
+            "tea_agent.session_pipeline",
+            "tea_agent.onlinesession",
+            "tea_agent.agent",
+            "tea_agent.agent_pipeline",
         ]
         for mod_name in _core_modules:
             mod = _sys.modules.get(mod_name)
@@ -280,6 +274,7 @@ class AgentModule(HotReloadModule):
                     logger.warning(f"⚠️ Deep reload {mod_name} failed (non-fatal): {e}")
 
         from tea_agent.agent import Agent
+
         cls._start_time = time.time()
         cfg_path = cls._config_path or os.environ.get("TEA_CONFIG", "")
         if not cfg_path:
@@ -288,7 +283,7 @@ class AgentModule(HotReloadModule):
             if cfg_path:
                 logger.info(f"Using remembered config: {cfg_path}")
         cls._instance = Agent(mode="full", config_path=cfg_path or None)
-        cls._config_path = cfg_path or getattr(cls._instance, '_config_path', '')
+        cls._config_path = cfg_path or getattr(cls._instance, "_config_path", "")
         logger.info(f"Agent loaded | model={cls._get_model_name()}")
         return True
 
@@ -330,13 +325,13 @@ class AgentModule(HotReloadModule):
             return
         try:
             from tea_agent.storage_scope import project_run_dir
+
             run_dir = project_run_dir()
             if not run_dir:
                 return
             target = os.path.join(run_dir, cls._LAST_CONFIG_FILENAME)
             with open(target, "w", encoding="utf-8") as f:
-                json.dump({"config_path": os.path.abspath(config_path)}, f,
-                          ensure_ascii=False, indent=2)
+                json.dump({"config_path": os.path.abspath(config_path)}, f, ensure_ascii=False, indent=2)
             logger.debug(f"remember last config: {config_path}")
         except Exception:
             logger.debug(f"remember last config failed: {config_path}", exc_info=True)
@@ -346,13 +341,14 @@ class AgentModule(HotReloadModule):
         """读取项目记忆的最后 config 路径；文件缺失/已删除返回 None。"""
         try:
             from tea_agent.storage_scope import project_run_dir
+
             run_dir = project_run_dir()
             if not run_dir:
                 return None
             target = os.path.join(run_dir, cls._LAST_CONFIG_FILENAME)
             if not os.path.isfile(target):
                 return None
-            with open(target, "r", encoding="utf-8") as f:
+            with open(target, encoding="utf-8") as f:
                 data = json.load(f)
             p = ((data or {}).get("config_path") or "").strip()
             return p if p and os.path.isfile(p) else None
@@ -364,6 +360,7 @@ class AgentModule(HotReloadModule):
         key = config_path or "__default__"
         if key not in config_cache:
             from tea_agent.config import load_config
+
             config_cache[key] = load_config(config_path)
         return config_cache[key]
 
@@ -393,30 +390,37 @@ class AgentModule(HotReloadModule):
         tk = tlk.toolkit
         main_m = cfg.main_model
         cheap_m = cfg.cheap_model
-        _options = getattr(main_m, 'options', {}) or {}
+        _options = getattr(main_m, "options", {}) or {}
         # 视觉能力由主模型自身 supports_vision 决定（不再有独立 vision_model 角色）
-        supports_vision = _options.get('supports_vision', False) if isinstance(_options, dict) else False
-        supports_reasoning = _options.get('supports_reasoning', True) if isinstance(_options, dict) else True
+        supports_vision = _options.get("supports_vision", False) if isinstance(_options, dict) else False
+        supports_reasoning = _options.get("supports_reasoning", True) if isinstance(_options, dict) else True
 
         from tea_agent.store import get_storage as _get_storage
+
         _storage = _get_storage()
         sess = OnlineToolSession(
             toolkit=tk,
-            api_key=main_m.api_key, api_url=main_m.api_url, model=main_m.model_name,
+            api_key=main_m.api_key,
+            api_url=main_m.api_url,
+            model=main_m.model_name,
             provider=str(getattr(main_m, "provider", "") or ""),
-            max_history=cfg.max_history, max_iterations=cfg.max_iterations,
-            keep_turns=cfg.keep_turns, max_tool_output=cfg.max_tool_output,
+            max_history=cfg.max_history,
+            max_iterations=cfg.max_iterations,
+            keep_turns=cfg.keep_turns,
+            max_tool_output=cfg.max_tool_output,
             max_assistant_content=cfg.max_assistant_content,
             max_context_tokens=main_m.max_context_tokens,
             tool_profile=main_m.tool_profile,
             memory_extraction_threshold=cfg.memory_extraction_threshold,
             storage=_storage,
-            cheap_api_key=cheap_m.api_key, cheap_api_url=cheap_m.api_url,
+            cheap_api_key=cheap_m.api_key,
+            cheap_api_url=cheap_m.api_url,
             cheap_model=cheap_m.model_name,
             enable_thinking=cfg.enable_thinking,
             thinking_strength=cfg.thinking_strength,
             reasoning_effort=cfg.reasoning_effort,
-            supports_vision=supports_vision, supports_reasoning=supports_reasoning,
+            supports_vision=supports_vision,
+            supports_reasoning=supports_reasoning,
         )
         sess.context.interface_type = "web"
         return sess, _storage
@@ -461,19 +465,20 @@ class AgentModule(HotReloadModule):
             if put is None:
                 return
             with contextlib.suppress(Exception):
-                put({
-                    "type": "steering_injected",
-                    "item_id": (item or {}).get("id", ""),
-                    "text": (item or {}).get("message", ""),
-                })
+                put(
+                    {
+                        "type": "steering_injected",
+                        "item_id": (item or {}).get("id", ""),
+                        "text": (item or {}).get("message", ""),
+                    }
+                )
 
         attach_steering_provider(session, cls._steering_drain, _notify)
 
     @classmethod
-    def chat_completion(cls, model: str, messages: list[dict],
-                         stream: bool = False, temperature: float = 0.7,
-                         max_tokens: int | None = None,
-                         topic_id: str = "") -> dict:
+    def chat_completion(
+        cls, model: str, messages: list[dict], stream: bool = False, temperature: float = 0.7, max_tokens: int | None = None, topic_id: str = ""
+    ) -> dict:
         """非流式对话完成。"""
         agent = cls._instance
         if agent is None:
@@ -498,59 +503,50 @@ class AgentModule(HotReloadModule):
         except Exception:
             logger.exception("create_turn failed (turn continues, will save at end)")
         collected = []
+
         def cb(text: str):
             if text and not text.startswith("["):
                 collected.append(text)
+
         # ⭐ 插话接线：非流式 API 回合同样要能消费插话（否则 /api/chat/steering 静默滞留）
         cls._wire_steering(agent.sess)
-        ai_msg, used_tools = agent.sess.chat_stream(
-            user_msg, callback=cb,
-            topic_id=topic_id or agent.current_topic_id)
+        ai_msg, used_tools = agent.sess.chat_stream(user_msg, callback=cb, topic_id=topic_id or agent.current_topic_id)
         _server_round_summary(
             getattr(agent.sess.context, "model", ""),
             user_msg,
             getattr(agent.sess, "_last_tool_names", []) or [],
             ai_msg,
         )
-        agent._post_chat_pipeline(ai_msg, used_tools, user_msg,
-                                   topic_id or agent.current_topic_id)
+        agent._post_chat_pipeline(ai_msg, used_tools, user_msg, topic_id or agent.current_topic_id)
         full = "".join(collected) or ai_msg
         return {
             "id": f"chatcmpl-{uuid.uuid4().hex[:12]}",
             "object": "chat.completion",
             "created": int(time.time()),
             "model": model,
-            "choices": [{
-                "index": 0,
-                "message": {"role": "assistant", "content": full},
-                "finish_reason": "stop"
-            }],
+            "choices": [{"index": 0, "message": {"role": "assistant", "content": full}, "finish_reason": "stop"}],
             "usage": {"total_tokens": 0, "prompt_tokens": 0, "completion_tokens": 0},
-            "tools_used": used_tools or []
+            "tools_used": used_tools or [],
         }
 
     @classmethod
-    async def chat_completion_stream(cls, model, messages,
-                                      temperature=0.7,
-                                      max_tokens=None, topic_id="",
-                                      config_path=None):
+    async def chat_completion_stream(cls, model, messages, temperature=0.7, max_tokens=None, topic_id="", config_path=None):
         """流式对话完成。每请求创建独立 Session。"""
         session, _storage = cls.create_session(config_path)
         user_msg = cls._extract_user_message(messages)
         queue = asyncio.Queue()
         event_loop = asyncio.get_running_loop()
+
         def _put(event):
             with contextlib.suppress(Exception):
-                event_loop.call_soon_threadsafe(
-                    lambda: queue.put_nowait(event))
+                event_loop.call_soon_threadsafe(lambda: queue.put_nowait(event))
+
         def stream_cb(text):
             if text.startswith("["):
                 return
             _put({"type": "content", "text": text})
-        thread = threading.Thread(
-            target=cls._run_stream,
-            args=(session, user_msg, topic_id, stream_cb, _put),
-            daemon=True)
+
+        thread = threading.Thread(target=cls._run_stream, args=(session, user_msg, topic_id, stream_cb, _put), daemon=True)
         thread.start()
         try:
             async for event in cls._generate_sse(queue, model):
@@ -562,17 +558,21 @@ class AgentModule(HotReloadModule):
     def _run_stream(cls, session, user_msg, topic_id, stream_cb, put):
         """后台线程运行流式对话。"""
         from tea_agent.store import get_storage
+
         storage = get_storage()
         _streamed_text_parts: list[str] = []
+
         def _wrapped_cb(text):
             _streamed_text_parts.append(text)
             stream_cb(text)
+
         try:
             if topic_id:
                 cls._load_topic_history(storage, session, topic_id)
             else:
                 topic_id = storage.create_topic("API 流式会话")
             from tea_agent.session_ref import get_agent
+
             _ga = get_agent() or cls._instance
             if _ga:
                 _ga.current_topic_id = topic_id
@@ -587,8 +587,7 @@ class AgentModule(HotReloadModule):
                 logger.exception("create_turn failed (will save at end)")
             # ⭐ 插话接线：/v1/chat/completions 流式路径
             cls._wire_steering(session, put=put)
-            ai_msg, used_tools = session.chat_stream(
-                user_msg, callback=_wrapped_cb, topic_id=topic_id)
+            ai_msg, used_tools = session.chat_stream(user_msg, callback=_wrapped_cb, topic_id=topic_id)
             _effective_ai_msg = ai_msg if ai_msg else "".join(_streamed_text_parts)
             _server_round_summary(
                 getattr(session.context, "model", ""),
@@ -597,18 +596,23 @@ class AgentModule(HotReloadModule):
                 _effective_ai_msg,
             )
             cls._save_chat_result(storage, session, topic_id, user_msg, _effective_ai_msg, used_tools)
-            _usage = getattr(session, '_last_usage', None) or {}
-            _model = getattr(session.context, 'model', '')
-            _cheap_model = getattr(session.context, 'cheap_model', '')
-            put({"type": "done", "ai_msg": _effective_ai_msg,
-                 "tools_used": used_tools or [],
-                 "usage": {
-                     "total_tokens": _usage.get("total_tokens", 0),
-                     "prompt_tokens": _usage.get("prompt_tokens", 0),
-                     "completion_tokens": _usage.get("completion_tokens", 0),
-                     "model": _model,
-                     "cheap_model": _cheap_model,
-                 }})
+            _usage = getattr(session, "_last_usage", None) or {}
+            _model = getattr(session.context, "model", "")
+            _cheap_model = getattr(session.context, "cheap_model", "")
+            put(
+                {
+                    "type": "done",
+                    "ai_msg": _effective_ai_msg,
+                    "tools_used": used_tools or [],
+                    "usage": {
+                        "total_tokens": _usage.get("total_tokens", 0),
+                        "prompt_tokens": _usage.get("prompt_tokens", 0),
+                        "completion_tokens": _usage.get("completion_tokens", 0),
+                        "model": _model,
+                        "cheap_model": _cheap_model,
+                    },
+                }
+            )
         except Exception as e:
             logger.exception(f"Stream chat error: {e}")
             with contextlib.suppress(Exception):
@@ -619,27 +623,35 @@ class AgentModule(HotReloadModule):
         cid = "chatcmpl-" + uuid.uuid4().hex[:12]
         now = int(time.time())
         nl2 = "\n\n"
-        init_data = {"id": cid, "object": "chat.completion.chunk",
-                     "created": now, "model": model,
-                     "choices": [{"index": 0, "delta": {"role": "assistant"},
-                                  "finish_reason": None}]}
+        init_data = {
+            "id": cid,
+            "object": "chat.completion.chunk",
+            "created": now,
+            "model": model,
+            "choices": [{"index": 0, "delta": {"role": "assistant"}, "finish_reason": None}],
+        }
         yield "data: " + json.dumps(init_data) + nl2
         while True:
             event = await queue.get()
             t = event["type"]
             if t == "content":
-                data = {"id": cid, "object": "chat.completion.chunk",
-                        "created": now, "model": model,
-                        "choices": [{"index": 0,
-                                     "delta": {"content": event["text"]},
-                                     "finish_reason": None}]}
+                data = {
+                    "id": cid,
+                    "object": "chat.completion.chunk",
+                    "created": now,
+                    "model": model,
+                    "choices": [{"index": 0, "delta": {"content": event["text"]}, "finish_reason": None}],
+                }
                 yield "data: " + json.dumps(data) + nl2
             elif t == "done":
-                done_data = {"id": cid, "object": "chat.completion.chunk",
-                            "created": now, "model": model,
-                            "choices": [{"index": 0, "delta": {},
-                                         "finish_reason": "stop"}],
-                            "tools_used": event.get("tools_used", [])}
+                done_data = {
+                    "id": cid,
+                    "object": "chat.completion.chunk",
+                    "created": now,
+                    "model": model,
+                    "choices": [{"index": 0, "delta": {}, "finish_reason": "stop"}],
+                    "tools_used": event.get("tools_used", []),
+                }
                 yield "data: " + json.dumps(done_data) + nl2
                 yield "data: [DONE]" + nl2
                 break
@@ -682,7 +694,7 @@ class AgentModule(HotReloadModule):
         try:
             all_light = storage.get_conversations(topic_id, limit=-1, include_rounds=False)
             if all_light:
-                history_turns = getattr(session.context, 'keep_turns', 3)
+                history_turns = getattr(session.context, "keep_turns", 3)
                 recent_n = storage.get_conversations(topic_id, limit=history_turns, include_rounds=True)
                 if recent_n:
                     for i, conv in enumerate(recent_n):
@@ -691,10 +703,14 @@ class AgentModule(HotReloadModule):
                 semantic = storage.get_semantic_summary(topic_id)
                 tool_chain = storage.get_tool_chain_summary(topic_id)
                 old_summary = storage.get_topic_summary(topic_id) or ""
-                session.load_history(all_light, summary=old_summary,
-                                    level2=level2, semantic_summary=semantic,
-                                    tool_chain_summary=tool_chain,
-                                    history_turns=history_turns)
+                session.load_history(
+                    all_light,
+                    summary=old_summary,
+                    level2=level2,
+                    semantic_summary=semantic,
+                    tool_chain_summary=tool_chain,
+                    history_turns=history_turns,
+                )
                 return
         except Exception:
             logger.exception(f"_load_topic_history failed for topic={topic_id}")
@@ -724,9 +740,7 @@ class AgentModule(HotReloadModule):
             if isinstance(user_msg, dict) and user_msg.get("images"):
                 payload = {"text": user_msg.get("text", ""), "images": list(user_msg["images"])}
             else:
-                payload = user_msg if isinstance(user_msg, str) else (
-                    user_msg.get("text", "") if isinstance(user_msg, dict) else str(user_msg)
-                )
+                payload = user_msg if isinstance(user_msg, str) else (user_msg.get("text", "") if isinstance(user_msg, dict) else str(user_msg))
             try:
                 conv_id = storage.save_msg(topic_id, payload, "", False)
             except Exception:
@@ -735,17 +749,18 @@ class AgentModule(HotReloadModule):
         rounds = session._rounds_collector
         try:
             # finalize_turn 按 round_num 幂等补齐：回合中已实时落盘的轮次不会重复
-            storage.finalize_turn(conv_id, ai_msg, is_func_calling=used_tools,
-                                  rounds=rounds if rounds else None, status="done")
+            storage.finalize_turn(conv_id, ai_msg, is_func_calling=used_tools, rounds=rounds if rounds else None, status="done")
         except Exception:
             logger.exception("finalize_turn failed")
         try:
             usage = session._last_usage
             cheap_usage = session._last_cheap_usage
             if usage and usage.get("total_tokens", 0) > 0:
-                kwargs = {"total_tokens": usage["total_tokens"],
-                          "prompt_tokens": usage["prompt_tokens"],
-                          "completion_tokens": usage["completion_tokens"]}
+                kwargs = {
+                    "total_tokens": usage["total_tokens"],
+                    "prompt_tokens": usage["prompt_tokens"],
+                    "completion_tokens": usage["completion_tokens"],
+                }
                 if cheap_usage and cheap_usage.get("total_tokens", 0) > 0:
                     kwargs["cheap_tokens"] = cheap_usage["total_tokens"]
                     kwargs["cheap_prompt_tokens"] = cheap_usage["prompt_tokens"]
@@ -771,7 +786,9 @@ class AgentModule(HotReloadModule):
                 return default
 
             l2_count, overflow_items, should_summarize = storage.push_to_level2(
-                topic_id, user_text, ai_msg,
+                topic_id,
+                user_text,
+                ai_msg,
                 rounds=rounds if rounds else None,
                 max_level2=_cfg_int("history_l2_max", 8) or 8,
                 thinking_max_chars=_cfg_int("l2_thinking_max_chars", 6000) or 6000,
@@ -782,6 +799,7 @@ class AgentModule(HotReloadModule):
             return
         if overflow_items or should_summarize:
             from tea_agent.agent_pipeline import do_async_summaries
+
             proxy = _ChatAgentProxy(storage, session)
             threading.Thread(
                 target=do_async_summaries,
@@ -790,16 +808,14 @@ class AgentModule(HotReloadModule):
             ).start()
 
     @classmethod
-    def chat_stream_sse(cls, session, storage, msg,
-                         queue: asyncio.Queue, topic_id: str = "",
-                         event_loop=None):
+    def chat_stream_sse(cls, session, storage, msg, queue: asyncio.Queue, topic_id: str = "", event_loop=None):
         """在后台线程运行 SSE 流式对话。"""
+
         def _put(event: dict):
             if event_loop is None:
                 return
             with contextlib.suppress(Exception):
-                event_loop.call_soon_threadsafe(
-                    lambda: queue.put_nowait(event))
+                event_loop.call_soon_threadsafe(lambda: queue.put_nowait(event))
 
         _thinking_active = False
         _tool_active = False
@@ -809,21 +825,21 @@ class AgentModule(HotReloadModule):
             nonlocal _thinking_active, _tool_active, _streamed_text_parts
             if text.startswith("[PARALLEL:"):
                 # 并行工具批次标记：转为事件，避免作为 token 泄漏到聊天区
-                _names = text[len("[PARALLEL:"):-1]
+                _names = text[len("[PARALLEL:") : -1]
                 _put({"type": "tool_parallel", "names": _names})
             elif text.startswith("[TOOL_START:"):
-                _tool_name = text[len("[TOOL_START:"):-1]
+                _tool_name = text[len("[TOOL_START:") : -1]
                 _put({"type": "tool_start", "name": _tool_name})
                 _tool_active = True
             elif text.startswith("[TOOL_RESULT:"):
-                _res = text[len("[TOOL_RESULT:"):-1]
+                _res = text[len("[TOOL_RESULT:") : -1]
                 _put({"type": "tool_result", "result": _res})
             elif text.startswith("[DAG_VIZ:"):
-                _viz_id = text[len("[DAG_VIZ:"):-1]
+                _viz_id = text[len("[DAG_VIZ:") : -1]
                 if _viz_id:
                     _put({"type": "dag_viz", "viz_id": _viz_id})
             elif text.startswith("[TOOL_ARG:"):
-                _args = text[len("[TOOL_ARG:"):-1]
+                _args = text[len("[TOOL_ARG:") : -1]
                 _put({"type": "tool_args", "args": _args})
             elif text == "[TOOL_DONE]":
                 if _tool_active:
@@ -845,26 +861,28 @@ class AgentModule(HotReloadModule):
             if status_msg.startswith("!MAX_ITER:"):
                 confirm_id = uuid.uuid4().hex[:12]
                 max_iter_pending[confirm_id] = {
-                    "session": session, "timestamp": time.time(),
+                    "session": session,
+                    "timestamp": time.time(),
                 }
-                _put({"type": "max_iter_confirm", "confirm_id": confirm_id,
-                      "text": status_msg})
+                _put({"type": "max_iter_confirm", "confirm_id": confirm_id, "text": status_msg})
             elif not status_msg.startswith("\u23f3"):
                 _put({"type": "status", "text": status_msg})
 
         try:
             from tea_agent import session_ref as _sess_ref
+
             _saved_session = _sess_ref._current_session
             _sess_ref._current_session = session
 
             if not topic_id:
-                _ts = datetime.now().strftime('%m-%d %H:%M')
+                _ts = datetime.now().strftime("%m-%d %H:%M")
                 topic_id = storage.create_topic(f"Web Session ({_ts})")
             # ⭐ 尽早通知前端主题 ID（首次对话时前端尚未持有 topic_id，
             # 拿到后才能正确投递插话消息 /api/chat/steering）
             _put({"type": "topic_ready", "topic_id": topic_id})
 
             from tea_agent.session_ref import get_agent as _get_agent
+
             _ga = _get_agent() or cls._instance
             if _ga:
                 _ga.current_topic_id = topic_id
@@ -872,8 +890,15 @@ class AgentModule(HotReloadModule):
             cls._load_topic_history(storage, session, topic_id)
 
             from tea_agent import tlk
+
             tlk.toolkit._question_web_handler = lambda t, q, o, d, to: cls._server_question_handler(
-                t, q, o, d, to, _put, event_loop,
+                t,
+                q,
+                o,
+                d,
+                to,
+                _put,
+                event_loop,
             )
 
             # ⭐ 插话（steering）接线：所有回合入口共用 _wire_steering
@@ -894,8 +919,11 @@ class AgentModule(HotReloadModule):
 
             try:
                 ai_msg, used_tools = session.chat_stream(
-                    msg, callback=stream_cb, topic_id=topic_id,
-                    on_status=status_cb, on_usage=_usage_cb,
+                    msg,
+                    callback=stream_cb,
+                    topic_id=topic_id,
+                    on_status=status_cb,
+                    on_usage=_usage_cb,
                 )
             finally:
                 tlk.toolkit._question_web_handler = None
@@ -909,19 +937,16 @@ class AgentModule(HotReloadModule):
             )
             if _effective_ai_msg is not None:
                 try:
-                    cls._save_chat_result(storage, session, topic_id, msg,
-                                           _effective_ai_msg, used_tools)
+                    cls._save_chat_result(storage, session, topic_id, msg, _effective_ai_msg, used_tools)
                 except Exception as save_err:
                     logger.exception(f"Save chat failed: {save_err}")
 
             try:
                 _tp = storage.get_topic(topic_id)
                 if _tp:
-                    _cur_title = (_tp.get("title") or "")
+                    _cur_title = _tp.get("title") or ""
                     if _cur_title and not _cur_title.startswith("\u203b"):
-                        _user_text = msg if isinstance(msg, str) else (
-                            msg.get("text", "") if isinstance(msg, dict) else str(msg)
-                        )
+                        _user_text = msg if isinstance(msg, str) else (msg.get("text", "") if isinstance(msg, dict) else str(msg))
                         if _user_text:
                             _short = _user_text.strip().replace("\n", " ")[:28]
                             if _short:
@@ -932,13 +957,15 @@ class AgentModule(HotReloadModule):
                 pass
 
             usage_data = _build_usage_data(session)
-            _put({
-                "type": "done",
-                "ai_msg": _effective_ai_msg,
-                "used_tools": used_tools,
-                "topic_id": topic_id,
-                "usage": usage_data,
-            })
+            _put(
+                {
+                    "type": "done",
+                    "ai_msg": _effective_ai_msg,
+                    "used_tools": used_tools,
+                    "topic_id": topic_id,
+                    "usage": usage_data,
+                }
+            )
         except Exception as e:
             logger.exception("Chat stream error")
             _put({"type": "error", "error": str(e)})
@@ -946,24 +973,28 @@ class AgentModule(HotReloadModule):
             _sess_ref._current_session = _saved_session
 
     @classmethod
-    def _server_question_handler(cls, title, question, options, default, timeout,
-                                  put_fn, event_loop):
+    def _server_question_handler(cls, title, question, options, default, timeout, put_fn, event_loop):
         """Server 模式下处理 toolkit_question()。"""
         import uuid as _uuid_mod
+
         question_id = _uuid_mod.uuid4().hex[:12]
         event = threading.Event()
         entry = {"event": event, "answer": None, "timestamp": time.time()}
         question_pending[question_id] = entry
         try:
             if event_loop is not None:
-                event_loop.call_soon_threadsafe(lambda: put_fn({
-                    "type": "question",
-                    "question_id": question_id,
-                    "title": title,
-                    "question": question,
-                    "options": options or [],
-                    "default": default,
-                }))
+                event_loop.call_soon_threadsafe(
+                    lambda: put_fn(
+                        {
+                            "type": "question",
+                            "question_id": question_id,
+                            "title": title,
+                            "question": question,
+                            "options": options or [],
+                            "default": default,
+                        }
+                    )
+                )
         except Exception:
             pass
         if timeout > 0:
@@ -977,9 +1008,7 @@ class AgentModule(HotReloadModule):
     # ── 模型切换 ──
 
     @classmethod
-    def switch_model(cls, api_key: str, api_url: str, model_name: str,
-                     provider: str | None = None, ref_model: str | None = None,
-                     **kwargs) -> None:
+    def switch_model(cls, api_key: str, api_url: str, model_name: str, provider: str | None = None, ref_model: str | None = None, **kwargs) -> None:
         """热切换模型。
 
         ``provider`` / ``ref_model`` 必须与 model_name 一起更新：它们是状态栏
@@ -1021,8 +1050,7 @@ class AgentModule(HotReloadModule):
             cfg.cheap_model.api_key = kwargs.get("cheap_api_key", api_key)
             cfg.cheap_model.api_url = cheap_api_url
             cfg.cheap_model.model_name = cheap_model_name
-            for attr in ["temperature", "max_tokens", "top_p",
-                         "max_context_tokens", "options"]:
+            for attr in ["temperature", "max_tokens", "top_p", "max_context_tokens", "options"]:
                 val = kwargs.get(f"cheap_{attr}")
                 if val is not None:
                     setattr(cfg.cheap_model, attr, val)
@@ -1038,8 +1066,7 @@ class AgentModule(HotReloadModule):
     _switch_lock = threading.Lock()
 
     @classmethod
-    def request_model_switch(cls, api_key: str, api_url: str, model_name: str,
-                             **kwargs) -> dict:
+    def request_model_switch(cls, api_key: str, api_url: str, model_name: str, **kwargs) -> dict:
         """请求切换模型并继续当前会话（统一模型面板「应用并继续会话」入口）。
 
         语义（配置须已由调用方落盘，如 ProviderService.apply_provider）：
@@ -1052,9 +1079,7 @@ class AgentModule(HotReloadModule):
         busy = bool(active_sessions) or bool(background_sessions)
         if busy:
             with cls._switch_lock:
-                cls._pending_switch = {"api_key": api_key, "api_url": api_url,
-                                       "model_name": model_name, "kwargs": dict(kwargs),
-                                       "at": time.time()}
+                cls._pending_switch = {"api_key": api_key, "api_url": api_url, "model_name": model_name, "kwargs": dict(kwargs), "at": time.time()}
             logger.info("model switch queued (turn in progress): %s", model_name)
             return {"mode": "pending_next_turn", "model": model_name}
         if cls._instance is None:
@@ -1079,10 +1104,8 @@ class AgentModule(HotReloadModule):
             # 纯 Web 模式：落盘配置已生效，下一条消息自然使用新模型
             return {"mode": "next_message", "model": pending["model_name"]}
         try:
-            cls.switch_model(pending["api_key"], pending["api_url"],
-                             pending["model_name"], **pending["kwargs"])
-            logger.info("pending model switch applied: %s (session continues)",
-                        pending["model_name"])
+            cls.switch_model(pending["api_key"], pending["api_url"], pending["model_name"], **pending["kwargs"])
+            logger.info("pending model switch applied: %s (session continues)", pending["model_name"])
             return {"mode": "applied_after_turn", "model": pending["model_name"]}
         except Exception as e:
             logger.warning("apply pending model switch failed: %s", e)
@@ -1102,14 +1125,18 @@ class AgentModule(HotReloadModule):
         if not os.path.exists(config_path):
             return {"ok": False, "error": f"Config not found: {config_path}"}
         from tea_agent.config import AgentConfig, load_config
+
         new_cfg = load_config(config_path)
         if not new_cfg.main_model.is_configured:
             return {"ok": False, "error": "main_model not complete"}
         cm = new_cfg.main_model
         cc = new_cfg.cheap_model
         cls.switch_model(
-            cm.api_key, cm.api_url, cm.model_name,
-            provider=cm.provider, ref_model=cm.ref_model,
+            cm.api_key,
+            cm.api_url,
+            cm.model_name,
+            provider=cm.provider,
+            ref_model=cm.ref_model,
             cheap_api_key=(cc.api_key or "") if cc else "",
             cheap_api_url=(cc.api_url or "") if cc else "",
             cheap_model_name=(cc.model_name or "") if cc else "",
@@ -1120,13 +1147,13 @@ class AgentModule(HotReloadModule):
             options=cm.options,
         )
         agent = cls._instance
-        if agent and hasattr(agent, '_cfg'):
+        if agent and hasattr(agent, "_cfg"):
             cfg = agent._cfg
             for key in AgentConfig._RUNTIME_CONFIG_KEYS:
                 setattr(cfg, key, getattr(new_cfg, key))
             cfg.mode_params = new_cfg.mode_params
         cls._config_path = config_path
-        if agent and hasattr(agent, '_config_path'):
+        if agent and hasattr(agent, "_config_path"):
             agent._config_path = config_path
         # 记住最后成功使用的 config（下次启动默认使用）
         cls._remember_last_config(config_path)
@@ -1197,12 +1224,13 @@ class AgentModule(HotReloadModule):
     @classmethod
     def update_config(cls, updates: dict) -> dict:
         from tea_agent.config import AgentConfig
+
         agent = cls._instance
         if agent is None:
             return {"ok": False, "errors": ["Agent not loaded"]}
         cfg = agent._cfg
         whitelist = AgentConfig._RUNTIME_CONFIG_KEYS
-        type_map = getattr(AgentConfig, '_CONFIG_TYPES', {})
+        type_map = getattr(AgentConfig, "_CONFIG_TYPES", {})
         updated, errors = [], []
         for key, value in updates.items():
             if key not in whitelist:
@@ -1227,6 +1255,7 @@ class AgentModule(HotReloadModule):
     def list_config_files(cls, check_valid: bool = False):
         """Scan ~/.tea_agent/*.yaml and return parsed config summaries."""
         from tea_agent.config import load_config
+
         configs_dir = cls._get_configs_dir()
         if not configs_dir.exists():
             return {"configs": [], "any_valid": False} if check_valid else []
@@ -1240,43 +1269,53 @@ class AgentModule(HotReloadModule):
                 is_valid = main_m.is_configured
                 if is_valid:
                     any_valid = True
-                results.append({
-                    "filename": fpath.name,
-                    "path": str(fpath),
-                    "is_valid": is_valid,
-                    "main_model": {
-                        "model_name": main_m.model_name or "",
-                        "api_url": main_m.api_url or "",
-                        "api_key_masked": (
-                            (main_m.api_key[:6] + "..." + main_m.api_key[-4:])
-                            if len(main_m.api_key) > 12 else "***"
-                        ) if main_m.api_key else "",
-                    },
-                    "cheap_model": {
-                        "model_name": cheap_m.model_name or "",
-                        "api_url": cheap_m.api_url or "",
-                        "api_key_masked": (
-                            (cheap_m.api_key[:6] + "..." + cheap_m.api_key[-4:])
-                            if len(cheap_m.api_key) > 12 else "***"
-                        ) if cheap_m and cheap_m.api_key else "",
-                    } if cheap_m and cheap_m.model_name else None,
-                })
+                results.append(
+                    {
+                        "filename": fpath.name,
+                        "path": str(fpath),
+                        "is_valid": is_valid,
+                        "main_model": {
+                            "model_name": main_m.model_name or "",
+                            "api_url": main_m.api_url or "",
+                            "api_key_masked": ((main_m.api_key[:6] + "..." + main_m.api_key[-4:]) if len(main_m.api_key) > 12 else "***")
+                            if main_m.api_key
+                            else "",
+                        },
+                        "cheap_model": {
+                            "model_name": cheap_m.model_name or "",
+                            "api_url": cheap_m.api_url or "",
+                            "api_key_masked": ((cheap_m.api_key[:6] + "..." + cheap_m.api_key[-4:]) if len(cheap_m.api_key) > 12 else "***")
+                            if cheap_m and cheap_m.api_key
+                            else "",
+                        }
+                        if cheap_m and cheap_m.model_name
+                        else None,
+                    }
+                )
             except Exception as e:
-                results.append({
-                    "filename": fpath.name,
-                    "path": str(fpath),
-                    "is_valid": False,
-                    "error": str(e),
-                })
+                results.append(
+                    {
+                        "filename": fpath.name,
+                        "path": str(fpath),
+                        "is_valid": False,
+                        "error": str(e),
+                    }
+                )
         if check_valid:
             return {"configs": results, "any_valid": any_valid}
         return results
 
     @classmethod
-    def create_config_file(cls, filename: str,
-                           main_model_name: str, main_api_url: str, main_api_key: str,
-                           cheap_model_name: str = "", cheap_api_url: str = "",
-                           cheap_api_key: str = ""):
+    def create_config_file(
+        cls,
+        filename: str,
+        main_model_name: str,
+        main_api_url: str,
+        main_api_key: str,
+        cheap_model_name: str = "",
+        cheap_api_url: str = "",
+        cheap_api_key: str = "",
+    ):
         """Create a new config file in ~/.tea_agent/."""
         configs_dir = cls._get_configs_dir()
         configs_dir.mkdir(parents=True, exist_ok=True)
@@ -1328,6 +1367,7 @@ class AgentModule(HotReloadModule):
 
 class _ChatAgentProxy:
     """轻量级 Agent 代理，供后处理流水线使用。"""
+
     def __init__(self, storage, session):
         self._db = storage
         self._sess = session

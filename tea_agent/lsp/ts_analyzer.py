@@ -18,6 +18,7 @@ _TS_LANG_LOADED = False
 _PARSE_CACHE: dict[str, tuple[float, dict | None]] = {}
 _PARSE_CACHE_TTL = 300  # 5 分钟缓存（结构分析不要求实时精确到秒）
 
+
 def _ensure_ts():
     """Internal: ensure ts."""
     global _TS_LANG, _TS_LANG_LOADED
@@ -27,6 +28,7 @@ def _ensure_ts():
     try:
         import tree_sitter_python as tsp
         from tree_sitter import Language
+
         _TS_LANG = Language(tsp.language())
         return _TS_LANG
     except ImportError:
@@ -36,9 +38,11 @@ def _ensure_ts():
         logger.warning(f"tree-sitter 加载失败: {e}")
         return None
 
+
 def _get_text(source_bytes, node):
     """从 source_bytes 中提取 node 对应的文本。"""
-    return source_bytes[node.start_byte:node.end_byte].decode("utf-8")
+    return source_bytes[node.start_byte : node.end_byte].decode("utf-8")
+
 
 def _extract_docstring(source_bytes, body_node):
     """从函数/类的 body 节点提取 docstring。"""
@@ -50,6 +54,7 @@ def _extract_docstring(source_bytes, body_node):
                 return text[:200]
         break
     return ""
+
 
 def _extract_calls(source_bytes, body_node):
     """从函数 body 中提取所有调用的函数名。"""
@@ -70,6 +75,7 @@ def _extract_calls(source_bytes, body_node):
             stack.append(child)
     return sorted(calls)
 
+
 def _extract_params(source_bytes, func_node):
     """从函数节点提取参数名列表。"""
     params_node = func_node.child_by_field_name("parameters")
@@ -77,14 +83,20 @@ def _extract_params(source_bytes, func_node):
         return []
     params = []
     for child in params_node.named_children:
-        if child.type in ("identifier", "typed_parameter", "default_parameter",
-                          "list_splat_pattern", "dictionary_splat_pattern",
-                          "typed_default_parameter"):
+        if child.type in (
+            "identifier",
+            "typed_parameter",
+            "default_parameter",
+            "list_splat_pattern",
+            "dictionary_splat_pattern",
+            "typed_default_parameter",
+        ):
             for c in child.children:
                 if c.type == "identifier":
                     params.append(_get_text(source_bytes, c))
                     break
     return params
+
 
 def parse_file(filepath: str) -> dict | None:
     """解析 Python 文件，返回函数/类/导入/顶层符号的结构化信息。根据 mtime 缓存结果。"""
@@ -113,6 +125,7 @@ def _parse_with_ts(filepath: str, lang) -> dict | None:
         return None
 
     from tree_sitter import Parser
+
     parser = Parser()
     parser.language = lang
     source_bytes = source.encode("utf-8")
@@ -131,15 +144,23 @@ def _parse_with_ts(filepath: str, lang) -> dict | None:
                 params = _extract_params(source_bytes, child)
                 calls = _extract_calls(source_bytes, child) if body_node else []
                 doc = _extract_docstring(source_bytes, body_node) if body_node else ""
-                result["functions"].append({
-                    "name": name, "line": child.start_point[0] + 1,
-                    "params": params, "docstring": doc, "calls": calls,
-                })
-                if depth == 0:
-                    result["top_level"].append({
-                        "name": name, "kind": "function",
+                result["functions"].append(
+                    {
+                        "name": name,
                         "line": child.start_point[0] + 1,
-                    })
+                        "params": params,
+                        "docstring": doc,
+                        "calls": calls,
+                    }
+                )
+                if depth == 0:
+                    result["top_level"].append(
+                        {
+                            "name": name,
+                            "kind": "function",
+                            "line": child.start_point[0] + 1,
+                        }
+                    )
             elif child.type == "class_definition":
                 name_node = child.child_by_field_name("name")
                 body_node = child.child_by_field_name("body")
@@ -160,19 +181,31 @@ def _parse_with_ts(filepath: str, lang) -> dict | None:
                             mparams = _extract_params(source_bytes, sub)
                             mcalls = _extract_calls(source_bytes, sub) if mb else []
                             mdoc = _extract_docstring(source_bytes, mb) if mb else ""
-                            methods.append({
-                                "name": mn_name, "line": sub.start_point[0] + 1,
-                                "params": mparams, "docstring": mdoc, "calls": mcalls,
-                            })
-                result["classes"].append({
-                    "name": name, "line": child.start_point[0] + 1,
-                    "methods": methods, "bases": bases,
-                })
-                if depth == 0:
-                    result["top_level"].append({
-                        "name": name, "kind": "class",
+                            methods.append(
+                                {
+                                    "name": mn_name,
+                                    "line": sub.start_point[0] + 1,
+                                    "params": mparams,
+                                    "docstring": mdoc,
+                                    "calls": mcalls,
+                                }
+                            )
+                result["classes"].append(
+                    {
+                        "name": name,
                         "line": child.start_point[0] + 1,
-                    })
+                        "methods": methods,
+                        "bases": bases,
+                    }
+                )
+                if depth == 0:
+                    result["top_level"].append(
+                        {
+                            "name": name,
+                            "kind": "class",
+                            "line": child.start_point[0] + 1,
+                        }
+                    )
             elif child.type in ("import_statement", "import_from_statement"):
                 module = ""
                 names = []
@@ -189,14 +222,18 @@ def _parse_with_ts(filepath: str, lang) -> dict | None:
                                     module = _get_text(source_bytes, ac)
                                 else:
                                     names.append(_get_text(source_bytes, ac))
-                result["imports"].append({
-                    "module": module, "names": names,
-                    "line": child.start_point[0] + 1,
-                })
+                result["imports"].append(
+                    {
+                        "module": module,
+                        "names": names,
+                        "line": child.start_point[0] + 1,
+                    }
+                )
             _walk(child, depth + 1)
 
     _walk(root)
     return result
+
 
 def _parse_file_ast_fallback(filepath: str) -> dict | None:
     """Python ast 回退解析（当 tree-sitter 不可用时）。"""
@@ -220,10 +257,15 @@ def _parse_file_ast_fallback(filepath: str) -> dict | None:
                         calls.add(child.func.attr)
             doc = py_ast.get_docstring(node) or ""
             params = [arg.arg for arg in node.args.args]
-            result["functions"].append({
-                "name": node.name, "line": node.lineno,
-                "params": params, "docstring": doc[:200], "calls": sorted(calls),
-            })
+            result["functions"].append(
+                {
+                    "name": node.name,
+                    "line": node.lineno,
+                    "params": params,
+                    "docstring": doc[:200],
+                    "calls": sorted(calls),
+                }
+            )
             result["top_level"].append({"name": node.name, "kind": "function", "line": node.lineno})
         elif isinstance(node, py_ast.ClassDef):
             bases = [py_ast.unparse(b) for b in node.bases]
@@ -239,30 +281,44 @@ def _parse_file_ast_fallback(filepath: str) -> dict | None:
                                 mcalls.add(child.func.attr)
                     mdoc = py_ast.get_docstring(sub) or ""
                     mparams = [arg.arg for arg in sub.args.args]
-                    methods.append({
-                        "name": sub.name, "line": sub.lineno,
-                        "params": mparams, "docstring": mdoc[:200],
-                        "calls": sorted(mcalls),
-                    })
-            result["classes"].append({
-                "name": node.name, "line": node.lineno,
-                "methods": methods, "bases": bases,
-            })
+                    methods.append(
+                        {
+                            "name": sub.name,
+                            "line": sub.lineno,
+                            "params": mparams,
+                            "docstring": mdoc[:200],
+                            "calls": sorted(mcalls),
+                        }
+                    )
+            result["classes"].append(
+                {
+                    "name": node.name,
+                    "line": node.lineno,
+                    "methods": methods,
+                    "bases": bases,
+                }
+            )
             result["top_level"].append({"name": node.name, "kind": "class", "line": node.lineno})
         elif isinstance(node, py_ast.Import):
             for alias in node.names:
-                result["imports"].append({
-                    "module": alias.name, "names": [alias.asname or alias.name],
-                    "line": node.lineno,
-                })
+                result["imports"].append(
+                    {
+                        "module": alias.name,
+                        "names": [alias.asname or alias.name],
+                        "line": node.lineno,
+                    }
+                )
         elif isinstance(node, py_ast.ImportFrom):
-            result["imports"].append({
-                "module": node.module or "",
-                "names": [a.asname or a.name for a in node.names],
-                "line": node.lineno,
-            })
+            result["imports"].append(
+                {
+                    "module": node.module or "",
+                    "names": [a.asname or a.name for a in node.names],
+                    "line": node.lineno,
+                }
+            )
 
     return result
+
 
 def impact_analysis(project_root: str, filepath: str, symbol: str) -> dict:
     """影响分析：找出修改符号会影响的所有调用者（直接 + 间接）。"""
@@ -273,8 +329,7 @@ def impact_analysis(project_root: str, filepath: str, symbol: str) -> dict:
     target_def = None
     for f in parsed["functions"]:
         if f["name"] == symbol:
-            target_def = {"file": filepath, "line": f["line"], "type": "function",
-                          "calls": f.get("calls", [])}
+            target_def = {"file": filepath, "line": f["line"], "type": "function", "calls": f.get("calls", [])}
             break
     if not target_def:
         for c in parsed["classes"]:
@@ -301,16 +356,23 @@ def impact_analysis(project_root: str, filepath: str, symbol: str) -> dict:
             continue
         for f_item in pf_parsed["functions"]:
             for call in f_item.get("calls", []):
-                all_calls[call].append({
-                    "file": pf_str, "line": f_item["line"], "name": f_item["name"],
-                })
+                all_calls[call].append(
+                    {
+                        "file": pf_str,
+                        "line": f_item["line"],
+                        "name": f_item["name"],
+                    }
+                )
         for c_item in pf_parsed["classes"]:
             for m_item in c_item.get("methods", []):
                 for call in m_item.get("calls", []):
-                    all_calls[call].append({
-                        "file": pf_str, "line": m_item["line"],
-                        "name": f"{c_item['name']}.{m_item['name']}",
-                    })
+                    all_calls[call].append(
+                        {
+                            "file": pf_str,
+                            "line": m_item["line"],
+                            "name": f"{c_item['name']}.{m_item['name']}",
+                        }
+                    )
 
     direct_callers = all_calls.get(symbol, [])
 
@@ -324,7 +386,7 @@ def impact_analysis(project_root: str, filepath: str, symbol: str) -> dict:
         for cc in all_calls.get(cn, []):
             indirect.add((cc["file"], cc["line"], cc["name"]))
 
-    indirect_callers = [{"file": f, "line": l, "name": n} for f, l, n in indirect]
+    indirect_callers = [{"file": f, "line": ln, "name": n} for f, ln, n in indirect]
 
     same_file = []
     for f_item in parsed["functions"]:
@@ -344,12 +406,17 @@ def impact_analysis(project_root: str, filepath: str, symbol: str) -> dict:
     hint_parts.append(f"风险: {risk}")
 
     return {
-        "ok": True, "symbol": symbol,
+        "ok": True,
+        "symbol": symbol,
         "definition": {"file": target_def["file"], "line": target_def["line"], "type": target_def["type"]},
-        "direct_callers": direct_callers, "indirect_callers": indirect_callers,
-        "callees": target_def.get("calls", []), "same_file_symbols": same_file,
-        "risk_level": risk, "hint": " | ".join(hint_parts),
+        "direct_callers": direct_callers,
+        "indirect_callers": indirect_callers,
+        "callees": target_def.get("calls", []),
+        "same_file_symbols": same_file,
+        "risk_level": risk,
+        "hint": " | ".join(hint_parts),
     }
+
 
 def build_dependency_graph(project_root: str) -> dict:
     """构建模块级依赖图，检测循环依赖和孤立模块。"""
@@ -379,6 +446,7 @@ def build_dependency_graph(project_root: str) -> dict:
     circular = []
     visited = set()
     path = []
+
     def _dfs(m):
         """DFS 检测循环依赖。"""
         if m in path:
@@ -407,7 +475,9 @@ def build_dependency_graph(project_root: str) -> dict:
         }
 
     return {
-        "ok": True, "modules": limited,
-        "circular": circular[:10], "orphans": orphans[:20],
+        "ok": True,
+        "modules": limited,
+        "circular": circular[:10],
+        "orphans": orphans[:20],
         "hint": f"{len(graph)} 模块, {len(circular)} 循环依赖, {len(orphans)} 孤立模块",
     }

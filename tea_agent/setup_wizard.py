@@ -26,12 +26,11 @@ from __future__ import annotations
 
 import sys
 from collections.abc import Callable
-from pathlib import Path
 
 from tea_agent.providers import get_provider
 
 __all__ = [
-    "run_setup_wizard",   # 兼容别名 → run_provider_setup_wizard
+    "run_setup_wizard",  # 兼容别名 → run_provider_setup_wizard
     "run_provider_setup_wizard",
     "needs_provider_setup",
     "QUICK_PROVIDERS",
@@ -40,8 +39,15 @@ __all__ = [
 
 # 向导中展示的常用 Provider（保持精简；完整列表见 providers.PROVIDERS）
 QUICK_PROVIDERS = [
-    "DeepSeek", "OpenAI", "Gemini", "Anthropic",
-    "Moonshot", "Alibaba", "SiliconFlow", "Ollama", "OpenRouter",
+    "DeepSeek",
+    "OpenAI",
+    "Gemini",
+    "Anthropic",
+    "Moonshot",
+    "Alibaba",
+    "SiliconFlow",
+    "Ollama",
+    "OpenRouter",
 ]
 
 BANNER = r"""
@@ -60,13 +66,17 @@ PROVIDER_BANNER = r"""
 """
 
 
-class WizardCancelled(Exception):
+class WizardCancelled(Exception):  # noqa: N818
     """用户取消向导（Ctrl+C 或输入 q/quit）。"""
 
 
-def _ask(prompt: str, default: str = "", required: bool = False,
-         input_fn: Callable[[str], str] = input,
-         validate: Callable[[str], str | None] | None = None) -> str:
+def _ask(
+    prompt: str,
+    default: str = "",
+    required: bool = False,
+    input_fn: Callable[[str], str] = input,
+    validate: Callable[[str], str | None] | None = None,
+) -> str:
     """带默认值 / 必填校验的提问，返回去空白后的用户输入。
 
     Args:
@@ -103,10 +113,6 @@ def _ask(prompt: str, default: str = "", required: bool = False,
         return raw
 
 
-
-
-
-
 def needs_provider_setup(store=None) -> bool:
     """是否需要首启提供商引导：provider.yaml 缺失（bootstrap 迁移后）providers 仍为空。
 
@@ -133,7 +139,7 @@ def needs_provider_setup(store=None) -> bool:
 
 def _pick_model(provider_name: str, input_fn: Callable[[str], str]) -> str:
     """选择模型：内置目录编号列表（default_model 默认）；无目录时手输 id。"""
-    from tea_agent.providers import get_provider, model_ids
+    from tea_agent.providers import model_ids
 
     p = get_provider(provider_name)
     ids = model_ids(p)
@@ -151,7 +157,8 @@ def _pick_model(provider_name: str, input_fn: Callable[[str], str]) -> str:
     while True:
         raw = _ask(
             f"请选择模型 [1-{len(ids)}，或直接输入模型 id]",
-            default=str(default_idx), input_fn=input_fn,
+            default=str(default_idx),
+            input_fn=input_fn,
         )
         if raw.isdigit() and 1 <= int(raw) <= len(ids):
             return ids[int(raw) - 1]
@@ -160,8 +167,7 @@ def _pick_model(provider_name: str, input_fn: Callable[[str], str]) -> str:
         print("  ⚠ 请输入有效的选项编号")
 
 
-def run_provider_setup_wizard(input_fn: Callable[[str], str] | None = None,
-                               store=None) -> bool:
+def run_provider_setup_wizard(input_fn: Callable[[str], str] | None = None, store=None) -> bool:
     """首启提供商引导：选供应商 → 选模型 → 输入 api_key，可循环添加多个。
 
     结果写入 provider.yaml（不生成 config.yaml —— 身份三元组唯一事实源 = provider.yaml）。
@@ -178,7 +184,7 @@ def run_provider_setup_wizard(input_fn: Callable[[str], str] | None = None,
     if input_fn is None:
         input_fn = input
     from tea_agent.provider_store import get_provider_store
-    from tea_agent.providers import get_provider, model_ids
+    from tea_agent.providers import model_ids
 
     st = store or get_provider_store()
     print(PROVIDER_BANNER)
@@ -209,11 +215,10 @@ def run_provider_setup_wizard(input_fn: Callable[[str], str] | None = None,
             # ── 2. 模型与端点 ──
             if name == "custom":
                 api_url = _ask(
-                    "模型 API URL", required=True, input_fn=input_fn,
-                    validate=lambda u: (
-                        None if u.startswith(("http://", "https://"))
-                        else "URL 需以 http:// 或 https:// 开头"
-                    ),
+                    "模型 API URL",
+                    required=True,
+                    input_fn=input_fn,
+                    validate=lambda u: None if u.startswith(("http://", "https://")) else "URL 需以 http:// 或 https:// 开头",
                 )
                 model = _ask("模型名称", required=True, input_fn=input_fn)
                 description, source, models = "custom", "custom", [model]
@@ -230,14 +235,17 @@ def run_provider_setup_wizard(input_fn: Callable[[str], str] | None = None,
             # ── 3. API Key ──
             api_key = _ask("API Key", required=True, input_fn=input_fn)
 
-            st.upsert_provider(name, {
-                "api_url": api_url,
-                "api_key": api_key,
-                "default_model": model,
-                "description": description,
-                "source": source,
-                "models": models,
-            })
+            st.upsert_provider(
+                name,
+                {
+                    "api_url": api_url,
+                    "api_key": api_key,
+                    "default_model": model,
+                    "description": description,
+                    "source": source,
+                    "models": models,
+                },
+            )
             written += 1
             print(f"  ✓ 已写入 provider.yaml: {name} / {model}")
 
@@ -255,8 +263,7 @@ def run_provider_setup_wizard(input_fn: Callable[[str], str] | None = None,
     return True
 
 
-def run_setup_wizard(config_path: str | None = None,
-                     input_fn: Callable[[str], str] | None = None) -> str | None:
+def run_setup_wizard(config_path: str | None = None, input_fn: Callable[[str], str] | None = None) -> str | None:
     """兼容别名：委托 ``run_provider_setup_wizard()``（写 provider.yaml）。
 
     config.yaml 已彻底删除，本函数不再生成任何配置文件。
@@ -280,11 +287,9 @@ def main() -> None:
     import argparse
 
     parser = argparse.ArgumentParser(description="Tea Agent 配置向导")
-    parser.add_argument("--config", type=str, default=None,
-                        help="已废弃（config.yaml 已删除，仅保留签名兼容）")
-    parser.add_argument("--provider", action="store_true",
-                        help="提供商引导（写 provider.yaml，唯一事实源）")
-    args = parser.parse_args()
+    parser.add_argument("--config", type=str, default=None, help="已废弃（config.yaml 已删除，仅保留签名兼容）")
+    parser.add_argument("--provider", action="store_true", help="提供商引导（写 provider.yaml，唯一事实源）")
+    parser.parse_args()
     saved = run_setup_wizard()
     sys.exit(0 if saved else 1)
 

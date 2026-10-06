@@ -21,15 +21,23 @@ from dataclasses import asdict, dataclass, field
 
 logger = logging.getLogger("session_events")
 
-EVENT_TYPES = frozenset({
-    "turn_start", "turn_end", "step_request", "tool_call",
-    "tool_result", "summary", "memory",
-})
+EVENT_TYPES = frozenset(
+    {
+        "turn_start",
+        "turn_end",
+        "step_request",
+        "tool_call",
+        "tool_result",
+        "summary",
+        "memory",
+    }
+)
 
 
 @dataclass(frozen=True)
 class SessionEvent:
     """一条不可变会话事件。"""
+
     seq: int
     topic_id: str
     type: str
@@ -42,13 +50,17 @@ class SessionEvent:
 
     @classmethod
     def from_dict(cls, d: dict) -> SessionEvent:
-        return cls(seq=int(d["seq"]), topic_id=str(d["topic_id"]),
-                   type=str(d["type"]), turn=int(d.get("turn", 0)),
-                   step=int(d.get("step", 0)), data=dict(d.get("data") or {}))
+        return cls(
+            seq=int(d["seq"]),
+            topic_id=str(d["topic_id"]),
+            type=str(d["type"]),
+            turn=int(d.get("turn", 0)),
+            step=int(d.get("step", 0)),
+            data=dict(d.get("data") or {}),
+        )
 
 
-def append_event(log: list[SessionEvent], *, topic_id: str, type: str,
-                 turn: int, step: int = 0, data: dict | None = None) -> SessionEvent:
+def append_event(log: list[SessionEvent], *, topic_id: str, type: str, turn: int, step: int = 0, data: dict | None = None) -> SessionEvent:
     """追加事件（append-only）：seq 自增，类型/连续性违例抛 ValueError。
 
     Args:
@@ -64,8 +76,7 @@ def append_event(log: list[SessionEvent], *, topic_id: str, type: str,
     if type not in EVENT_TYPES:
         raise ValueError(f"未知事件类型: {type}")
     expected = (log[-1].seq + 1) if log else 1
-    ev = SessionEvent(seq=expected, topic_id=topic_id, type=type,
-                      turn=turn, step=step, data=dict(data or {}))
+    ev = SessionEvent(seq=expected, topic_id=topic_id, type=type, turn=turn, step=step, data=dict(data or {}))
     log.append(ev)
     return ev
 
@@ -89,15 +100,14 @@ def replay(rows: list[dict]) -> list[SessionEvent]:
 
 # ═══ 纯函数投影 ══════════════════════════════════════════
 
-def persist_step_request(storage, topic_id: str, turn: int, step: int,
-                         data: dict | None = None) -> None:
+
+def persist_step_request(storage, topic_id: str, turn: int, step: int, data: dict | None = None) -> None:
     """把 step_request 事件持久化到 storage.events（旁路 fail-open，永不抛出）。"""
     try:
         evs = getattr(storage, "events", None)
         if evs is None or not hasattr(evs, "append_event"):
             return
-        evs.append_event(topic_id or "unknown", "step/request",
-                         data or {}, "")
+        evs.append_event(topic_id or "unknown", "step/request", data or {}, "")
     except Exception as e:  # noqa: BLE001 — 旁路观测不得影响请求
         logger.debug("session_events 持久化跳过: %s", e)
 
@@ -110,14 +120,11 @@ def project_l1(events: list[SessionEvent]) -> list[dict]:
     msgs: list[dict] = []
     for ev in events:
         if ev.type == "step_request":
-            msgs.append({"role": "step", "turn": ev.turn,
-                         "starts_request_series": ev.data.get("starts_request_series")})
+            msgs.append({"role": "step", "turn": ev.turn, "starts_request_series": ev.data.get("starts_request_series")})
         elif ev.type == "tool_call":
-            msgs.append({"role": "tool_call", "turn": ev.turn,
-                         "name": ev.data.get("name", "")})
+            msgs.append({"role": "tool_call", "turn": ev.turn, "name": ev.data.get("name", "")})
         elif ev.type == "tool_result":
-            msgs.append({"role": "tool_result", "turn": ev.turn,
-                         "status": ev.data.get("status", "")})
+            msgs.append({"role": "tool_result", "turn": ev.turn, "status": ev.data.get("status", "")})
     return msgs
 
 
@@ -132,8 +139,7 @@ def project_l3(events: list[SessionEvent]) -> dict:
     turns = project_turns(events)
     steps = project_steps(events)
     return {
-        "topic_summary": (f"{len(turns)} turns / {len(steps)} steps / "
-                          f"{sum(t['tool_calls'] for t in turns)} tool_calls"),
+        "topic_summary": (f"{len(turns)} turns / {len(steps)} steps / {sum(t['tool_calls'] for t in turns)} tool_calls"),
         "series_resets": sum(1 for s in steps if s["series_reset"]),
     }
 
@@ -142,10 +148,17 @@ def project_turns(events: list[SessionEvent]) -> list[dict]:
     """投影：每个 turn 的边界与步进统计（turn_snapshot 事实源）。"""
     turns: dict[int, dict] = {}
     for ev in events:
-        t = turns.setdefault(ev.turn, {
-            "turn": ev.turn, "started": False, "ended": False,
-            "steps": 0, "series_resets": 0, "tool_calls": 0,
-        })
+        t = turns.setdefault(
+            ev.turn,
+            {
+                "turn": ev.turn,
+                "started": False,
+                "ended": False,
+                "steps": 0,
+                "series_resets": 0,
+                "tool_calls": 0,
+            },
+        )
         if ev.type == "turn_start":
             t["started"] = True
         elif ev.type == "turn_end":
@@ -164,9 +177,7 @@ def project_steps(events: list[SessionEvent]) -> list[dict]:
     out = []
     for ev in events:
         if ev.type == "step_request":
-            out.append({"turn": ev.turn, "step": ev.step,
-                        "series_reset": bool(ev.data.get("starts_request_series")),
-                        "tools": []})
+            out.append({"turn": ev.turn, "step": ev.step, "series_reset": bool(ev.data.get("starts_request_series")), "tools": []})
         elif ev.type == "tool_call" and out:
             out[-1]["tools"].append(ev.data.get("name", ""))
     return out

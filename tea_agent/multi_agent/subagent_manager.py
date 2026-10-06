@@ -385,15 +385,17 @@ class SubAgentManager:
         )
 
         # checkpoint
-        cpm.save({
-            'agent_id': agent_id,
-            'role': info.role,
-            'goal': info.goal[:200],
-            'task': task[:500],
-            'context': context or {},
-            'status': 'running',
-            'trace_id': trace_id,
-        })
+        cpm.save(
+            {
+                "agent_id": agent_id,
+                "role": info.role,
+                "goal": info.goal[:200],
+                "task": task[:500],
+                "context": context or {},
+                "status": "running",
+                "trace_id": trace_id,
+            }
+        )
 
         if info.agent_tool:
             result = info.agent_tool.call(task, context)
@@ -402,17 +404,13 @@ class SubAgentManager:
                 info.metrics["tasks_failed"] += 1
                 info.status = "error"
                 info.error = result["error"]
-                te.end_span(f"root-{trace_id}", 'failed',
-                            error=result["error"])
-                cpm.update_status(agent_id, 'failed',
-                                  error=result["error"][:500])
+                te.end_span(f"root-{trace_id}", "failed", error=result["error"])
+                cpm.update_status(agent_id, "failed", error=result["error"][:500])
             else:
                 info.metrics["tasks_completed"] += 1
                 info.status = "idle"
-                te.end_span(f"root-{trace_id}", 'completed',
-                            result=str(result.get('result', ''))[:500])
-                cpm.update_status(agent_id, 'completed',
-                                  result=str(result.get('result', ''))[:500])
+                te.end_span(f"root-{trace_id}", "completed", result=str(result.get("result", ""))[:500])
+                cpm.update_status(agent_id, "completed", result=str(result.get("result", ""))[:500])
 
             info.last_active = datetime.now().isoformat()
             return result
@@ -451,8 +449,8 @@ class SubAgentManager:
             info.metrics["tasks_failed"] += 1
             info.status = "error"
             info.error = str(e)
-            te.end_span(f"root-{trace_id}", 'failed', error=str(e)[:500])
-            cpm.update_status(agent_id, 'failed', error=str(e)[:500])
+            te.end_span(f"root-{trace_id}", "failed", error=str(e)[:500])
+            cpm.update_status(agent_id, "failed", error=str(e)[:500])
             return {"error": str(e), "trace_id": trace_id}
 
     def call_role(self, role: str, task: str) -> list[dict]:
@@ -531,10 +529,7 @@ class SubAgentManager:
             for info in self._agents.values():
                 status_counts[info.status] = status_counts.get(info.status, 0) + 1
 
-            total_tasks_done = sum(
-                i.metrics["tasks_completed"] + i.metrics["tasks_failed"]
-                for i in self._agents.values()
-            )
+            total_tasks_done = sum(i.metrics["tasks_completed"] + i.metrics["tasks_failed"] for i in self._agents.values())
 
             return {
                 "total_agents": len(self._agents),
@@ -606,8 +601,8 @@ class SubAgentManager:
             "name": info.role,
             "role": info.role,
             "goal": info.goal,
-            "backstory": info.agent.backstory if hasattr(info.agent, 'backstory') else "",
-            "tools": info.agent.tools if hasattr(info.agent, 'tools') else [],
+            "backstory": info.agent.backstory if hasattr(info.agent, "backstory") else "",
+            "tools": info.agent.tools if hasattr(info.agent, "tools") else [],
             "tags": info.topics + [info.role],
             "description": f"从 Agent {agent_id} 自动注册的模式",
         }

@@ -60,19 +60,24 @@ def _get_device(device_id):
 def _list_devices():
     with _registry_lock:
         return [
-            {"device_id": did, "host": info["host"], "port": info["port"],
-             "working_path": info["working_path"], "base_url": info["base_url"],
-             "registered_at": info["registered_at"], "last_seen": info["last_seen"]}
+            {
+                "device_id": did,
+                "host": info["host"],
+                "port": info["port"],
+                "working_path": info["working_path"],
+                "base_url": info["base_url"],
+                "registered_at": info["registered_at"],
+                "last_seen": info["last_seen"],
+            }
             for did, info in _device_registry.items()
         ]
 
 
 def _check_device_online(device):
     try:
-        req = Request(f"{device['base_url']}/health", method="GET",
-                      headers=_build_headers(device["auth_code"]))
+        req = Request(f"{device['base_url']}/health", method="GET", headers=_build_headers(device["auth_code"]))
         with urlopen(req, timeout=5) as resp:
-            data = resp.read().decode()
+            resp.read()
             with _registry_lock:
                 if device["device_id"] in _device_registry:
                     _device_registry[device["device_id"]]["last_seen"] = datetime.now().isoformat()
@@ -105,13 +110,14 @@ def _exec_remote(device, goal, session_id="", enable_thinking=True, timeout=120)
 
     # 3. 发送聊天请求
     try:
-        chat_body = json.dumps({
-            "messages": messages,
-            "topic_id": remote_session_id,
-            "stream": False,
-        }).encode()
-        req = Request(f"{base_url}/v1/chat/completions", data=chat_body,
-                      headers=headers, method="POST")
+        chat_body = json.dumps(
+            {
+                "messages": messages,
+                "topic_id": remote_session_id,
+                "stream": False,
+            }
+        ).encode()
+        req = Request(f"{base_url}/v1/chat/completions", data=chat_body, headers=headers, method="POST")
         start = time.time()
         with urlopen(req, timeout=timeout) as resp:
             result = json.loads(resp.read())
@@ -123,8 +129,7 @@ def _exec_remote(device, goal, session_id="", enable_thinking=True, timeout=120)
 
         choices = result.get("choices", [])
         if not choices:
-            return {"ok": False, "error": "远程AI未返回有效响应",
-                    "device_id": device["device_id"], "session_id": remote_session_id}
+            return {"ok": False, "error": "远程AI未返回有效响应", "device_id": device["device_id"], "session_id": remote_session_id}
 
         assistant_msg = choices[0].get("message", {}).get("content", "")
         tools_used = result.get("tools_used", [])
@@ -133,18 +138,16 @@ def _exec_remote(device, goal, session_id="", enable_thinking=True, timeout=120)
             "ok": True,
             "device_id": device["device_id"],
             "session_id": remote_session_id,
-            "result": assistant_msg,        # ← 远程AI的最终回答（核心！）
-            "tools_used": tools_used,        # ← 远程AI使用了哪些工具
-            "elapsed": elapsed,              # ← 总耗时
+            "result": assistant_msg,  # ← 远程AI的最终回答（核心！）
+            "tools_used": tools_used,  # ← 远程AI使用了哪些工具
+            "elapsed": elapsed,  # ← 总耗时
         }
 
     except HTTPError as e:
         body = e.read().decode() if e.fp else ""
-        return {"ok": False, "error": f"HTTP {e.code}: {body[:200]}",
-                "device_id": device["device_id"], "session_id": remote_session_id}
+        return {"ok": False, "error": f"HTTP {e.code}: {body[:200]}", "device_id": device["device_id"], "session_id": remote_session_id}
     except Exception as e:
-        return {"ok": False, "error": str(e),
-                "device_id": device["device_id"], "session_id": remote_session_id}
+        return {"ok": False, "error": str(e), "device_id": device["device_id"], "session_id": remote_session_id}
 
 
 def toolkit_remote_agent(
@@ -260,7 +263,7 @@ def meta_toolkit_remote_agent() -> dict:
                     "action": {
                         "type": "string",
                         "enum": ["register", "unregister", "list", "exec", "status"],
-                        "description": "register=注册设备, unregister=移除, list=已注册设备, exec=向设备AI发任务, status=检查在线"
+                        "description": "register=注册设备, unregister=移除, list=已注册设备, exec=向设备AI发任务, status=检查在线",
                     },
                     "device_id": {"type": "string", "description": "设备标识名，如 bm1688-1"},
                     "host": {"type": "string", "description": "设备IP或主机名"},

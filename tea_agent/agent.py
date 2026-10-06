@@ -7,7 +7,6 @@
 """
 
 import logging
-import os
 import threading
 from collections.abc import Callable
 from dataclasses import dataclass
@@ -181,10 +180,7 @@ class Agent:
         self._toolkit = tlk.Toolkit(str(tool_dir))
         tlk.toolkit = self._toolkit
 
-        logger.info(
-            f"Toolkit 初始化 | 工具: {len(self._toolkit.func_map)} 个 | "
-            f"toolkit_dir: {tool_dir} | kb_dir: {kb_dir}"
-        )
+        logger.info(f"Toolkit 初始化 | 工具: {len(self._toolkit.func_map)} 个 | toolkit_dir: {tool_dir} | kb_dir: {kb_dir}")
 
     def _init_storage(self) -> None:
         """初始化 Storage 数据库。
@@ -199,9 +195,7 @@ class Agent:
         使用此属性」——本方法此前违背了该约定。
         """
         cfg = self._cfg
-        db_path = Path(
-            getattr(cfg.paths, "active_db_path_abs", "") or cfg.paths.db_path_abs
-        )
+        db_path = Path(getattr(cfg.paths, "active_db_path_abs", "") or cfg.paths.db_path_abs)
         self._db = Storage(db_path=str(db_path))
         logger.info(f"Storage 初始化 | db: {db_path}")
 
@@ -226,11 +220,7 @@ class Agent:
         if self.mode == "lightweight" and not self._use_tools:
             self._sess.tools = []
 
-        logger.info(
-            f"会话初始化 | 模式: {self.mode} | "
-            f"主模型: {self._cfg.main_model.model_name} | "
-            f"工具: {'开' if tools_on else '关'}"
-        )
+        logger.info(f"会话初始化 | 模式: {self.mode} | 主模型: {self._cfg.main_model.model_name} | 工具: {'开' if tools_on else '关'}")
 
     def _build_lite_session(self) -> LiteSession:
         """构造 LiteSession 实例（lite 模式专用）。"""
@@ -250,11 +240,7 @@ class Agent:
             model_name = cast(str, main_m.model_name)
 
         _options = getattr(main_m, "options", {}) or {}
-        supports_reasoning = (
-            _options.get("supports_reasoning", True)
-            if isinstance(_options, dict)
-            else True
-        )
+        supports_reasoning = _options.get("supports_reasoning", True) if isinstance(_options, dict) else True
 
         # 工具档位与窗口：按实际所用模型（cheap/main）传递，供 LiteSession 精简工具集
         _used = cheap_m if (self._use_cheap_model and cheap_m.api_key) else main_m
@@ -287,16 +273,8 @@ class Agent:
         cheap_m = cfg.cheap_model
 
         _options = getattr(main_m, "options", {}) or {}
-        supports_vision = bool(
-            _options.get("supports_vision", False)
-            if isinstance(_options, dict)
-            else False
-        )
-        supports_reasoning = (
-            _options.get("supports_reasoning", True)
-            if isinstance(_options, dict)
-            else True
-        )
+        supports_vision = bool(_options.get("supports_vision", False) if isinstance(_options, dict) else False)
+        supports_reasoning = _options.get("supports_reasoning", True) if isinstance(_options, dict) else True
 
         return OnlineToolSession(
             toolkit=self._toolkit,
@@ -332,9 +310,7 @@ class Agent:
 
     def toolkit_save(self, name: str, meta: dict, pycode: str) -> bool:
         """添加/更新工具。"""
-        result = self._toolkit.call_tool(
-            "toolkit_save", name=name, meta=meta, pycode=pycode
-        )
+        result = self._toolkit.call_tool("toolkit_save", name=name, meta=meta, pycode=pycode)
         return bool(result and (isinstance(result, dict) and result.get("ok")))
 
     def toolkit_reload(self) -> dict:
@@ -414,9 +390,7 @@ class Agent:
                 # /api/chat/continue 用户决定续命/终止。
                 self._sess._continue_after_max = False
                 self._sess._max_iter_wait.set()
-                self._notify(
-                    {"type": "status", "text": "已达最大轮次上限，本回合终止（Web 端可在确认弹框中输入续命轮数）"}
-                )
+                self._notify({"type": "status", "text": "已达最大轮次上限，本回合终止（Web 端可在确认弹框中输入续命轮数）"})
             elif on_status:
                 on_status(status_msg)
             else:
@@ -447,9 +421,7 @@ class Agent:
     # ────────────────────────────────────────────═══
     # 后处理流水线
     # ────────────────────────────────────────────═══
-    def _post_chat_pipeline(
-        self, ai_msg: str, used_tools: bool, user_msg, topic_id: str
-    ) -> None:
+    def _post_chat_pipeline(self, ai_msg: str, used_tools: bool, user_msg, topic_id: str) -> None:
         """AI 回复后流水线：入库 → Token 统计 → L2 推送 → 条件摘要。
 
         ⚠️ 此方法在 AI 回复已生成后运行。任何异常只记录日志不冒泡，
@@ -476,8 +448,11 @@ class Agent:
             if conv_id:
                 # 已有行：只定稿（补 ai_msg/状态 + 兜底补齐漏写轮次）
                 self._db.finalize_turn(
-                    conv_id, ai_msg, is_func_calling=used_tools,
-                    rounds=rounds if rounds else None, status="done",
+                    conv_id,
+                    ai_msg,
+                    is_func_calling=used_tools,
+                    rounds=rounds if rounds else None,
+                    status="done",
                 )
             else:
                 conv_id = self._db.save_msg(topic_id, user_msg, "", False)
@@ -495,9 +470,9 @@ class Agent:
             user_text = self._extract_user_text(user_msg)
 
             # 步骤4: 推送到L2缓存（使用 config 中的 history_l2_max）
-            l2_max = getattr(self._cfg, 'history_l2_max', 8) if hasattr(self, '_cfg') else 8
+            l2_max = getattr(self._cfg, "history_l2_max", 8) if hasattr(self, "_cfg") else 8
             # 上下文填充治理：单条 thinking 限幅 + 总量字符阈值（溢出即摘要）
-            _cfg = getattr(self, '_cfg', None)
+            _cfg = getattr(self, "_cfg", None)
 
             def _cfg_int(_name, _default):
                 _raw = getattr(_cfg, _name, _default)
@@ -506,8 +481,8 @@ class Agent:
                     return _raw
                 return _default
 
-            l2_thinking_max = _cfg_int('l2_thinking_max_chars', 6000) or 6000
-            l2_max_chars = _cfg_int('l2_max_chars', 120000)
+            l2_thinking_max = _cfg_int("l2_thinking_max_chars", 6000) or 6000
+            l2_max_chars = _cfg_int("l2_max_chars", 120000)
             l2_count, overflow_items, should_summarize = self._db.push_to_level2(
                 topic_id,
                 user_text,
@@ -517,22 +492,13 @@ class Agent:
                 thinking_max_chars=l2_thinking_max,
                 max_level2_chars=l2_max_chars,
             )
-            logger.debug(
-                f"L2 push: count={l2_count}, overflow={len(overflow_items)}, "
-                f"summarize={should_summarize}"
-            )
+            logger.debug(f"L2 push: count={l2_count}, overflow={len(overflow_items)}, summarize={should_summarize}")
 
             # 步骤5: 启动后台任务
-            self._start_background_tasks(
-                topic_id, overflow_items, should_summarize,
-                user_text, ai_msg, used_tools, rounds
-            )
+            self._start_background_tasks(topic_id, overflow_items, should_summarize, user_text, ai_msg, used_tools, rounds)
 
         except Exception:
-            logger.exception(
-                "_post_chat_pipeline failed — AI reply preserved, "
-                "but DB write may be lost"
-            )
+            logger.exception("_post_chat_pipeline failed — AI reply preserved, but DB write may be lost")
 
     def _update_token_usage(self, topic_id: str) -> None:
         """更新Token使用统计。
@@ -563,6 +529,7 @@ class Agent:
         # usage.prompt_cache_hit_tokens / prompt_cache_miss_tokens）
         try:
             from .session.cache_report import format_cache_hit_rate
+
             _rate = format_cache_hit_rate(usage)
             if _rate:
                 logger.info(f"[Cache] 主模型 {_rate}")
@@ -588,14 +555,7 @@ class Agent:
         return str(user_msg)
 
     def _start_background_tasks(
-        self,
-        topic_id: str,
-        overflow_items: list,
-        should_summarize: bool,
-        user_text: str,
-        ai_msg: str,
-        used_tools: bool,
-        rounds: list
+        self, topic_id: str, overflow_items: list, should_summarize: bool, user_text: str, ai_msg: str, used_tools: bool, rounds: list
     ) -> None:
         """启动后台任务线程。
 
@@ -623,8 +583,8 @@ class Agent:
         ).start()
 
         # 启动自进化任务（触发→分析→执行）
-        ctx = getattr(self._sess, 'context', None)
-        if ctx and getattr(ctx, 'evolution_trigger', None):
+        ctx = getattr(self._sess, "context", None)
+        if ctx and getattr(ctx, "evolution_trigger", None):
             threading.Thread(
                 target=self._do_evolution,
                 args=(topic_id,),
@@ -637,9 +597,7 @@ class Agent:
             daemon=True,
         ).start()
 
-    def _do_async_summaries(
-        self, topic_id: str, overflow_items: list = None, should_summarize: bool = False
-    ):
+    def _do_async_summaries(self, topic_id: str, overflow_items: list = None, should_summarize: bool = False):
         """后台线程：执行标题摘要 + 条件 L2→L3 摘要。"""
         do_async_summaries(self, topic_id, overflow_items, should_summarize)
 
@@ -665,16 +623,11 @@ class Agent:
             tools_used = self._extract_tools_used(rounds)
 
             # 步骤2: 评估任务
-            evaluation_result = self._evaluate_task(
-                user_text, rounds, tools_used, usage
-            )
+            evaluation_result = self._evaluate_task(user_text, rounds, tools_used, usage)
 
             # 步骤3: 如果需要，结晶技能
             if evaluation_result.should_crystallize and tools_used:
-                self._crystallize_skill(
-                    user_text, tools_used, rounds,
-                    evaluation_result.success, usage
-                )
+                self._crystallize_skill(user_text, tools_used, rounds, evaluation_result.success, usage)
 
             # 步骤4: 保存经验教训
             if evaluation_result.lessons and self._db:
@@ -689,19 +642,19 @@ class Agent:
         只在累积了触发事件且 cheap_client 可用时执行。
         """
         try:
-            ctx = getattr(self._sess, 'context', None)
-            trigger = getattr(ctx, 'evolution_trigger', None) if ctx else None
+            ctx = getattr(self._sess, "context", None)
+            trigger = getattr(ctx, "evolution_trigger", None) if ctx else None
             if not trigger:
                 return
             events = trigger.get_pending_events()
             if not events:
                 return
 
-            cheap_client = getattr(self._sess, 'context', None) and self._sess.context.cheap_client
+            cheap_client = getattr(self._sess, "context", None) and self._sess.context.cheap_client
             if not cheap_client:
                 return
 
-            cheap_model = getattr(self._sess.context, 'cheap_model', 'gpt-4o-mini')
+            cheap_model = getattr(self._sess.context, "cheap_model", "gpt-4o-mini")
             analyzer = EvolutionAnalyzer(cheap_client, cheap_model)
             actions = analyzer.analyze(events)
             if not actions:
@@ -719,10 +672,7 @@ class Agent:
                 b = evaluator.evaluate_target(ea["target"], ea["rubric"])
                 if b and b.get("ok"):
                     baselines[ea["target"]] = b
-                    logger.info(
-                        f"evolution: 基线评分 {ea['target']}: "
-                        f"{b.get('mean_score')}/{b.get('max_score')}"
-                    )
+                    logger.info(f"evolution: 基线评分 {ea['target']}: {b.get('mean_score')}/{b.get('max_score')}")
 
             # ── Act 阶段：执行进化行动 ──
             results = actor.execute(actions)
@@ -739,15 +689,9 @@ class Agent:
                 dec = decision.get("decision", "no_change")
                 if dec == "rollback":
                     ok_rb = evaluator.rollback(target)
-                    logger.info(
-                        f"evolution: 回滚 {target} "
-                        f"(评分下降 {decision.get('delta', 0):+.2f}): ok={ok_rb}"
-                    )
+                    logger.info(f"evolution: 回滚 {target} (评分下降 {decision.get('delta', 0):+.2f}): ok={ok_rb}")
                 else:
-                    logger.info(
-                        f"evolution: {target} 评估决策={dec} "
-                        f"delta={decision.get('delta', 0):+.2f}"
-                    )
+                    logger.info(f"evolution: {target} 评估决策={dec} delta={decision.get('delta', 0):+.2f}")
 
             if trigger:
                 trigger.clear_events()
@@ -758,10 +702,12 @@ class Agent:
         """后台线程：跨主题汇总 — 每 3 轮触发一次分析。"""
         try:
             from .cross_topic_summarizer import CrossTopicSummarizer
+
             cheap_client = None
             try:
                 from .config import get_config
                 from .providers import get_cheap_client
+
                 cheap_client = get_cheap_client(get_config())
             except Exception:
                 pass
@@ -791,13 +737,7 @@ class Agent:
 
         return tools_used
 
-    def _evaluate_task(
-        self,
-        user_text: str,
-        rounds: list,
-        tools_used: list[str],
-        usage: dict
-    ):
+    def _evaluate_task(self, user_text: str, rounds: list, tools_used: list[str], usage: dict):
         """评估任务执行情况。
 
         Args:
@@ -825,14 +765,7 @@ class Agent:
         logger.debug(f"📊 评估结果: {result.summary}")
         return result
 
-    def _crystallize_skill(
-        self,
-        user_text: str,
-        tools_used: list[str],
-        rounds: list,
-        success: bool,
-        usage: dict
-    ) -> None:
+    def _crystallize_skill(self, user_text: str, tools_used: list[str], rounds: list, success: bool, usage: dict) -> None:
         """结晶技能模式（扩展点）— 当前未接线，仅保留调用点。
 
         Args:
@@ -848,7 +781,10 @@ class Agent:
         # （如 multi_agent.pattern_market.PatternMarket.save）后启用。
         logger.debug(
             "技能结晶未接线，跳过: task=%r tools=%s rounds=%d success=%s tokens=%s",
-            user_text[:60], tools_used, len(rounds or []), success,
+            user_text[:60],
+            tools_used,
+            len(rounds or []),
+            success,
             (usage or {}).get("total_tokens", 0),
         )
 
@@ -886,7 +822,7 @@ class Agent:
         all_light = self._db.get_conversations(topic_id, limit=-1, include_rounds=False)
         if all_light:
             # 获取最近 history_turns 轮的完整数据（含 rounds）
-            history_turns = getattr(self._sess.context, 'keep_turns', 3)
+            history_turns = getattr(self._sess.context, "keep_turns", 3)
             recent_n = self._db.get_conversations(topic_id, limit=history_turns, include_rounds=True)
             if recent_n:
                 # 用完整数据替换 all_light 中对应条目
@@ -905,9 +841,7 @@ class Agent:
                 history_turns=history_turns,
             )
         else:
-            self._sess.messages = [
-                {"role": "system", "content": self._sess.system_prompt}
-            ]
+            self._sess.messages = [{"role": "system", "content": self._sess.system_prompt}]
             self._sess._history_summary = ""
             self._sess._semantic_summary = ""
             self._sess._tool_chain_summary = ""

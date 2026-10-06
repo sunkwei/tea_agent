@@ -29,15 +29,13 @@ def toolkit_api_smoke(scope: str = "all", verbose: bool = False) -> str:
     try:
         from tea_agent.evaluation.api_smoke import run
     except ImportError as e:
-        return json.dumps({"ok": False, "error": f"冒烟模块不可用: {e}"},
-                          ensure_ascii=False)
+        return json.dumps({"ok": False, "error": f"冒烟模块不可用: {e}"}, ensure_ascii=False)
 
     try:
         out = run(scope=scope, with_entries=bool(verbose))
     except Exception as e:  # noqa: BLE001 — 工具边界：返回结构化错误而非抛出
         logger.exception("api_smoke op_failed")
-        return json.dumps({"ok": False, "error": f"冒烟执行失败: {e}"},
-                          ensure_ascii=False)
+        return json.dumps({"ok": False, "error": f"冒烟执行失败: {e}"}, ensure_ascii=False)
 
     res = {
         "ok": not out.get("failures"),
@@ -55,16 +53,25 @@ def toolkit_api_smoke(scope: str = "all", verbose: bool = False) -> str:
 
 def meta_toolkit_api_smoke() -> dict:
     """Meta toolkit api_smoke."""
-    return {"type": "function", "function": {
-        "name": "toolkit_api_smoke",
-        "description": "公共 API 入口冒烟：以最小良性入参调用存活入口，检出「入口级」静默"
-                       "失效（委托层签名漂移、符号缺失、__all__ 承诺未兑现）。只把 "
-                       "TypeError/ImportError/NameError/AttributeError 计为失败；合法入参"
-                       "拒绝（ValueError 等）视为通过。使用临时数据库，不触碰真实数据。",
-        "parameters": {"type": "object", "properties": {
-            "scope": {"type": "string", "enum": ["public", "storage", "all"],
-                      "description": "public=仅包公开名; storage=Storage 公共方法; all=两者",
-                      "default": "all"},
-            "verbose": {"type": "boolean",
-                        "description": "返回已检入口清单与待审阅异常", "default": False},
-        }}}}
+    return {
+        "type": "function",
+        "function": {
+            "name": "toolkit_api_smoke",
+            "description": "公共 API 入口冒烟：以最小良性入参调用存活入口，检出「入口级」静默"
+            "失效（委托层签名漂移、符号缺失、__all__ 承诺未兑现）。只把 "
+            "TypeError/ImportError/NameError/AttributeError 计为失败；合法入参"
+            "拒绝（ValueError 等）视为通过。使用临时数据库，不触碰真实数据。",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "scope": {
+                        "type": "string",
+                        "enum": ["public", "storage", "all"],
+                        "description": "public=仅包公开名; storage=Storage 公共方法; all=两者",
+                        "default": "all",
+                    },
+                    "verbose": {"type": "boolean", "description": "返回已检入口清单与待审阅异常", "default": False},
+                },
+            },
+        },
+    }

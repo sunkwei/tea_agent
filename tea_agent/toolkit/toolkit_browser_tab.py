@@ -4,8 +4,8 @@ import logging
 
 logger = logging.getLogger("toolkit")
 
-def toolkit_browser_tab(action: str, browser: str = "firefox", tab_title: str = None,
-                        window_index: int = 0):
+
+def toolkit_browser_tab(action: str, browser: str = "firefox", tab_title: str = None, window_index: int = 0):
     """
     浏览器标签管理工具。
 
@@ -31,6 +31,7 @@ def toolkit_browser_tab(action: str, browser: str = "firefox", tab_title: str = 
     if is_windows:
         return _windows_browser_tab(action, browser, tab_title, window_index)
     return _linux_browser_tab(action, browser, tab_title, window_index)
+
 
 def _windows_browser_tab(action, browser, tab_title, window_index):
     """Windows 平台实现"""
@@ -78,7 +79,11 @@ def _windows_browser_tab(action, browser, tab_title, window_index):
                 return True
 
             # 根据浏览器类型匹配
-            if (browser_name_lower == "firefox" and "firefox" in title.lower()) or (browser_name_lower == "chrome" and "chrome" in title.lower()) or (browser_name_lower == "edge" and ("edge" in title.lower() or "microsoft" in title.lower())):
+            if (
+                (browser_name_lower == "firefox" and "firefox" in title.lower())
+                or (browser_name_lower == "chrome" and "chrome" in title.lower())
+                or (browser_name_lower == "edge" and ("edge" in title.lower() or "microsoft" in title.lower()))
+            ):
                 windows.append({"hwnd": hwnd, "title": title})
             return True
 
@@ -95,11 +100,7 @@ def _windows_browser_tab(action, browser, tab_title, window_index):
         # 返回所有窗口标题（标签页信息）
         tabs = []
         for i, win in enumerate(browser_windows):
-            tabs.append({
-                "index": i,
-                "title": win["title"],
-                "hwnd": win["hwnd"]
-            })
+            tabs.append({"index": i, "title": win["title"], "hwnd": win["hwnd"]})
         return {"ok": True, "browser": browser, "tabs": tabs, "count": len(tabs)}
 
     if action == "get_active_tab":
@@ -122,11 +123,7 @@ def _windows_browser_tab(action, browser, tab_title, window_index):
                 break
 
         if not matched_window:
-            return {
-                "ok": False,
-                "error": f"未找到包含 '{tab_title}' 的标签",
-                "available_tabs": [w["title"] for w in browser_windows]
-            }
+            return {"ok": False, "error": f"未找到包含 '{tab_title}' 的标签", "available_tabs": [w["title"] for w in browser_windows]}
 
         # 激活窗口
         hwnd = matched_window["hwnd"]
@@ -144,14 +141,10 @@ def _windows_browser_tab(action, browser, tab_title, window_index):
         current_fg = get_foreground_window()
         success = current_fg == hwnd
 
-        return {
-            "ok": success,
-            "activated": matched_window["title"],
-            "hwnd": hwnd,
-            "success": success
-        }
+        return {"ok": success, "activated": matched_window["title"], "hwnd": hwnd, "success": success}
 
     return {"ok": False, "error": f"未知 action: {action}"}
+
 
 def _linux_browser_tab(action, browser, tab_title, window_index):
     """Linux 平台实现（使用 xdotool/wmctrl）"""
@@ -168,11 +161,7 @@ def _linux_browser_tab(action, browser, tab_title, window_index):
             if line:
                 parts = line.split(None, 3)
                 if len(parts) >= 4:
-                    windows.append({
-                        "id": parts[0],
-                        "desktop": parts[1],
-                        "title": parts[3]
-                    })
+                    windows.append({"id": parts[0], "desktop": parts[1], "title": parts[3]})
 
         # 过滤浏览器窗口
         browser_windows = [w for w in windows if browser.lower() in w["title"].lower()]
@@ -204,4 +193,24 @@ def _linux_browser_tab(action, browser, tab_title, window_index):
 
 
 def meta_toolkit_browser_tab() -> dict:
-    return {"type": "function", "function": {"name": "toolkit_browser_tab", "description": "浏览器标签管理工具。可以激活指定浏览器窗口、切换到指定标签页、获取标签列表。支持 Firefox、Chrome 等主流浏览器。", "parameters": {"type": "object", "properties": {"action": {"type": "string", "enum": ["activate_tab", "list_tabs", "get_active_tab"], "description": "activate_tab=激活指定标签, list_tabs=列出所有标签, get_active_tab=获取当前标签"}, "browser": {"type": "string", "description": "浏览器名称，如 firefox, chrome, edge", "default": "firefox"}, "tab_title": {"type": "string", "description": "标签标题（支持部分匹配）"}, "window_index": {"type": "integer", "description": "窗口索引（0=第一个窗口）", "default": 0}}, "required": ["action"]}}}
+    return {
+        "type": "function",
+        "function": {
+            "name": "toolkit_browser_tab",
+            "description": "浏览器标签管理工具。可以激活指定浏览器窗口、切换到指定标签页、获取标签列表。支持 Firefox、Chrome 等主流浏览器。",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "action": {
+                        "type": "string",
+                        "enum": ["activate_tab", "list_tabs", "get_active_tab"],
+                        "description": "activate_tab=激活指定标签, list_tabs=列出所有标签, get_active_tab=获取当前标签",
+                    },
+                    "browser": {"type": "string", "description": "浏览器名称，如 firefox, chrome, edge", "default": "firefox"},
+                    "tab_title": {"type": "string", "description": "标签标题（支持部分匹配）"},
+                    "window_index": {"type": "integer", "description": "窗口索引（0=第一个窗口）", "default": 0},
+                },
+                "required": ["action"],
+            },
+        },
+    }

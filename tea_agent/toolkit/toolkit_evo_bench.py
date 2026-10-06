@@ -64,9 +64,9 @@ def meta_toolkit_evo_bench():
     }
 
 
-def toolkit_evo_bench(action: str = "run", kind: str = "", root: str = ".",
-                      record: bool = False, tag: str = "", threshold: float = 0.0,
-                      verbose: bool = True) -> dict:
+def toolkit_evo_bench(
+    action: str = "run", kind: str = "", root: str = ".", record: bool = False, tag: str = "", threshold: float = 0.0, verbose: bool = True
+) -> dict:
     """EvolutionBench 基准入口。
 
     Args:
@@ -98,8 +98,7 @@ def toolkit_evo_bench(action: str = "run", kind: str = "", root: str = ".",
     kind_arg = None if k in ("", "all") else k
 
     if act == "run":
-        agg = run_bench(root=root or ".", kind=kind_arg, record=bool(record),
-                        tag=(tag or None))
+        agg = run_bench(root=root or ".", kind=kind_arg, record=bool(record), tag=(tag or None))
         agg["ok"] = bool(agg.get("ok"))
         agg["history_path"] = history_path()
         if not verbose:
@@ -113,8 +112,14 @@ def toolkit_evo_bench(action: str = "run", kind: str = "", root: str = ".",
             "points": len(pts),
             "path": history_path(),
             "series": [
-                {"ts": p.get("ts"), "tag": p.get("tag"), "score": p.get("score"),
-                 "passed": p.get("passed"), "total": p.get("total"), "git": p.get("git")}
+                {
+                    "ts": p.get("ts"),
+                    "tag": p.get("tag"),
+                    "score": p.get("score"),
+                    "passed": p.get("passed"),
+                    "total": p.get("total"),
+                    "git": p.get("git"),
+                }
                 for p in pts[-20:]
             ],
         }
@@ -126,8 +131,7 @@ def toolkit_evo_bench(action: str = "run", kind: str = "", root: str = ".",
         candidate = pts[-1]
         if len(pts) < 2:
             return {"ok": False, "error": "曲线仅 1 个数据点，无法对比基线", "candidate": candidate}
-        res = compare_with_history(baseline=pts[-2], candidate=candidate,
-                                   threshold=float(threshold))
+        res = compare_with_history(baseline=pts[-2], candidate=candidate, threshold=float(threshold))
         res["baseline_point"] = pts[-2]
         res["candidate_point"] = candidate
         return res

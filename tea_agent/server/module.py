@@ -28,6 +28,7 @@ logger = logging.getLogger("hot_reload")
 # HotReloadModule 基类
 # ═══════════════════════════════════════════════════════════════
 
+
 class HotReloadModule:
     """热重载模块基类。
 
@@ -152,6 +153,7 @@ def _resolve_class(module_name: str, class_name: str) -> type[HotReloadModule] |
 # ModuleRegistry — 模块注册与生命周期管理
 # ═══════════════════════════════════════════════════════════════
 
+
 class ModuleRegistry:
     """模块注册表。
 
@@ -215,8 +217,7 @@ class ModuleRegistry:
             results[name] = success
         return results
 
-    def reload_module(self, name: str, cascade: bool = True,
-                      _reloaded: set[str] | None = None) -> bool:
+    def reload_module(self, name: str, cascade: bool = True, _reloaded: set[str] | None = None) -> bool:
         """热重载指定模块。
 
         cascade=True 时，自动找出依赖此模块的其他模块并级重重载。
@@ -258,10 +259,7 @@ class ModuleRegistry:
 
         # 级联：找出依赖此模块的其他模块并重载
         if cascade and success:
-            dependents = [
-                other_name for other_name, other_cls in self._modules.items()
-                if other_name != name and name in other_cls.dependencies
-            ]
+            dependents = [other_name for other_name, other_cls in self._modules.items() if other_name != name and name in other_cls.dependencies]
             if dependents:
                 logger.info(f"📦 Cascade reloading dependents of [{name}]: {dependents}")
                 for dep_name in dependents:
@@ -322,9 +320,7 @@ class ModuleRegistry:
         """检查是否所有模块都已加载。"""
         return all(cls._loaded for name, cls in self._modules.items())
 
-    def start_watcher(self, interval: float = 2.0,
-                      paths: list[str] | None = None,
-                      server=None) -> None:
+    def start_watcher(self, interval: float = 2.0, paths: list[str] | None = None, server=None) -> None:
         """启动文件监控线程（polling 模式）。
 
         Args:
@@ -341,18 +337,26 @@ class ModuleRegistry:
             watch_paths.extend(paths)
         else:
             for cls in self._modules.values():
-                mod_path = getattr(cls, '_module_path', '')
+                mod_path = getattr(cls, "_module_path", "")
                 if mod_path and os.path.isfile(mod_path):
                     watch_paths.append(mod_path)
             tea_agent_dir = str(Path(__file__).parent.parent)
             # 核心 Agent 模块文件（变更时触发模块级热重载）
             for sub in [
-                'agent.py', 'onlinesession.py', 'tlk.py',
-                'config.py', 'store.py', 'agent_pipeline.py',
-                'basesession.py', 'session_pipeline.py',
-                'session/context.py', 'session/history_builder.py',
-                'session/os_info_injector.py', 'session/params.py',
-                'session/prompts.py', 'session/tool_loop_runner.py',
+                "agent.py",
+                "onlinesession.py",
+                "tlk.py",
+                "config.py",
+                "store.py",
+                "agent_pipeline.py",
+                "basesession.py",
+                "session_pipeline.py",
+                "session/context.py",
+                "session/history_builder.py",
+                "session/os_info_injector.py",
+                "session/params.py",
+                "session/prompts.py",
+                "session/tool_loop_runner.py",
             ]:
                 fp = os.path.join(tea_agent_dir, sub)
                 if os.path.isfile(fp):
@@ -361,17 +365,16 @@ class ModuleRegistry:
 
         # If server reference provided, set up route hot-reload callback
         on_route_change = None
-        if server and hasattr(server, 'rebuild_routes'):
+        if server and hasattr(server, "rebuild_routes"):
             on_route_change = server.rebuild_routes
             # Also watch server.py and route_handlers.py
             server_dir = str(Path(__file__).parent)
-            for f in ['server.py', 'route_handlers.py']:
+            for f in ["server.py", "route_handlers.py"]:
                 fp = os.path.join(server_dir, f)
                 if os.path.isfile(fp) and fp not in watch_paths:
                     watch_paths.append(fp)
 
-        self._watcher = FileWatcher(self, watch_paths, interval,
-                                    on_route_change=on_route_change)
+        self._watcher = FileWatcher(self, watch_paths, interval, on_route_change=on_route_change)
         self._watcher.start()
         logger.info(f"File watcher started ({len(watch_paths)} files)")
 
@@ -390,6 +393,7 @@ class ModuleRegistry:
 # ═══════════════════════════════════════════════════════════════
 # _ModuleVersionManager — 模块文件版本管理 + 自动回退
 # ═══════════════════════════════════════════════════════════════
+
 
 class _ModuleVersionManager:
     """模块文件版本管理器 — 在热重载前自动备份、失败时自动回退。
@@ -410,10 +414,7 @@ class _ModuleVersionManager:
     @classmethod
     def _ensure_dir(cls) -> str:
         if not cls._backup_dir:
-            cls._backup_dir = os.path.join(
-                str(Path(__file__).parent.parent.parent),
-                ".tea_agent_run", "module_versions"
-            )
+            cls._backup_dir = os.path.join(str(Path(__file__).parent.parent.parent), ".tea_agent_run", "module_versions")
             os.makedirs(cls._backup_dir, exist_ok=True)
         return cls._backup_dir
 
@@ -435,7 +436,7 @@ class _ModuleVersionManager:
         versions = []
         for f in Path(bdir).glob(f"{safe}.v*.bak"):
             try:
-                v = int(f.name.split('.v')[1].split('.')[0])
+                v = int(f.name.split(".v")[1].split(".")[0])
                 versions.append(v)
             except (ValueError, IndexError):
                 pass
@@ -447,7 +448,7 @@ class _ModuleVersionManager:
         if not os.path.isfile(filepath):
             return None
         try:
-            with open(filepath, encoding='utf-8') as f:
+            with open(filepath, encoding="utf-8") as f:
                 content = f.read()
         except Exception as e:
             logger.debug(f"Cannot read {filepath} for backup: {e}")
@@ -461,7 +462,7 @@ class _ModuleVersionManager:
         backup_path = os.path.join(bdir, f"{safe}.v{new_ver}.bak")
 
         try:
-            with open(backup_path, 'w', encoding='utf-8') as f:
+            with open(backup_path, "w", encoding="utf-8") as f:
                 f.write(content)
         except Exception as e:
             logger.warning(f"Backup write failed for {filepath}: {e}")
@@ -484,7 +485,7 @@ class _ModuleVersionManager:
         bdir = cls._ensure_dir()
         marker = os.path.join(bdir, f"{safe}.last_good")
         try:
-            with open(marker, 'w') as f:
+            with open(marker, "w") as f:
                 f.write(str(version))
         except Exception:
             pass
@@ -531,12 +532,11 @@ class _ModuleVersionManager:
             return False
 
         try:
-            with open(last_good_path, encoding='utf-8') as f:
+            with open(last_good_path, encoding="utf-8") as f:
                 content = f.read()
-            with open(filepath, 'w', encoding='utf-8') as f:
+            with open(filepath, "w", encoding="utf-8") as f:
                 f.write(content)
-            logger.warning(f"🔄 Rolled back {os.path.basename(filepath)} → "
-                          f"v{cls.get_last_good_version(filepath)}")
+            logger.warning(f"🔄 Rolled back {os.path.basename(filepath)} → v{cls.get_last_good_version(filepath)}")
             return True
         except Exception as e:
             logger.error(f"Rollback failed for {filepath}: {e}")
@@ -552,12 +552,14 @@ class _ModuleVersionManager:
             safe = cls._safe_name(filepath)
             bdir = cls._ensure_dir()
             path = os.path.join(bdir, f"{safe}.v{v}.bak")
-            result.append({
-                "version": v,
-                "path": path,
-                "exists": os.path.isfile(path),
-                "is_last_good": v == last_good,
-            })
+            result.append(
+                {
+                    "version": v,
+                    "path": path,
+                    "exists": os.path.isfile(path),
+                    "is_last_good": v == last_good,
+                }
+            )
         return result
 
     @classmethod
@@ -569,14 +571,14 @@ class _ModuleVersionManager:
         if last_good_v is None:
             return False
         try:
-            with open(filepath, encoding='utf-8') as f:
+            with open(filepath, encoding="utf-8") as f:
                 current = f.read()
             safe = cls._safe_name(filepath)
             bdir = cls._ensure_dir()
             backup_path = os.path.join(bdir, f"{safe}.v{last_good_v}.bak")
             if not os.path.isfile(backup_path):
                 return False
-            with open(backup_path, encoding='utf-8') as f:
+            with open(backup_path, encoding="utf-8") as f:
                 good = f.read()
             return current == good
         except Exception:
@@ -599,12 +601,11 @@ class _ModuleVersionManager:
         if v is not None:
             cls.mark_last_good(filepath, v)
 
+
 class FileWatcher:
     """基于 polling 的文件变更检测器。"""
 
-    def __init__(self, registry: ModuleRegistry,
-                 file_paths: list[str], interval: float = 2.0,
-                 on_route_change=None):
+    def __init__(self, registry: ModuleRegistry, file_paths: list[str], interval: float = 2.0, on_route_change=None):
         self._registry = registry
         self._file_paths: list[str] = list(file_paths)
         self._interval = interval
@@ -617,7 +618,7 @@ class FileWatcher:
 
         # ── 启动时初始化版本备份（确保每个监控文件有至少一个 last_good 版本） ──
         for fp in file_paths:
-            if fp.endswith('.py') and os.path.isfile(fp):
+            if fp.endswith(".py") and os.path.isfile(fp):
                 _ModuleVersionManager.init_backup(fp)
 
     def _build_core_file_map(self) -> dict[str, str]:
@@ -627,23 +628,21 @@ class FileWatcher:
         FileWatcher 通过此映射直接触发对应 HotReloadModule 的 reload。
         避免这些"非模块类文件"被忽略。
         """
-        tea_agent_dir = os.path.normcase(os.path.normpath(
-            str(Path(__file__).parent.parent)))
+        tea_agent_dir = os.path.normcase(os.path.normpath(str(Path(__file__).parent.parent)))
         mapping: dict[str, str] = {}
         # key=相对路径, value=目标模块名（必须在 ModuleRegistry 中注册过）
         _rel_map = {
-            'basesession.py': 'agent',
-            'session_pipeline.py': 'agent',
-            'session/context.py': 'agent',
-            'session/history_builder.py': 'agent',
-            'session/os_info_injector.py': 'agent',
-            'session/params.py': 'agent',
-            'session/prompts.py': 'agent',
-            'session/tool_loop_runner.py': 'agent',
+            "basesession.py": "agent",
+            "session_pipeline.py": "agent",
+            "session/context.py": "agent",
+            "session/history_builder.py": "agent",
+            "session/os_info_injector.py": "agent",
+            "session/params.py": "agent",
+            "session/prompts.py": "agent",
+            "session/tool_loop_runner.py": "agent",
         }
         for rel_path, module_name in _rel_map.items():
-            full = os.path.normcase(os.path.normpath(
-                os.path.join(tea_agent_dir, rel_path)))
+            full = os.path.normcase(os.path.normpath(os.path.join(tea_agent_dir, rel_path)))
             mapping[full] = module_name
         return mapping
 
@@ -651,8 +650,7 @@ class FileWatcher:
         if self._thread is not None:
             return
         self._stop_event.clear()
-        self._thread = threading.Thread(target=self._run, daemon=True,
-                                        name="FileWatcher")
+        self._thread = threading.Thread(target=self._run, daemon=True, name="FileWatcher")
         self._thread.start()
 
     def stop(self) -> None:
@@ -690,10 +688,7 @@ class FileWatcher:
         # ── Route file change → hot-reload routes (no restart) ──
         if self._on_route_change:
             server_dir = os.path.dirname(os.path.abspath(__file__))
-            route_files = [
-                os.path.normcase(os.path.normpath(os.path.join(server_dir, f)))
-                for f in ['server.py', 'route_handlers.py']
-            ]
+            route_files = [os.path.normcase(os.path.normpath(os.path.join(server_dir, f))) for f in ["server.py", "route_handlers.py"]]
             if file_path in route_files:
                 logger.info(f"Route file changed: {os.path.basename(file_path)} → rebuilding routes")
                 try:
@@ -704,7 +699,7 @@ class FileWatcher:
 
         # ── 所有 .py 文件变更 → 自动备份（reload 前确保有回退能力） ──
         new_ver = None
-        if file_path.endswith('.py') and os.path.isfile(file_path):
+        if file_path.endswith(".py") and os.path.isfile(file_path):
             new_ver = _ModuleVersionManager.backup_new_version(file_path)
 
         # ── 辅助函数：带版本管理的 reload ──
@@ -739,7 +734,7 @@ class FileWatcher:
             return
 
         for name, cls in self._registry._modules.items():
-            mod_path = getattr(cls, '_module_path', '')
+            mod_path = getattr(cls, "_module_path", "")
             if mod_path and os.path.normcase(os.path.normpath(mod_path)) == file_path:
                 _reload_with_version(name)
                 return
@@ -782,9 +777,10 @@ def reset_registry() -> None:
 def _module_path_for(cls: type) -> str:
     """获取类定义所在的 .py 文件路径。"""
     import sys
+
     try:
         mod = sys.modules.get(cls.__module__)
-        if mod and hasattr(mod, '__file__') and mod.__file__:
+        if mod and hasattr(mod, "__file__") and mod.__file__:
             return os.path.abspath(mod.__file__)
     except Exception:
         pass

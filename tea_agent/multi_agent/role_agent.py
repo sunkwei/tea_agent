@@ -41,6 +41,7 @@ def _get_checkpoint_manager():
     global _checkpoint_manager
     if _checkpoint_manager is None:
         from .checkpoint_manager import CheckpointManager
+
         _checkpoint_manager = CheckpointManager.get_instance()
     return _checkpoint_manager
 
@@ -49,12 +50,14 @@ def _get_trace_engine():
     global _trace_engine
     if _trace_engine is None:
         from .trace_engine import TraceEngine
+
         _trace_engine = TraceEngine.get_instance()
     return _trace_engine
 
 
 class AgentStatus(Enum):
     """Agent 执行状态"""
+
     IDLE = "idle"
     RUNNING = "running"
     COMPLETED = "completed"
@@ -65,6 +68,7 @@ class AgentStatus(Enum):
 @dataclass
 class AgentResult:
     """Agent 执行结果"""
+
     success: bool
     output: str
     structured: dict | None = None
@@ -172,15 +176,17 @@ class RoleAgent:
 
         # ── Phase 3: Checkpoint ─────────────────
         cpm = _get_checkpoint_manager()
-        cpm.save({
-            'agent_id': self.agent_id,
-            'role': self.role,
-            'goal': self.goal[:200],
-            'task': task[:500],
-            'context': context or {},
-            'status': 'running',
-            'trace_id': self._trace_id,
-        })
+        cpm.save(
+            {
+                "agent_id": self.agent_id,
+                "role": self.role,
+                "goal": self.goal[:200],
+                "task": task[:500],
+                "context": context or {},
+                "status": "running",
+                "trace_id": self._trace_id,
+            }
+        )
 
         try:
             # 1. 构建系统提示
@@ -229,10 +235,8 @@ class RoleAgent:
                     logger.error(f"❌ [{agent_name}] 失败: {error}")
 
                 # ── Phase 3: Trace 失败 ──
-                te.end_span(self._span_id, 'failed',
-                            error=error, tool_calls=tool_calls)
-                cpm.update_status(self.agent_id, 'failed',
-                                  error=error, tool_calls=tool_calls)
+                te.end_span(self._span_id, "failed", error=error, tool_calls=tool_calls)
+                cpm.update_status(self.agent_id, "failed", error=error, tool_calls=tool_calls)
                 return self.last_result
 
             # 6. 如果指定了 output_model，尝试解析结构化输出
@@ -257,10 +261,8 @@ class RoleAgent:
                 logger.info(f"✅ [{agent_name}] 完成 ({elapsed:.1f}s, {tool_calls} 次工具调用)")
 
             # ── Phase 3: Trace 完成 ──
-            te.end_span(self._span_id, 'completed',
-                        result=assistant[:500], tool_calls=tool_calls)
-            cpm.update_status(self.agent_id, 'completed',
-                              result=assistant[:500], tool_calls=tool_calls)
+            te.end_span(self._span_id, "completed", result=assistant[:500], tool_calls=tool_calls)
+            cpm.update_status(self.agent_id, "completed", result=assistant[:500], tool_calls=tool_calls)
             return self.last_result
 
         except Exception as e:
@@ -279,9 +281,8 @@ class RoleAgent:
             # ── Phase 3: Trace 异常 ──
             try:
                 if self._span_id:
-                    te.end_span(self._span_id, 'failed',
-                                error=str(e)[:500])
-                cpm.update_status(self.agent_id, 'failed', error=str(e)[:500])
+                    te.end_span(self._span_id, "failed", error=str(e)[:500])
+                cpm.update_status(self.agent_id, "failed", error=str(e)[:500])
             except Exception:
                 pass
             return self.last_result
@@ -307,7 +308,7 @@ class RoleAgent:
         return cpm.load(self.agent_id)
 
     @classmethod
-    def recover(cls, agent_id: str) -> 'RoleAgent | None':
+    def recover(cls, agent_id: str) -> "RoleAgent | None":
         """
         从 checkpoint 恢复 RoleAgent。
 
@@ -322,17 +323,14 @@ class RoleAgent:
             return None
 
         agent = cls(
-            role=cp.get('role', '恢复的 Agent'),
-            goal=cp.get('goal', '继续未完成的任务'),
+            role=cp.get("role", "恢复的 Agent"),
+            goal=cp.get("goal", "继续未完成的任务"),
             verbose=True,
         )
         agent.agent_id = agent_id
-        agent.status = AgentStatus(cp.get('status', 'idle'))
+        agent.status = AgentStatus(cp.get("status", "idle"))
 
-        logger.info(
-            f"🔄 从 checkpoint 恢复 [{agent_id}]: "
-            f"status={agent.status.value}, task={cp.get('task', '')[:80]}"
-        )
+        logger.info(f"🔄 从 checkpoint 恢复 [{agent_id}]: status={agent.status.value}, task={cp.get('task', '')[:80]}")
         return agent
 
     @classmethod
@@ -390,17 +388,14 @@ class RoleAgent:
         for key, value in context.items():
             context_parts.append(f"【{key}】\n{value}")
 
-        return (
-            "## 上下文信息\n"
-            + "\n\n".join(context_parts)
-            + f"\n\n## 当前任务\n{task}"
-        )
+        return "## 上下文信息\n" + "\n\n".join(context_parts) + f"\n\n## 当前任务\n{task}"
 
     def _get_llm_config(self):
         """获取模型配置。"""
         if self.llm_config:
             # 支持自定义配置
             from types import SimpleNamespace
+
             config = SimpleNamespace()
             config.main_model = SimpleNamespace()
             config.main_model.api_key = self.llm_config.get("api_key")
@@ -408,12 +403,14 @@ class RoleAgent:
             config.main_model.model_name = self.llm_config.get("model")
             return config
         from tea_agent.config import load_config
+
         return load_config()
 
     def _get_toolkit(self):
         """获取 Toolkit 实例。"""
         if self._toolkit is None:
             from tea_agent import tlk
+
             self._toolkit = tlk.toolkit
         return self._toolkit
 
@@ -448,7 +445,8 @@ class RoleAgent:
 
         # 策略 2: json 代码块
         import re
-        json_match = re.search(r'```(?:json)?\s*\n?(.*?)\n?```', text, re.DOTALL)
+
+        json_match = re.search(r"```(?:json)?\s*\n?(.*?)\n?```", text, re.DOTALL)
         if json_match:
             try:
                 data = json.loads(json_match.group(1).strip())
@@ -457,7 +455,7 @@ class RoleAgent:
                 logger.debug("structured parse 策略2(json 代码块) 未命中: %s", e)
 
         # 策略 3: 尝试提取第一对 {} 或 []
-        brace_match = re.search(r'(\{.*\}|\[.*\])', text, re.DOTALL)
+        brace_match = re.search(r"(\{.*\}|\[.*\])", text, re.DOTALL)
         if brace_match:
             try:
                 data = json.loads(brace_match.group(0))
@@ -475,15 +473,13 @@ class RoleAgent:
 # 快捷创建函数
 # ───────────────────────────────────────────────
 
+
 def create_analyst(verbose: bool = True) -> RoleAgent:
     """创建代码分析 Agent。"""
     return RoleAgent(
         role="资深代码分析专家",
         goal="分析代码结构、识别设计问题和代码坏味道",
-        backstory=(
-            "你拥有 15 年软件架构经验，精通各种设计模式和重构技术。"
-            "你能快速从代码中识别出潜在问题，并给出具体的改进建议。"
-        ),
+        backstory=("你拥有 15 年软件架构经验，精通各种设计模式和重构技术。你能快速从代码中识别出潜在问题，并给出具体的改进建议。"),
         verbose=verbose,
     )
 
@@ -494,9 +490,7 @@ def create_coder(verbose: bool = True) -> RoleAgent:
         role="高级软件工程师",
         goal="高效实现功能需求和代码修改",
         backstory=(
-            "你擅长编写高质量、可维护的 Python 代码。"
-            "你熟悉 SOLID 原则、类型注解、测试驱动开发。"
-            "你总是编写带有类型注解和文档字符串的干净代码。"
+            "你擅长编写高质量、可维护的 Python 代码。你熟悉 SOLID 原则、类型注解、测试驱动开发。你总是编写带有类型注解和文档字符串的干净代码。"
         ),
         verbose=verbose,
     )
@@ -507,10 +501,7 @@ def create_tester(verbose: bool = True) -> RoleAgent:
     return RoleAgent(
         role="专业测试工程师",
         goal="编写全面的测试用例，确保代码质量",
-        backstory=(
-            "你精通 pytest 和各种测试技术，包括单元测试、集成测试和 Mock。"
-            "你追求高覆盖率，但也知道哪些代码真正需要测试。"
-        ),
+        backstory=("你精通 pytest 和各种测试技术，包括单元测试、集成测试和 Mock。你追求高覆盖率，但也知道哪些代码真正需要测试。"),
         verbose=verbose,
     )
 
@@ -520,9 +511,6 @@ def create_reviewer(verbose: bool = True) -> RoleAgent:
     return RoleAgent(
         role="严格的代码审查员",
         goal="审查代码质量，确保符合最佳实践",
-        backstory=(
-            "你以严苛著称，对代码质量零容忍。"
-            "你会检查类型安全、错误处理、性能问题、可维护性等各个方面。"
-        ),
+        backstory=("你以严苛著称，对代码质量零容忍。你会检查类型安全、错误处理、性能问题、可维护性等各个方面。"),
         verbose=verbose,
     )

@@ -84,11 +84,7 @@ class SessionPipeline:
             self._step_order.remove(name)
 
     def get_enabled_steps(self) -> list[tuple[str, PipelineStep]]:
-        return [
-            (name, self._steps[name])
-            for name in self._step_order
-            if self._steps[name].enabled
-        ]
+        return [(name, self._steps[name]) for name in self._step_order if self._steps[name].enabled]
 
     def execute(
         self,

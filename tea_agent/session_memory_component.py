@@ -19,6 +19,7 @@ import logging
 
 logger = logging.getLogger("session.memory")
 
+
 class MemoryComponent(SessionComponent):
     """
     会话记忆组件。
@@ -37,6 +38,7 @@ class MemoryComponent(SessionComponent):
             return
 
         from tea_agent.memory import MemoryManager
+
         threshold = self.ctx.memory_extraction_threshold
         dedup = self.ctx.memory_dedup_threshold
         try:
@@ -86,12 +88,12 @@ class MemoryComponent(SessionComponent):
                     all_memory_texts.append(formatted)
                     logger.info(f"注入了 {len(memories)} 条用户记忆")
             except Exception:
-                logger.exception('op_failed')
-
+                logger.exception("op_failed")
 
         # ── 项目记忆 ──
         try:
             from tea_agent.project_memory import ProjectMemoryManager
+
             pm = ProjectMemoryManager()
             pm_memories = pm.get_all(limit=30)
             if pm_memories:
@@ -163,9 +165,10 @@ class AutoMemoryExtractor:
         """从配置加载 cheap model 信息。"""
         try:
             from tea_agent.config import get_config
+
             cfg = get_config()
             self._model_config = cfg.cheap_model
-            if not self._model_config or not getattr(self._model_config, 'api_key', None):
+            if not self._model_config or not getattr(self._model_config, "api_key", None):
                 self._model_config = cfg.main_model
             logger.info(f"AutoMemory LLM: {getattr(self._model_config, 'model', 'unknown')}")
         except Exception as e:
@@ -177,6 +180,7 @@ class AutoMemoryExtractor:
         # 冷却检查：同一 topic 在 COOLDOWN_SECONDS 内不重复提取
         if not force:
             import time
+
             now = time.time()
             last = self._cooldowns.get(topic_id, 0)
             if now - last < self.COOLDOWN_SECONDS:
@@ -230,8 +234,7 @@ class AutoMemoryExtractor:
     def _get_unextracted_conversations(self, topic_id: str) -> list[dict]:
         c = self.storage.conn.cursor()
         c.execute(
-            "SELECT id, user_msg, ai_msg, stamp FROM conversations "
-            "WHERE topic_id = ? AND memory_extracted = 0 ORDER BY stamp ASC",
+            "SELECT id, user_msg, ai_msg, stamp FROM conversations WHERE topic_id = ? AND memory_extracted = 0 ORDER BY stamp ASC",
             (topic_id,),
         )
         rows = c.fetchall()
@@ -252,8 +255,10 @@ class AutoMemoryExtractor:
             return 0.0
         if text1 == text2:
             return 1.0
+
         def get_bigrams(text):
-            return {text[i:i+2] for i in range(len(text) - 1)}
+            return {text[i : i + 2] for i in range(len(text) - 1)}
+
         bigrams1 = get_bigrams(text1.lower())
         bigrams2 = get_bigrams(text2.lower())
         if not bigrams1 or not bigrams2:
@@ -261,8 +266,6 @@ class AutoMemoryExtractor:
         intersection = bigrams1 & bigrams2
         union = bigrams1 | bigrams2
         return len(intersection) / len(union) if union else 0.0
-
-
 
     def _extract_with_llm(self, conversation_text: str) -> list[dict]:
         """真实 LLM 调用，替代旧的 mock 实现。"""
@@ -272,22 +275,25 @@ class AutoMemoryExtractor:
 
         try:
             prompt = EXTRACTION_PROMPT.format(conversation=conversation_text[:4000])
-            url = (getattr(self._model_config, 'api_url', '') or '').rstrip('/')
-            if not url.endswith('/v1'):
-                url += '/v1' if not url.endswith('/v1') else ''
-            url += '/chat/completions'
+            url = (getattr(self._model_config, "api_url", "") or "").rstrip("/")
+            if not url.endswith("/v1"):
+                url += "/v1" if not url.endswith("/v1") else ""
+            url += "/chat/completions"
 
             headers = {
                 "Content-Type": "application/json",
             }
-            api_key = getattr(self._model_config, 'api_key', '') or ''
+            api_key = getattr(self._model_config, "api_key", "") or ""
             if api_key:
                 headers["Authorization"] = f"Bearer {api_key}"
 
             payload = {
-                "model": getattr(self._model_config, 'model', 'gpt-3.5-turbo'),
+                "model": getattr(self._model_config, "model", "gpt-3.5-turbo"),
                 "messages": [
-                    {"role": "system", "content": "You are a memory extraction assistant. Extract key information from conversations. Reply in Chinese."},
+                    {
+                        "role": "system",
+                        "content": "You are a memory extraction assistant. Extract key information from conversations. Reply in Chinese.",
+                    },
                     {"role": "user", "content": prompt},
                 ],
                 "temperature": 0.1,
@@ -318,16 +324,18 @@ class AutoMemoryExtractor:
     def _fallback_extract(self, conversation_text: str) -> list[dict]:
         """关键词提取作为 LLM 失败的备选。"""
         memories = []
-        lines = conversation_text.split('\n')
+        lines = conversation_text.split("\n")
         for line in lines:
             line = line.strip()
             if any(kw in line for kw in ["记住", "不要", "必须", "偏好", "喜欢", "习惯"]):
-                memories.append({
-                    "content": line[:150],
-                    "category": "instruction" if any(kw in line for kw in ["记住", "不要", "必须"]) else "preference",
-                    "importance": 3,
-                    "tags": "auto_extracted,keyword_fallback",
-                })
+                memories.append(
+                    {
+                        "content": line[:150],
+                        "category": "instruction" if any(kw in line for kw in ["记住", "不要", "必须"]) else "preference",
+                        "importance": 3,
+                        "tags": "auto_extracted,keyword_fallback",
+                    }
+                )
         return memories[:3]
 
     def _is_duplicate(self, content: str, threshold: float = 0.85) -> bool:
@@ -338,7 +346,8 @@ class AutoMemoryExtractor:
         """
         try:
             import hashlib
-            h = hashlib.sha256(content.encode('utf-8')).hexdigest()[:16]
+
+            h = hashlib.sha256(content.encode("utf-8")).hexdigest()[:16]
             c = self.storage.conn.cursor()
             c.execute(
                 "SELECT COUNT(*) FROM memories WHERE content_hash = ? AND is_active = 1",

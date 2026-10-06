@@ -104,8 +104,12 @@ def _to_data_url(image: str) -> str | None:
             return None
         ext = os.path.splitext(image)[1].lower()
         mime_map = {
-            ".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg",
-            ".gif": "image/gif", ".webp": "image/webp", ".bmp": "image/bmp",
+            ".png": "image/png",
+            ".jpg": "image/jpeg",
+            ".jpeg": "image/jpeg",
+            ".gif": "image/gif",
+            ".webp": "image/webp",
+            ".bmp": "image/bmp",
         }
         mime = mime_map.get(ext, "image/png")
         return f"data:{mime};base64,{b64}"
@@ -154,13 +158,15 @@ def toolkit_vision_analyze(image: str, prompt: str = "请描述这张图片的�
         """单次视觉调用尝试；失败转结构化错误（不自抛，便于回退重试）。"""
         try:
             detail_opt = (opts or {}).get("detail", "") if opts else ""
-            messages = [{
-                "role": "user",
-                "content": [
-                    {"type": "text", "text": prompt},
-                    _build_image_block(data_url, detail or detail_opt),
-                ],
-            }]
+            messages = [
+                {
+                    "role": "user",
+                    "content": [
+                        {"type": "text", "text": prompt},
+                        _build_image_block(data_url, detail or detail_opt),
+                    ],
+                }
+            ]
             kwargs = {"model": model, "messages": messages, "max_tokens": max_tokens}
             # 透传模型 options（如 supports_reasoning 需要的 extra_body）
             if opts:
@@ -184,11 +190,8 @@ def toolkit_vision_analyze(image: str, prompt: str = "请描述这张图片的�
             # 静默失效防护（实测复现）：推理型视觉模型会先把 max_tokens 预算用于
             # reasoning，预算耗尽时 content 为空且 finish_reason='length'。
             # 若仍返回 ok=True，调用方会误判为「图中无内容」而错过整张图。
-            hint = ("推理(reasoning)已耗尽 max_tokens 预算，请增大 max_tokens 重试"
-                    if finish == "length" else "模型返回空内容，请调整 prompt 或重试")
-            return {"ok": False,
-                    "error": f"视觉模型输出为空（finish_reason={finish or 'unknown'}）：{hint}",
-                    "model": model, "finish_reason": finish}
+            hint = "推理(reasoning)已耗尽 max_tokens 预算，请增大 max_tokens 重试" if finish == "length" else "模型返回空内容，请调整 prompt 或重试"
+            return {"ok": False, "error": f"视觉模型输出为空（finish_reason={finish or 'unknown'}）：{hint}", "model": model, "finish_reason": finish}
         return {"ok": True, "text": text, "model": model}
 
     result = _attempt(client, model_name, options)

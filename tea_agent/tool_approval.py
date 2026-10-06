@@ -59,14 +59,27 @@ _VALID_MODES = ("off", "advisory", "enforce")
 # 注：toolkit_sudo_gui 已删除——Agent 不允许获取管理员权限，提权一律由用户手动执行
 _CRITICAL_TOOLS = {"toolkit_self_evolve"}
 _HIGH_TOOLS = {
-    "toolkit_save", "toolkit_rollback", "toolkit_prompt_evolve", "toolkit_reload",
-    "toolkit_config", "toolkit_send_email", "toolkit_scheduler",
-    "toolkit_remote_agent", "toolkit_subagent",
+    "toolkit_save",
+    "toolkit_rollback",
+    "toolkit_prompt_evolve",
+    "toolkit_reload",
+    "toolkit_config",
+    "toolkit_send_email",
+    "toolkit_scheduler",
+    "toolkit_remote_agent",
+    "toolkit_subagent",
 }
 _MEDIUM_TOOLS = {
-    "toolkit_edit", "toolkit_diff", "toolkit_batch_process", "toolkit_format_code",
-    "toolkit_pkg", "toolkit_mcp", "toolkit_fork_session", "toolkit_topic_prompt",
-    "toolkit_build", "toolkit_release_version",
+    "toolkit_edit",
+    "toolkit_diff",
+    "toolkit_batch_process",
+    "toolkit_format_code",
+    "toolkit_pkg",
+    "toolkit_mcp",
+    "toolkit_fork_session",
+    "toolkit_topic_prompt",
+    "toolkit_build",
+    "toolkit_release_version",
 }
 
 # 写盘类动作（按 args 判定）
@@ -125,6 +138,7 @@ def _require_at() -> str:
 
 # ── 风险分级 ──────────────────────────────────────────────────────
 
+
 def classify_risk(tool_name: str, args: dict | None = None) -> tuple[str | None, str]:
     """对工具调用做确定性风险分级。
 
@@ -168,8 +182,12 @@ def classify_risk(tool_name: str, args: dict | None = None) -> tuple[str | None,
         return "high", "变更工具/配置/对外发送"
     if name in _MEDIUM_TOOLS:
         action = str(args.get("action", "")).lower()
-        if name in ("toolkit_batch_process", "toolkit_diff", "toolkit_format_code", "toolkit_pkg") \
-                and action and action not in _WRITE_ACTIONS and action not in ("apply", "format", "install", "ensure", "lint", "compile"):
+        if (
+            name in ("toolkit_batch_process", "toolkit_diff", "toolkit_format_code", "toolkit_pkg")
+            and action
+            and action not in _WRITE_ACTIONS
+            and action not in ("apply", "format", "install", "ensure", "lint", "compile")
+        ):
             return "low", f"低风险子动作（action={action}）"
         return "medium", "可能修改工作区"
 
@@ -177,6 +195,7 @@ def classify_risk(tool_name: str, args: dict | None = None) -> tuple[str | None,
 
 
 # ── 授权管理 ──────────────────────────────────────────────────────
+
 
 def _allow_path() -> str | None:
     d = _run_dir()
@@ -275,8 +294,8 @@ def approval_status() -> dict:
 
 # ── Hook 实现 ─────────────────────────────────────────────────────
 
-def _audit(event: str, tool: str, phase: str = "", status: str = "",
-           detail: Any = None, **extra: Any) -> None:
+
+def _audit(event: str, tool: str, phase: str = "", status: str = "", detail: Any = None, **extra: Any) -> None:
     """审计写入（失败静默，绝不阻断工具执行）。"""
     try:
         from tea_agent.audit_log import audit_log
@@ -292,6 +311,7 @@ def make_pre_hook():
     Returns:
         fn(tool_name, args) -> True | {'deny': True, 'reason': str}
     """
+
     def _pre(tool_name: str, args: dict):
         level, reason = classify_risk(tool_name, args)
         if level is None:
@@ -304,9 +324,11 @@ def make_pre_hook():
 
         # 审计 pre 阶段（含审批决策痕迹）
         _audit(
-            "tool/call", tool_name, phase="pre", status="pending",
-            detail={"risk": level, "reason": reason, "mode": mode,
-                    "args_preview": args, "granted": granted},
+            "tool/call",
+            tool_name,
+            phase="pre",
+            status="pending",
+            detail={"risk": level, "reason": reason, "mode": mode, "args_preview": args, "granted": granted},
         )
 
         if mode != "enforce" or not needs_approval or granted:
@@ -321,8 +343,7 @@ def make_pre_hook():
             f"  3) 调用 toolkit_approve(action='grant', tool='{tool_name}') 持久授权\n"
             f"  4) 临时放行: 设置 {_MODE_ENV}=advisory"
         )
-        _audit("approval/deny", tool_name, phase="pre", status="denied",
-               detail={"risk": level, "reason": reason, "mode": mode})
+        _audit("approval/deny", tool_name, phase="pre", status="denied", detail={"risk": level, "reason": reason, "mode": mode})
         logger.warning("approval denied: tool=%s risk=%s", tool_name, level)
         return {"deny": True, "reason": deny_reason}
 
@@ -331,6 +352,7 @@ def make_pre_hook():
 
 def make_post_hook():
     """构造 post-execute 钩子：记录结果状态与耗时（若结果内提供）。"""
+
     def _post(tool_name: str, args: dict, result: Any):
         level, reason = classify_risk(tool_name, args)
         if level is None:
@@ -347,8 +369,7 @@ def make_post_hook():
         elif isinstance(result, str):
             status = "error" if result.startswith(("错误", "工具执行错误", "⛔")) else "ok"
 
-        _audit("tool/result", tool_name, phase="post", status=status,
-               detail={"risk": level, "args_preview": args}, duration_ms=duration)
+        _audit("tool/result", tool_name, phase="post", status=status, detail={"risk": level, "args_preview": args}, duration_ms=duration)
         return
 
     return _post

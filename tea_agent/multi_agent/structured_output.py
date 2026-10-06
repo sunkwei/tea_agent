@@ -33,8 +33,10 @@ class StructuredOutput(BaseModel):
 # 代码分析
 # ───────────────────────────────────────────────
 
+
 class CodeIssue(BaseModel):
     """代码问题。"""
+
     severity: str = Field(description="严重级别: critical/high/medium/low")
     file: str = Field(default="", description="文件路径")
     line: int = Field(default=0, description="行号")
@@ -46,6 +48,7 @@ class CodeIssue(BaseModel):
 
 class AnalysisReport(StructuredOutput):
     """代码分析报告。"""
+
     summary: str = Field(description="总体分析摘要")
     quality_score: float = Field(default=0.0, description="质量评分 0-100", ge=0, le=100)
     issues: list[CodeIssue] = Field(default_factory=list, description="发现的问题列表")
@@ -57,8 +60,10 @@ class AnalysisReport(StructuredOutput):
 # 代码修改计划
 # ───────────────────────────────────────────────
 
+
 class ChangeItem(BaseModel):
     """单个修改项。"""
+
     file: str = Field(description="文件路径")
     description: str = Field(description="修改描述")
     change_type: str = Field(default="modify", description="修改类型: add/modify/delete/refactor")
@@ -67,6 +72,7 @@ class ChangeItem(BaseModel):
 
 class CodeChangePlan(StructuredOutput):
     """代码修改计划。"""
+
     goal: str = Field(description="修改目标")
     files_to_change: list[ChangeItem] = Field(description="需要修改的文件列表")
     estimated_effort: str = Field(default="", description="预估工作量")
@@ -78,8 +84,10 @@ class CodeChangePlan(StructuredOutput):
 # 测试相关
 # ───────────────────────────────────────────────
 
+
 class TestCase(BaseModel):
     """测试用例。"""
+
     name: str = Field(description="测试名称")
     description: str = Field(description="测试目标")
     input: str = Field(default="", description="测试输入")
@@ -89,6 +97,7 @@ class TestCase(BaseModel):
 
 class TestPlan(StructuredOutput):
     """测试计划。"""
+
     files_to_test: list[str] = Field(description="需要测试的文件")
     test_cases: list[TestCase] = Field(description="测试用例列表")
     coverage_target: float = Field(default=0.8, description="覆盖率目标")
@@ -97,6 +106,7 @@ class TestPlan(StructuredOutput):
 
 class TestResult(StructuredOutput):
     """测试结果摘要。"""
+
     passed: int = Field(default=0, description="通过的测试数")
     failed: int = Field(default=0, description="失败的测试数")
     errors: list[str] = Field(default_factory=list, description="错误详情")
@@ -108,8 +118,10 @@ class TestResult(StructuredOutput):
 # 架构设计
 # ───────────────────────────────────────────────
 
+
 class Component(BaseModel):
     """架构组件。"""
+
     name: str = Field(description="组件名")
     responsibility: str = Field(description="职责描述")
     dependencies: list[str] = Field(default_factory=list, description="依赖的其他组件")
@@ -117,6 +129,7 @@ class Component(BaseModel):
 
 class ArchitectureDesign(StructuredOutput):
     """架构设计方案。"""
+
     title: str = Field(description="架构设计标题")
     overview: str = Field(description="总体概述")
     components: list[Component] = Field(description="组件列表")
@@ -128,8 +141,10 @@ class ArchitectureDesign(StructuredOutput):
 # 审查反馈
 # ───────────────────────────────────────────────
 
+
 class ReviewComment(BaseModel):
     """审查意见。"""
+
     file: str = Field(default="", description="文件")
     line: int = Field(default=0, description="行号")
     severity: str = Field(default="info", description="严重度: error/warning/info")
@@ -139,6 +154,7 @@ class ReviewComment(BaseModel):
 
 class CodeReview(StructuredOutput):
     """代码审查结果。"""
+
     overall_assessment: str = Field(description="总体评价")
     approval: bool = Field(default=False, description="是否批准")
     comments: list[ReviewComment] = Field(default_factory=list, description="审查意见列表")

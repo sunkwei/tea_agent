@@ -50,6 +50,7 @@ logger = logging.getLogger("multi_agent.trace")
 
 class TraceSpan:
     """单个追踪跨度。"""
+
     def __init__(
         self,
         span_id: str,
@@ -57,8 +58,8 @@ class TraceSpan:
         parent_span_id: str | None,
         name: str,
         agent_id: str,
-        agent_role: str = '',
-        task: str = '',
+        agent_role: str = "",
+        task: str = "",
     ):
         self.span_id = span_id
         self.trace_id = trace_id
@@ -70,14 +71,13 @@ class TraceSpan:
         self.start_time = time.time()
         self.end_time: float | None = None
         self.duration_ms: float | None = None
-        self.status = 'started'
+        self.status = "started"
         self.result: str | None = None
         self.error: str | None = None
         self.tool_calls = 0
         self.children: list[TraceSpan] = []
 
-    def end(self, status: str = 'completed', result: str | None = None,
-            error: str | None = None, tool_calls: int = 0):
+    def end(self, status: str = "completed", result: str | None = None, error: str | None = None, tool_calls: int = 0):
         self.end_time = time.time()
         self.duration_ms = round((self.end_time - self.start_time) * 1000, 2)
         self.status = status
@@ -87,30 +87,27 @@ class TraceSpan:
 
     def to_dict(self, include_children: bool = True) -> dict:
         d = {
-            'span_id': self.span_id,
-            'trace_id': self.trace_id,
-            'parent_span_id': self.parent_span_id,
-            'name': self.name,
-            'agent_id': self.agent_id,
-            'agent_role': self.agent_role,
-            'task': self.task[:200] if self.task else '',
-            'start_time': datetime.fromtimestamp(self.start_time).isoformat(),
-            'end_time': datetime.fromtimestamp(self.end_time).isoformat() if self.end_time else None,
-            'duration_ms': self.duration_ms,
-            'status': self.status,
-            'result': self.result[:500] if self.result else None,
-            'error': self.error[:500] if self.error else None,
-            'tool_calls': self.tool_calls,
+            "span_id": self.span_id,
+            "trace_id": self.trace_id,
+            "parent_span_id": self.parent_span_id,
+            "name": self.name,
+            "agent_id": self.agent_id,
+            "agent_role": self.agent_role,
+            "task": self.task[:200] if self.task else "",
+            "start_time": datetime.fromtimestamp(self.start_time).isoformat(),
+            "end_time": datetime.fromtimestamp(self.end_time).isoformat() if self.end_time else None,
+            "duration_ms": self.duration_ms,
+            "status": self.status,
+            "result": self.result[:500] if self.result else None,
+            "error": self.error[:500] if self.error else None,
+            "tool_calls": self.tool_calls,
         }
         if include_children and self.children:
-            d['children'] = [c.to_dict() for c in self.children]
+            d["children"] = [c.to_dict() for c in self.children]
         return d
 
     def __repr__(self):
-        return (
-            f"TraceSpan({self.name}, agent={self.agent_id}, "
-            f"status={self.status}, duration_ms={self.duration_ms})"
-        )
+        return f"TraceSpan({self.name}, agent={self.agent_id}, status={self.status}, duration_ms={self.duration_ms})"
 
 
 class TraceEngine:
@@ -120,13 +117,11 @@ class TraceEngine:
     Thread-safe。
     """
 
-    _instances: dict[str, 'TraceEngine'] = {}
+    _instances: dict[str, "TraceEngine"] = {}
     _lock = threading.Lock()
 
     def __init__(self, db_path: str | None = None, auto_cleanup: bool = True):
-        self.db_path = db_path or str(
-            Path.home() / '.tea_agent' / 'checkpoints.db'
-        )
+        self.db_path = db_path or str(Path.home() / ".tea_agent" / "checkpoints.db")
         self._local = threading.local()
         # 内存缓冲区: {trace_id: {span_id: TraceSpan}}
         self._buffer: dict[str, dict[str, TraceSpan]] = {}
@@ -136,9 +131,9 @@ class TraceEngine:
             self.cleanup()
 
     @classmethod
-    def get_instance(cls, db_path: str | None = None) -> 'TraceEngine':
+    def get_instance(cls, db_path: str | None = None) -> "TraceEngine":
         """获取共享单例。"""
-        key = db_path or 'default'
+        key = db_path or "default"
         if key not in cls._instances:
             with cls._lock:
                 if key not in cls._instances:
@@ -148,7 +143,7 @@ class TraceEngine:
     # ── 数据库 ──────────────────────────────────────
 
     def _get_conn(self) -> sqlite3.Connection:
-        if not hasattr(self._local, 'conn') or self._local.conn is None:
+        if not hasattr(self._local, "conn") or self._local.conn is None:
             Path(self.db_path).parent.mkdir(parents=True, exist_ok=True)
             conn = sqlite3.connect(self.db_path, timeout=10)
             conn.row_factory = sqlite3.Row
@@ -213,7 +208,7 @@ class TraceEngine:
         self,
         agent_id: str,
         task: str,
-        agent_role: str = '',
+        agent_role: str = "",
         trace_id: str | None = None,
     ) -> str:
         """创建新的 Trace（根 Span）。"""
@@ -222,7 +217,7 @@ class TraceEngine:
             span_id=f"root-{tid}",
             trace_id=tid,
             parent_span_id=None,
-            name='root',
+            name="root",
             agent_id=agent_id,
             agent_role=agent_role,
             task=task,
@@ -239,8 +234,7 @@ class TraceEngine:
             "(trace_id, root_span, agent_id, agent_role, task, status, "
             " total_duration_ms, total_tool_calls, span_count, created_at, updated_at) "
             "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-            (tid, root.span_id, agent_id, agent_role, task[:500],
-             'started', 0, 0, 1, now, now),
+            (tid, root.span_id, agent_id, agent_role, task[:500], "started", 0, 0, 1, now, now),
         )
         self._save_span(root)
         conn.commit()
@@ -253,8 +247,8 @@ class TraceEngine:
         parent_span_id: str | None,
         name: str,
         agent_id: str,
-        agent_role: str = '',
-        task: str = '',
+        agent_role: str = "",
+        task: str = "",
         span_id: str | None = None,
     ) -> str:
         """创建子 Span。"""
@@ -293,7 +287,7 @@ class TraceEngine:
     def end_span(
         self,
         span_id: str,
-        status: str = 'completed',
+        status: str = "completed",
         result: str | None = None,
         error: str | None = None,
         tool_calls: int = 0,
@@ -310,17 +304,14 @@ class TraceEngine:
         conn = self._get_conn()
         now = datetime.now().isoformat()
         conn.execute(
-            "UPDATE spans SET end_time=?, duration_ms=?, status=?, result=?, "
-            "error=?, tool_calls=? WHERE trace_id=? AND span_id=?",
-            (now, span.duration_ms, status, result, error, tool_calls,
-             span.trace_id, span_id),
+            "UPDATE spans SET end_time=?, duration_ms=?, status=?, result=?, error=?, tool_calls=? WHERE trace_id=? AND span_id=?",
+            (now, span.duration_ms, status, result, error, tool_calls, span.trace_id, span_id),
         )
 
         # 如果是根 span，更新 trace 状态
-        if span.parent_span_id is None or span_id.startswith('root-'):
+        if span.parent_span_id is None or span_id.startswith("root-"):
             conn.execute(
-                "UPDATE traces SET status=?, total_duration_ms=?, "
-                "total_tool_calls=?, updated_at=? WHERE trace_id=?",
+                "UPDATE traces SET status=?, total_duration_ms=?, total_tool_calls=?, updated_at=? WHERE trace_id=?",
                 (status, span.duration_ms or 0, tool_calls, now, span.trace_id),
             )
 
@@ -329,9 +320,7 @@ class TraceEngine:
     def get_trace(self, trace_id: str) -> dict[str, Any] | None:
         """获取完整 Trace 树。"""
         conn = self._get_conn()
-        trace_row = conn.execute(
-            "SELECT * FROM traces WHERE trace_id=?", (trace_id,)
-        ).fetchone()
+        trace_row = conn.execute("SELECT * FROM traces WHERE trace_id=?", (trace_id,)).fetchone()
         if not trace_row:
             return None
 
@@ -346,21 +335,19 @@ class TraceEngine:
         spans = [dict(r) for r in span_rows]
 
         # 构建树
-        span_map = {s['span_id']: s for s in spans}
+        span_map = {s["span_id"]: s for s in spans}
         root = None
         for s in spans:
-            s['children'] = []
-            if s['parent_span_id'] is None or s['parent_span_id'] == '':
+            s["children"] = []
+            if s["parent_span_id"] is None or s["parent_span_id"] == "":
                 root = s
-            elif s['parent_span_id'] in span_map:
-                span_map[s['parent_span_id']]['children'].append(s)
+            elif s["parent_span_id"] in span_map:
+                span_map[s["parent_span_id"]]["children"].append(s)
 
-        trace['spans'] = root
+        trace["spans"] = root
         return trace
 
-    def get_agent_traces(
-        self, agent_id: str, limit: int = 20
-    ) -> list[dict[str, Any]]:
+    def get_agent_traces(self, agent_id: str, limit: int = 20) -> list[dict[str, Any]]:
         """获取指定 Agent 的所有 Trace。"""
         conn = self._get_conn()
         rows = conn.execute(
@@ -369,9 +356,7 @@ class TraceEngine:
         ).fetchall()
         return [dict(r) for r in rows]
 
-    def list_traces(
-        self, status: str | None = None, limit: int = 20
-    ) -> list[dict[str, Any]]:
+    def list_traces(self, status: str | None = None, limit: int = 20) -> list[dict[str, Any]]:
         """列出所有 Traces。"""
         conn = self._get_conn()
         if status:
@@ -389,26 +374,21 @@ class TraceEngine:
     def get_stats(self) -> dict[str, Any]:
         """获取聚合统计。"""
         conn = self._get_conn()
-        stats = {'total_traces': 0, 'total_spans': 0, 'by_status': {}}
+        stats = {"total_traces": 0, "total_spans": 0, "by_status": {}}
 
         row = conn.execute("SELECT COUNT(*) as c FROM traces").fetchone()
-        stats['total_traces'] = row['c'] if row else 0
+        stats["total_traces"] = row["c"] if row else 0
 
         row = conn.execute("SELECT COUNT(*) as c FROM spans").fetchone()
-        stats['total_spans'] = row['c'] if row else 0
+        stats["total_spans"] = row["c"] if row else 0
 
-        for s in ['started', 'completed', 'failed']:
-            row = conn.execute(
-                "SELECT COUNT(*) as c FROM traces WHERE status=?", (s,)
-            ).fetchone()
-            stats['by_status'][s] = row['c'] if row else 0
+        for s in ["started", "completed", "failed"]:
+            row = conn.execute("SELECT COUNT(*) as c FROM traces WHERE status=?", (s,)).fetchone()
+            stats["by_status"][s] = row["c"] if row else 0
 
         # 平均耗时
-        row = conn.execute(
-            "SELECT AVG(total_duration_ms) as avg FROM traces "
-            "WHERE status IN ('completed', 'failed')"
-        ).fetchone()
-        stats['avg_duration_ms'] = round(row['avg'], 2) if row and row['avg'] else 0
+        row = conn.execute("SELECT AVG(total_duration_ms) as avg FROM traces WHERE status IN ('completed', 'failed')").fetchone()
+        stats["avg_duration_ms"] = round(row["avg"], 2) if row and row["avg"] else 0
 
         return stats
 
@@ -417,13 +397,13 @@ class TraceEngine:
         traces = self.list_traces(limit=limit)
         result = []
         for t in traces:
-            full = self.get_trace(t['trace_id'])
+            full = self.get_trace(t["trace_id"])
             if full:
                 result.append(full)
         return {
-            'exported_at': datetime.now().isoformat(),
-            'count': len(result),
-            'traces': result,
+            "exported_at": datetime.now().isoformat(),
+            "count": len(result),
+            "traces": result,
         }
 
     def cleanup(self, max_age_hours: int = 72):
@@ -434,8 +414,7 @@ class TraceEngine:
 
         # 删除旧 spans
         deleted_spans = conn.execute(
-            "DELETE FROM spans WHERE trace_id IN "
-            "(SELECT trace_id FROM traces WHERE updated_at < ?)",
+            "DELETE FROM spans WHERE trace_id IN (SELECT trace_id FROM traces WHERE updated_at < ?)",
             (threshold_iso,),
         ).rowcount
 
@@ -446,10 +425,7 @@ class TraceEngine:
         ).rowcount
 
         if deleted_traces:
-            logger.info(
-                f"🧹 清理了 {deleted_traces} traces / {deleted_spans} spans"
-                f" (> {max_age_hours}h)"
-            )
+            logger.info(f"🧹 清理了 {deleted_traces} traces / {deleted_spans} spans (> {max_age_hours}h)")
         conn.commit()
 
     # ── 内部方法 ────────────────────────────────────
@@ -493,7 +469,7 @@ class TraceEngine:
     # ── 生命周期 ────────────────────────────────────
 
     def close(self):
-        if hasattr(self._local, 'conn') and self._local.conn:
+        if hasattr(self._local, "conn") and self._local.conn:
             self._local.conn.close()
             self._local.conn = None
 

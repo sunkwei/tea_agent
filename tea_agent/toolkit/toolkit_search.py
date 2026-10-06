@@ -3,10 +3,20 @@
 import ast
 import logging
 
+from tea_agent.path_filters import prune_dirs
+
 logger = logging.getLogger("toolkit")
 
-def toolkit_search(query: str, max_results: int = 10, lang: str = "", engine: str = "duckduckgo",
-                   search_type: str = "web", root_path: str = "", glob_pattern: str = ""):
+
+def toolkit_search(
+    query: str,
+    max_results: int = 10,
+    lang: str = "",
+    engine: str = "duckduckgo",
+    search_type: str = "web",
+    root_path: str = "",
+    glob_pattern: str = "",
+):
     """
     搜索工具，支持互联网搜索（DuckDuckGo/百度/GitHub）和项目内代码搜索。
 
@@ -35,7 +45,6 @@ def toolkit_search(query: str, max_results: int = 10, lang: str = "", engine: st
     """
     logger.info(f"toolkit_search called: query={repr(query)[:80]}, search_type={search_type!r}")
 
-
     max_results = min(max(max_results, 1), 50)
 
     if search_type == "code":
@@ -48,6 +57,7 @@ def toolkit_search(query: str, max_results: int = 10, lang: str = "", engine: st
         return _search_baidu(query, max_results)
     return _search_duckduckgo(query, max_results, lang)
 
+
 def _search_duckduckgo(query: str, max_results: int, lang: str):
     import re
     from urllib.parse import parse_qs, unquote, urlparse
@@ -56,55 +66,59 @@ def _search_duckduckgo(query: str, max_results: int, lang: str):
     from bs4 import BeautifulSoup
 
     session = requests.Session()
-    session.headers.update({
-        'User-Agent': 'Mozilla/5.0 (X11; Linux x86_64; rv:130.0) Gecko/20100101 Firefox/130.0',
-        'Accept': 'text/html,application/xhtml+xml',
-        'Accept-Language': 'zh-CN,zh;q=0.9,en;q=0.8',
-    })
+    session.headers.update(
+        {
+            "User-Agent": "Mozilla/5.0 (X11; Linux x86_64; rv:130.0) Gecko/20100101 Firefox/130.0",
+            "Accept": "text/html,application/xhtml+xml",
+            "Accept-Language": "zh-CN,zh;q=0.9,en;q=0.8",
+        }
+    )
 
     results = []
-    params = {'q': query}
+    params = {"q": query}
     if lang:
-        params['kl'] = lang
+        params["kl"] = lang
 
     try:
-        resp = session.post('https://lite.duckduckgo.com/lite/', data=params, timeout=15)
-        resp.encoding = 'utf-8'
-        soup = BeautifulSoup(resp.text, 'html.parser')
+        resp = session.post("https://lite.duckduckgo.com/lite/", data=params, timeout=15)
+        resp.encoding = "utf-8"
+        soup = BeautifulSoup(resp.text, "html.parser")
 
-        result_links = soup.find_all('a', class_='result-link')
-        result_snippets = soup.find_all('td', class_='result-snippet')
-        link_texts = soup.find_all('span', class_='link-text')
+        result_links = soup.find_all("a", class_="result-link")
+        result_snippets = soup.find_all("td", class_="result-snippet")
+        link_texts = soup.find_all("span", class_="link-text")
 
         for i, link in enumerate(result_links):
             if len(results) >= max_results:
                 break
 
             title = link.get_text(strip=True)
-            href = link.get('href', '')
+            href = link.get("href", "")
             real_url = href
-            if 'duckduckgo.com/l/' in href:
+            if "duckduckgo.com/l/" in href:
                 parsed = urlparse(href)
                 qp = parse_qs(parsed.query)
-                uddg = qp.get('uddg', [None])[0]
+                uddg = qp.get("uddg", [None])[0]
                 if uddg:
                     real_url = unquote(uddg)
 
-            snippet = ''
+            snippet = ""
             if i < len(result_snippets):
-                raw = result_snippets[i].get_text('', strip=True) or ''
-                snippet = re.sub(r'<[^>]+>', '', raw).strip()
+                raw = result_snippets[i].get_text("", strip=True) or ""
+                snippet = re.sub(r"<[^>]+>", "", raw).strip()
 
-            display_url = ''
+            display_url = ""
             if i < len(link_texts):
                 display_url = link_texts[i].get_text(strip=True)
 
-            results.append({
-                'title': title,
-                'url': real_url,
-                'display_url': display_url,
-                'snippet': snippet,
-            })
+            results.append(
+                {
+                    "title": title,
+                    "url": real_url,
+                    "display_url": display_url,
+                    "snippet": snippet,
+                }
+            )
 
     except requests.Timeout:
         return {"ok": False, "error": "DuckDuckGo 搜索超时", "returncode": 1}
@@ -126,35 +140,34 @@ def _search_baidu(query: str, max_results: int):
     from bs4 import BeautifulSoup
 
     session = requests.Session()
-    session.headers.update({
-        'User-Agent': 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-        'Accept-Language': 'zh-CN,zh;q=0.9,en;q=0.8',
-    })
+    session.headers.update(
+        {
+            "User-Agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+            "Accept-Language": "zh-CN,zh;q=0.9,en;q=0.8",
+        }
+    )
 
     try:
         # 先访问百度首页获取 cookie，否则可能被反爬
-        session.get('https://www.baidu.com/', timeout=10)
+        session.get("https://www.baidu.com/", timeout=10)
 
         # 搜索
-        resp = session.get(
-            f'https://www.baidu.com/s?wd={requests.utils.quote(query)}&rn={max_results}',
-            timeout=15
-        )
-        resp.encoding = 'utf-8'
-        soup = BeautifulSoup(resp.text, 'lxml')
+        resp = session.get(f"https://www.baidu.com/s?wd={requests.utils.quote(query)}&rn={max_results}", timeout=15)
+        resp.encoding = "utf-8"
+        soup = BeautifulSoup(resp.text, "lxml")
 
-        result_divs = soup.select('div.c-container')
+        result_divs = soup.select("div.c-container")
         results = []
 
         for r in result_divs:
             if len(results) >= max_results:
                 break
 
-            h3 = r.find('h3')
+            h3 = r.find("h3")
             if not h3:
                 continue
-            a = h3.find('a')
+            a = h3.find("a")
             if not a:
                 continue
 
@@ -162,12 +175,12 @@ def _search_baidu(query: str, max_results: int):
             if not title:
                 continue
 
-            href = a.get('href', '')
+            href = a.get("href", "")
             real_url = href
 
             # 尝试解析百度跳转链接获取真实URL
             try:
-                if 'baidu.com/link' in href:
+                if "baidu.com/link" in href:
                     # 跟随跳转获取真实URL
                     try:
                         head_resp = session.head(href, allow_redirects=True, timeout=5)
@@ -175,39 +188,40 @@ def _search_baidu(query: str, max_results: int):
                     except Exception:
                         # HEAD失败时保持原href
                         pass
-                elif 'baidu.php' in href:
+                elif "baidu.php" in href:
                     # 广告链接，尝试从url参数提取
                     qp = parse_qs(urlparse(href).query)
-                    encoded = qp.get('url', [''])[0]
-                    if encoded.startswith('http'):
+                    encoded = qp.get("url", [""])[0]
+                    if encoded.startswith("http"):
                         real_url = encoded
             except Exception:
-                logger.exception('op_failed')
-
+                logger.exception("op_failed")
 
             # 摘要
-            snippet = ''
-            for cls_name in ['c-abstract', 'c-span-last']:
-                span = r.find('span', class_=cls_name)
+            snippet = ""
+            for cls_name in ["c-abstract", "c-span-last"]:
+                span = r.find("span", class_=cls_name)
                 if span:
                     t = span.get_text(strip=True)
                     if len(t) > len(snippet):
                         snippet = t
 
             # 显示URL
-            display_url = ''
-            for cls_name in ['c-showurl', 'showurl']:
+            display_url = ""
+            for cls_name in ["c-showurl", "showurl"]:
                 el = r.find(class_=cls_name)
                 if el:
                     display_url = el.get_text(strip=True)
                     break
 
-            results.append({
-                'title': title,
-                'url': real_url,
-                'display_url': display_url,
-                'snippet': snippet,
-            })
+            results.append(
+                {
+                    "title": title,
+                    "url": real_url,
+                    "display_url": display_url,
+                    "snippet": snippet,
+                }
+            )
 
         if not results:
             return {"ok": True, "results": [], "message": "未找到相关结果", "returncode": 0}
@@ -221,9 +235,40 @@ def _search_baidu(query: str, max_results: int):
     except Exception as e:
         return {"ok": False, "error": f"百度搜索出错: {e}", "returncode": 1}
 
+
 def meta_toolkit_search() -> dict:
     """Meta toolkit search."""
-    return {"type": "function", "function": {"name": "toolkit_search", "description": "搜索工具，支持互联网搜索（DuckDuckGo/百度/GitHub）和项目内代码搜索（全文搜索/符号搜索）。GitHub 搜索支持仓库、代码、Issues 搜索。", "parameters": {"type": "object", "properties": {"query": {"type": "string", "description": "搜索关键词，如 'Python async tutorial' 或 'def login'"}, "max_results": {"type": "integer", "description": "返回结果数量上限，默认10，最大50", "default": 10}, "lang": {"type": "string", "description": "语言偏好，如 zh-cn, en, 空=不限。仅 web 搜索支持", "default": ""}, "engine": {"type": "string", "enum": ["duckduckgo", "baidu", "repos", "code", "issues"], "description": "搜索引擎，默认 duckduckgo。repos/code/issues 为 GitHub 搜索", "default": "duckduckgo"}, "search_type": {"type": "string", "enum": ["web", "code", "symbol", "github"], "description": "搜索类型: web=互联网搜索, code=代码全文搜索, symbol=符号搜索, github=GitHub搜索", "default": "web"}, "root_path": {"type": "string", "description": "搜索根目录路径。code/symbol 搜索需要"}, "glob_pattern": {"type": "string", "description": "文件过滤模式，如 '*.py'。仅 code 搜索"}}, "required": ["query"]}}}
+    return {
+        "type": "function",
+        "function": {
+            "name": "toolkit_search",
+            "description": "搜索工具，支持互联网搜索（DuckDuckGo/百度/GitHub）和项目内代码搜索（全文搜索/符号搜索）。GitHub 搜索支持仓库、代码、Issues 搜索。",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "query": {"type": "string", "description": "搜索关键词，如 'Python async tutorial' 或 'def login'"},
+                    "max_results": {"type": "integer", "description": "返回结果数量上限，默认10，最大50", "default": 10},
+                    "lang": {"type": "string", "description": "语言偏好，如 zh-cn, en, 空=不限。仅 web 搜索支持", "default": ""},
+                    "engine": {
+                        "type": "string",
+                        "enum": ["duckduckgo", "baidu", "repos", "code", "issues"],
+                        "description": "搜索引擎，默认 duckduckgo。repos/code/issues 为 GitHub 搜索",
+                        "default": "duckduckgo",
+                    },
+                    "search_type": {
+                        "type": "string",
+                        "enum": ["web", "code", "symbol", "github"],
+                        "description": "搜索类型: web=互联网搜索, code=代码全文搜索, symbol=符号搜索, github=GitHub搜索",
+                        "default": "web",
+                    },
+                    "root_path": {"type": "string", "description": "搜索根目录路径。code/symbol 搜索需要"},
+                    "glob_pattern": {"type": "string", "description": "文件过滤模式，如 '*.py'。仅 code 搜索"},
+                },
+                "required": ["query"],
+            },
+        },
+    }
+
 
 def _search_codebase(query: str, root_path: str, glob_pattern: str, max_results: int):
     """项目内全文搜索（优先使用 ripgrep，回退到 Python 实现）"""
@@ -243,14 +288,25 @@ def _search_codebase(query: str, root_path: str, glob_pattern: str, max_results:
     rg_cmd = None
     for cmd in ["rg", "grep"]:
         import shutil
+
         if shutil.which(cmd):
             rg_cmd = cmd
             break
 
     if rg_cmd == "rg":
         # 使用 ripgrep
-        rg_args = ["--no-heading", "--line-number", "--color=never", "-C", "2",  # 上下文 2 行
-                   "--max-count", str(max_results), "--json", query, root_path]
+        rg_args = [
+            "--no-heading",
+            "--line-number",
+            "--color=never",
+            "-C",
+            "2",  # 上下文 2 行
+            "--max-count",
+            str(max_results),
+            "--json",
+            query,
+            root_path,
+        ]
 
         if glob_pattern:
             rg_args.insert(-2, "--glob")
@@ -258,23 +314,25 @@ def _search_codebase(query: str, root_path: str, glob_pattern: str, max_results:
 
         try:
             result = subprocess.run(rg_args, capture_output=True, text=True, timeout=30)
-            for line in result.stdout.strip().split('\n'):
+            for line in result.stdout.strip().split("\n"):
                 if not line:
                     continue
                 try:
                     parsed = json.loads(line)
-                    if parsed.get('type') == 'match':
-                        data = parsed['data']
-                        path = data['path']['text']
-                        for match in data.get('submatches', []):
-                            line_text = data['lines']['text']
-                            line_num = data['line_number']
-                            results.append({
-                                "file": os.path.relpath(path, root_path),
-                                "line": line_num,
-                                "content": line_text.strip(),
-                                "match": match.get('match', {}).get('text', ''),
-                            })
+                    if parsed.get("type") == "match":
+                        data = parsed["data"]
+                        path = data["path"]["text"]
+                        for match in data.get("submatches", []):
+                            line_text = data["lines"]["text"]
+                            line_num = data["line_number"]
+                            results.append(
+                                {
+                                    "file": os.path.relpath(path, root_path),
+                                    "line": line_num,
+                                    "content": line_text.strip(),
+                                    "match": match.get("match", {}).get("text", ""),
+                                }
+                            )
                             if len(results) >= max_results:
                                 break
                 except json.JSONDecodeError:
@@ -295,6 +353,7 @@ def _search_codebase(query: str, root_path: str, glob_pattern: str, max_results:
 
     return {"ok": True, "results": results, "returncode": 0}
 
+
 def _search_codebase_python(query: str, root_path: str, glob_pattern: str, max_results: int):
     """Python 实现的代码全文搜索（ripgrep 不可用时的回退方案）"""
     import fnmatch
@@ -305,30 +364,54 @@ def _search_codebase_python(query: str, root_path: str, glob_pattern: str, max_r
     pattern = re.compile(re.escape(query), re.IGNORECASE)
 
     for root, dirs, files in os.walk(root_path):
-        # 跳过隐藏目录和常见忽略目录
-        dirs[:] = [d for d in dirs if not d.startswith('.') and d not in
-                   ('node_modules', '__pycache__', '.git', 'venv', 'env', 'dist', 'build')]
+        # 跳过隐藏目录和常见忽略目录（唯一事实源见 tea_agent/path_filters.py）
+        prune_dirs(dirs)
 
         for filename in files:
             if glob_pattern and not fnmatch.fnmatch(filename, glob_pattern):
                 continue
 
-            if not filename.endswith(('.py', '.js', '.ts', '.jsx', '.tsx', '.java', '.cpp', '.c', '.h', '.go', '.rs', '.rb', '.md', '.txt', '.yaml', '.yml', '.json', '.xml', '.html', '.css')):
+            if not filename.endswith(
+                (
+                    ".py",
+                    ".js",
+                    ".ts",
+                    ".jsx",
+                    ".tsx",
+                    ".java",
+                    ".cpp",
+                    ".c",
+                    ".h",
+                    ".go",
+                    ".rs",
+                    ".rb",
+                    ".md",
+                    ".txt",
+                    ".yaml",
+                    ".yml",
+                    ".json",
+                    ".xml",
+                    ".html",
+                    ".css",
+                )
+            ):
                 continue
 
             filepath = os.path.join(root, filename)
             try:
-                with open(filepath, encoding='utf-8', errors='ignore') as f:
+                with open(filepath, encoding="utf-8", errors="ignore") as f:
                     lines = f.readlines()
 
                 for line_num, line in enumerate(lines, 1):
                     if pattern.search(line):
-                        results.append({
-                            "file": os.path.relpath(filepath, root_path),
-                            "line": line_num,
-                            "content": line.strip(),
-                            "match": query,
-                        })
+                        results.append(
+                            {
+                                "file": os.path.relpath(filepath, root_path),
+                                "line": line_num,
+                                "content": line.strip(),
+                                "match": query,
+                            }
+                        )
                         if len(results) >= max_results:
                             return {"ok": True, "results": results, "returncode": 0}
             except Exception:
@@ -338,6 +421,7 @@ def _search_codebase_python(query: str, root_path: str, glob_pattern: str, max_r
         return {"ok": True, "results": [], "message": "未找到匹配的代码", "returncode": 0}
 
     return {"ok": True, "results": results, "returncode": 0}
+
 
 def _search_symbol(query: str, root_path: str, max_results: int):
     """符号搜索（查找函数/类定义）"""
@@ -356,7 +440,7 @@ def _search_symbol(query: str, root_path: str, max_results: int):
     # 搜索的目录列表
     search_dirs = [abs_root_path]
     # 如果 root_path 是 toolkit 目录，也搜索其父目录（tlk.py 等在上层）
-    if 'toolkit' in abs_root_path.replace('\\', '/'):
+    if "toolkit" in abs_root_path.replace("\\", "/"):
         parent_dir = os.path.dirname(abs_root_path)
         if os.path.isdir(parent_dir) and parent_dir not in search_dirs:
             search_dirs.append(parent_dir)
@@ -366,38 +450,38 @@ def _search_symbol(query: str, root_path: str, max_results: int):
             continue
 
         for root, dirs, files in os.walk(search_dir):
-            dirs[:] = [d for d in dirs if not d.startswith('.') and d not in
-                       ('node_modules', '__pycache__', '.git', 'venv', 'env', 'dist', 'build')]
+            prune_dirs(dirs)
 
             for filename in files:
-                if not filename.endswith('.py'):
+                if not filename.endswith(".py"):
                     continue
 
                 filepath = os.path.join(root, filename)
                 try:
-                    with open(filepath, encoding='utf-8') as f:
+                    with open(filepath, encoding="utf-8") as f:
                         source = f.read()
 
                     tree = ast.parse(source, filename=filepath)
 
                     for node in ast.walk(tree):
-                        if isinstance(node, ast.FunctionDef | ast.AsyncFunctionDef | ast.ClassDef):
-                            if node.name == query or query in node.name:
-                                # 相对于 abs_root_path 计算相对路径
-                                rel_path = os.path.relpath(filepath, abs_root_path)
-                                try:
-                                    args = _extract_args(node)
-                                except Exception:
-                                    args = []
-                                results.append({
+                        if isinstance(node, ast.FunctionDef | ast.AsyncFunctionDef | ast.ClassDef) and (node.name == query or query in node.name):
+                            # 相对于 abs_root_path 计算相对路径
+                            rel_path = os.path.relpath(filepath, abs_root_path)
+                            try:
+                                args = _extract_args(node)
+                            except Exception:
+                                args = []
+                            results.append(
+                                {
                                     "file": rel_path,
                                     "line": node.lineno,
                                     "type": "class" if isinstance(node, ast.ClassDef) else "function",
                                     "name": node.name,
                                     "args": args,
-                                })
-                                if len(results) >= max_results:
-                                    return {"ok": True, "results": results, "returncode": 0}
+                                }
+                            )
+                            if len(results) >= max_results:
+                                return {"ok": True, "results": results, "returncode": 0}
 
                 except Exception as e:
                     if isinstance(e, SyntaxError):
@@ -410,6 +494,7 @@ def _search_symbol(query: str, root_path: str, max_results: int):
 
     return {"ok": True, "results": results, "returncode": 0}
 
+
 def _extract_args(node):
     """从 AST 节点提取参数信息。兼容 FunctionDef 和 ClassDef。"""
     if isinstance(node, ast.ClassDef):
@@ -420,19 +505,20 @@ def _extract_args(node):
             except Exception:
                 bases.append("?")
         return bases
-    node_args = getattr(node, 'args', None)
+    node_args = getattr(node, "args", None)
     if node_args is None:
         return []
     args = []
-    for arg in getattr(node_args, 'args', []):
+    for arg in getattr(node_args, "args", []):
         args.append(arg.arg)
-    vararg = getattr(node_args, 'vararg', None)
+    vararg = getattr(node_args, "vararg", None)
     if vararg:
         args.append(f"*{vararg.arg}")
-    kwarg = getattr(node_args, 'kwarg', None)
+    kwarg = getattr(node_args, "kwarg", None)
     if kwarg:
         args.append(f"**{kwarg.arg}")
     return args
+
 
 def _search_github(query: str, search_type: str, max_results: int):
     """
@@ -464,6 +550,7 @@ def _search_github(query: str, search_type: str, max_results: int):
 
     # 添加 GitHub Token（如果存在）
     import os
+
     token = os.environ.get("GITHUB_TOKEN")
     if token:
         headers["Authorization"] = f"token {token}"
@@ -483,37 +570,43 @@ def _search_github(query: str, search_type: str, max_results: int):
 
         for item in items[:max_results]:
             if api_type == "repos":
-                results.append({
-                    "title": item.get("full_name", ""),
-                    "url": item.get("html_url", ""),
-                    "snippet": item.get("description", "") or "",
-                    "stars": item.get("stargazers_count", 0),
-                    "forks": item.get("forks_count", 0),
-                    "language": item.get("language", ""),
-                    "updated": item.get("updated_at", "")[:10],  # 只取日期部分
-                })
+                results.append(
+                    {
+                        "title": item.get("full_name", ""),
+                        "url": item.get("html_url", ""),
+                        "snippet": item.get("description", "") or "",
+                        "stars": item.get("stargazers_count", 0),
+                        "forks": item.get("forks_count", 0),
+                        "language": item.get("language", ""),
+                        "updated": item.get("updated_at", "")[:10],  # 只取日期部分
+                    }
+                )
             elif api_type == "code":
                 repo = item.get("repository", {})
-                results.append({
-                    "title": item.get("name", ""),
-                    "url": item.get("html_url", ""),
-                    "snippet": f"仓库: {repo.get('full_name', '')}",
-                    "path": item.get("path", ""),
-                    "repo_stars": repo.get("stargazers_count", 0),
-                })
+                results.append(
+                    {
+                        "title": item.get("name", ""),
+                        "url": item.get("html_url", ""),
+                        "snippet": f"仓库: {repo.get('full_name', '')}",
+                        "path": item.get("path", ""),
+                        "repo_stars": repo.get("stargazers_count", 0),
+                    }
+                )
             elif api_type == "issues":
-                labels = [l.get("name", "") for l in item.get("labels", [])]
+                labels = [ln.get("name", "") for ln in item.get("labels", [])]
                 is_pr = "pull_request" in item
-                results.append({
-                    "title": item.get("title", ""),
-                    "url": item.get("html_url", ""),
-                    "snippet": (item.get("body", "") or "")[:200],  # 截取前 200 字符
-                    "state": item.get("state", ""),
-                    "type": "PR" if is_pr else "Issue",
-                    "labels": labels,
-                    "comments": item.get("comments", 0),
-                    "created": item.get("created_at", "")[:10],
-                })
+                results.append(
+                    {
+                        "title": item.get("title", ""),
+                        "url": item.get("html_url", ""),
+                        "snippet": (item.get("body", "") or "")[:200],  # 截取前 200 字符
+                        "state": item.get("state", ""),
+                        "type": "PR" if is_pr else "Issue",
+                        "labels": labels,
+                        "comments": item.get("comments", 0),
+                        "created": item.get("created_at", "")[:10],
+                    }
+                )
 
         if not results:
             return {"ok": True, "results": [], "message": f"GitHub 未找到相关{api_type}结果", "returncode": 0}

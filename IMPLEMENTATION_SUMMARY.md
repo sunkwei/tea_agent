@@ -20,11 +20,9 @@
 
 **核心实现**:
 ```python
-toolkit_mcp(action='connect', server_name='fs', command='npx', 
-           args=['-y', '@modelcontextprotocol/server-filesystem', '/path'])
-toolkit_mcp(action='list_tools', server_name='fs')
-toolkit_mcp(action='call_tool', server_name='fs', tool_name='read_file', 
-           tool_args={'path': '/tmp/test.txt'})
+toolkit_mcp(action="connect", server_name="fs", command="npx", args=["-y", "@modelcontextprotocol/server-filesystem", "/path"])
+toolkit_mcp(action="list_tools", server_name="fs")
+toolkit_mcp(action="call_tool", server_name="fs", tool_name="read_file", tool_args={"path": "/tmp/test.txt"})
 ```
 
 **技术细节**:
@@ -45,8 +43,7 @@ toolkit_mcp(action='call_tool', server_name='fs', tool_name='read_file',
 
 #### 2.1 全文代码搜索
 ```python
-toolkit_search(query='def login', search_type='code', 
-              root_path='/project', glob_pattern='*.py')
+toolkit_search(query="def login", search_type="code", root_path="/project", glob_pattern="*.py")
 ```
 - 优先使用 ripgrep（如果可用）
 - Python 实现作为回退方案
@@ -55,7 +52,7 @@ toolkit_search(query='def login', search_type='code',
 
 #### 2.2 符号搜索
 ```python
-toolkit_search(query='MyClass', search_type='symbol', root_path='/project')
+toolkit_search(query="MyClass", search_type="symbol", root_path="/project")
 ```
 - 基于 AST 解析
 - 查找函数/类定义
@@ -87,15 +84,13 @@ toolkit_search(query='MyClass', search_type='symbol', root_path='/project')
 **核心实现**:
 ```python
 # 应用 patch
-toolkit_edit(file_path='src/main.py', action='apply_patch',
-            content='@@ -10,3 +10,4 @@\n def foo():\n+    pass\n     return 1')
+toolkit_edit(file_path="src/main.py", action="apply_patch", content="@@ -10,3 +10,4 @@\n def foo():\n+    pass\n     return 1")
 
 # 插入行
-toolkit_edit(file_path='src/main.py', action='insert_lines',
-            start_line=10, new_content='def new_func():\n    pass')
+toolkit_edit(file_path="src/main.py", action="insert_lines", start_line=10, new_content="def new_func():\n    pass")
 
 # 预览
-toolkit_edit(file_path='src/main.py', action='preview_patch', content='...')
+toolkit_edit(file_path="src/main.py", action="preview_patch", content="...")
 ```
 
 **安全特性**:
@@ -149,35 +144,31 @@ toolkit_edit(file_path='src/main.py', action='preview_patch', content='...')
 ### 场景 1: 分析项目结构
 ```python
 # 搜索所有登录相关代码
-toolkit_search(query='login', search_type='code', root_path='.', glob_pattern='*.py')
+toolkit_search(query="login", search_type="code", root_path=".", glob_pattern="*.py")
 
 # 查找特定类
-toolkit_search(query='AuthService', search_type='symbol', root_path='.')
+toolkit_search(query="AuthService", search_type="symbol", root_path=".")
 ```
 
 ### 场景 2: 使用外部工具
 ```python
 # 连接数据库 MCP Server
-toolkit_mcp(action='connect', server_name='db', command='npx',
-           args=['-y', '@modelcontextprotocol/server-sqlite', './data.db'])
+toolkit_mcp(action="connect", server_name="db", command="npx", args=["-y", "@modelcontextprotocol/server-sqlite", "./data.db"])
 
 # 执行查询
-toolkit_mcp(action='call_tool', server_name='db',
-           tool_name='query', tool_args={'sql': 'SELECT * FROM users'})
+toolkit_mcp(action="call_tool", server_name="db", tool_name="query", tool_args={"sql": "SELECT * FROM users"})
 ```
 
 ### 场景 3: 精准代码修改
 ```python
 # 搜索需要修改的代码
-toolkit_search(query='old_function', search_type='code', root_path='src')
+toolkit_search(query="old_function", search_type="code", root_path="src")
 
 # 预览修改
-toolkit_edit(file_path='src/main.py', action='preview_patch',
-            content='@@ -42 +42 @@\n-def old():\n+def new():')
+toolkit_edit(file_path="src/main.py", action="preview_patch", content="@@ -42 +42 @@\n-def old():\n+def new():")
 
 # 应用修改
-toolkit_edit(file_path='src/main.py', action='apply_patch',
-            content='@@ -42 +42 @@\n-def old():\n+def new():')
+toolkit_edit(file_path="src/main.py", action="apply_patch", content="@@ -42 +42 @@\n-def old():\n+def new():")
 ```
 
 ---

@@ -10,24 +10,28 @@ from datetime import datetime
 
 logger = logging.getLogger("toolkit")
 
+
 def _get_topic_id() -> str | None:
     """获取当前 topic_id"""
     try:
         from tea_agent.session_ref import get_agent
+
         agent = get_agent()
         if agent is not None:
-            return getattr(agent, 'current_topic_id', None)
+            return getattr(agent, "current_topic_id", None)
     except Exception:
-        logger.exception('op_failed')
+        logger.exception("op_failed")
 
     return None
+
 
 def _get_pending_todos() -> list[dict]:
     """获取当前主题未完成的 TODO 项"""
     try:
         from tea_agent.session_ref import get_agent
+
         agent = get_agent()
-        if agent is None or not hasattr(agent, 'db'):
+        if agent is None or not hasattr(agent, "db"):
             return []
 
         db = agent.db
@@ -36,11 +40,14 @@ def _get_pending_todos() -> list[dict]:
             return []
 
         c = db.conn.cursor()
-        c.execute("""
+        c.execute(
+            """
             SELECT idx, desc, done FROM todo_items
             WHERE topic_id=? AND done=0
             ORDER BY idx ASC
-        """, (topic_id,))
+        """,
+            (topic_id,),
+        )
         rows = c.fetchall()
         c.close()
 
@@ -48,6 +55,7 @@ def _get_pending_todos() -> list[dict]:
     except Exception as e:
         logger.debug(f"check pending todos failed: {e}")
         return []
+
 
 def _get_pending_plans() -> list[dict]:
     """获取当前主题未完成的 Plan"""
@@ -81,12 +89,14 @@ def _get_pending_plans() -> list[dict]:
                 done = sum(1 for s in plan.get("steps", []) if s.get("status") == "done")
 
                 if done < total:
-                    pending.append({
-                        "plan_id": plan["id"],
-                        "goal": plan.get("goal", "")[:60],
-                        "progress": f"{done}/{total}",
-                        "status": plan.get("status", "unknown"),
-                    })
+                    pending.append(
+                        {
+                            "plan_id": plan["id"],
+                            "goal": plan.get("goal", "")[:60],
+                            "progress": f"{done}/{total}",
+                            "status": plan.get("status", "unknown"),
+                        }
+                    )
             except Exception:
                 continue
 
@@ -94,6 +104,7 @@ def _get_pending_plans() -> list[dict]:
     except Exception as e:
         logger.debug(f"check pending plans failed: {e}")
         return []
+
 
 # ── docs/ 产物扫描与对照 ─────────────────────────────────
 
@@ -131,7 +142,7 @@ def _scan_docs_dir(cwd: str = ".") -> list[dict]:
                 continue
 
             # 按 ## YYYY-MM-DD 统计条目
-            entries = len(re.findall(r'^## \d{4}-\d{2}-\d{2}', content, re.MULTILINE))
+            entries = len(re.findall(r"^## \d{4}-\d{2}-\d{2}", content, re.MULTILINE))
             if entries == 0:
                 entries = 1  # 至少算 1 条非空文档
 
@@ -139,14 +150,16 @@ def _scan_docs_dir(cwd: str = ".") -> list[dict]:
             rel_path = os.path.relpath(full, docs_dir)
             module = os.path.dirname(rel_path) if os.path.dirname(rel_path) else ""
 
-            results.append({
-                "path": os.path.relpath(full, cwd).replace("\\", "/"),
-                "type": doc_type,
-                "module": module or "",
-                "entries": entries,
-                "size": os.path.getsize(full),
-                "updated": datetime.fromtimestamp(os.path.getmtime(full)).strftime("%Y-%m-%d %H:%M"),
-            })
+            results.append(
+                {
+                    "path": os.path.relpath(full, cwd).replace("\\", "/"),
+                    "type": doc_type,
+                    "module": module or "",
+                    "entries": entries,
+                    "size": os.path.getsize(full),
+                    "updated": datetime.fromtimestamp(os.path.getmtime(full)).strftime("%Y-%m-%d %H:%M"),
+                }
+            )
 
     return results
 
@@ -176,22 +189,24 @@ def _get_all_plans_for_topic() -> list[dict]:
             steps = plan.get("steps", [])
             total = len(steps)
             done = sum(1 for s in steps if s.get("status") == "done")
-            results.append({
-                "plan_id": plan["id"],
-                "goal": plan.get("goal", "")[:80],
-                "status": plan.get("status", "unknown"),
-                "progress": f"{done}/{total}",
-                "steps": [
-                    {
-                        "id": s["id"],
-                        "desc": s.get("desc", ""),
-                        "status": s.get("status", "pending"),
-                        "doc_type": s.get("doc_type", ""),
-                        "doc_saved": s.get("doc_saved", ""),
-                    }
-                    for s in steps
-                ],
-            })
+            results.append(
+                {
+                    "plan_id": plan["id"],
+                    "goal": plan.get("goal", "")[:80],
+                    "status": plan.get("status", "unknown"),
+                    "progress": f"{done}/{total}",
+                    "steps": [
+                        {
+                            "id": s["id"],
+                            "desc": s.get("desc", ""),
+                            "status": s.get("status", "pending"),
+                            "doc_type": s.get("doc_type", ""),
+                            "doc_saved": s.get("doc_saved", ""),
+                        }
+                        for s in steps
+                    ],
+                }
+            )
         except Exception:
             continue
     return results
@@ -230,25 +245,29 @@ def _cross_check_docs_plans(cwd: str = ".") -> dict:
             if saved:
                 saved_rel = os.path.relpath(saved, cwd).replace("\\", "/")
                 if saved_rel not in doc_paths_set and s["status"] == "done":
-                    unfulfilled.append({
-                        "plan_id": p["plan_id"],
-                        "step_id": s["id"],
-                        "step_desc": s["desc"],
-                        "doc_type": s.get("doc_type", ""),
-                        "expected_path": saved_rel,
-                    })
+                    unfulfilled.append(
+                        {
+                            "plan_id": p["plan_id"],
+                            "step_id": s["id"],
+                            "step_desc": s["desc"],
+                            "doc_type": s.get("doc_type", ""),
+                            "expected_path": saved_rel,
+                        }
+                    )
 
     # 3. 计划步骤有 doc_type 但未设置 doc_saved → 计划未执行到落盘
     doc_planned_steps = []
     for p in plans:
         for s in p["steps"]:
             if s.get("doc_type") and not s.get("doc_saved") and s["status"] == "pending":
-                doc_planned_steps.append({
-                    "plan_id": p["plan_id"],
-                    "step_id": s["id"],
-                    "step_desc": s["desc"],
-                    "doc_type": s["doc_type"],
-                })
+                doc_planned_steps.append(
+                    {
+                        "plan_id": p["plan_id"],
+                        "step_id": s["id"],
+                        "step_desc": s["desc"],
+                        "doc_type": s["doc_type"],
+                    }
+                )
 
     # 4. docs/ 有产物但无关联计划 → 孤儿文档
     orphan_docs = []
@@ -332,12 +351,14 @@ def toolkit_task_resume(action: str = "check", plan_id: str = None) -> dict:
         if action == "resume_todo":
             # 恢复待办执行
             from tea_agent.toolkit.toolkit_todo import toolkit_todo
+
             return toolkit_todo(action="show")
 
         if action == "resume_plan":
             if not plan_id:
                 return {"ok": False, "error": "resume_plan 需要 plan_id"}
             from tea_agent.toolkit.toolkit_plan import toolkit_plan
+
             return toolkit_plan(action="show", plan_id=plan_id)
 
         return {"ok": False, "error": f"未知 action: {action}"}
@@ -357,18 +378,10 @@ def meta_toolkit_task_resume() -> dict:
             "parameters": {
                 "type": "object",
                 "properties": {
-                    "action": {
-                        "type": "string",
-                        "enum": ["check", "resume_todo", "resume_plan"],
-                        "description": "check/resume_todo/resume_plan"
-                    },
-                    "plan_id": {
-                        "type": "string",
-                        "description": "计划ID"
-                    }
+                    "action": {"type": "string", "enum": ["check", "resume_todo", "resume_plan"], "description": "check/resume_todo/resume_plan"},
+                    "plan_id": {"type": "string", "description": "计划ID"},
                 },
-                "required": ["action"]
-            }
-        }
+                "required": ["action"],
+            },
+        },
     }
-

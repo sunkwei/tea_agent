@@ -56,6 +56,7 @@ class AdminPanel:
     def sm(self):
         if self._subagent_manager is None:
             from .subagent_manager import SubAgentManager
+
             self._subagent_manager = SubAgentManager()
         return self._subagent_manager
 
@@ -63,6 +64,7 @@ class AdminPanel:
     def pm(self):
         if self._pattern_market is None:
             from .pattern_market import get_pattern_market
+
             self._pattern_market = get_pattern_market()
         return self._pattern_market
 
@@ -70,6 +72,7 @@ class AdminPanel:
     def cpm(self):
         if self._checkpoint_manager is None:
             from .checkpoint_manager import get_checkpoint_manager
+
             self._checkpoint_manager = get_checkpoint_manager()
         return self._checkpoint_manager
 
@@ -77,6 +80,7 @@ class AdminPanel:
     def te(self):
         if self._trace_engine is None:
             from .trace_engine import get_trace_engine
+
             self._trace_engine = get_trace_engine()
         return self._trace_engine
 
@@ -86,7 +90,7 @@ class AdminPanel:
 
     def list_agents(self, status: str = "") -> list[dict]:
         """列出所有子 Agent。"""
-        return self.sm.list_agents(status) if hasattr(self.sm, 'list_agents') else []
+        return self.sm.list_agents(status) if hasattr(self.sm, "list_agents") else []
 
     def create_agent(
         self,
@@ -104,7 +108,7 @@ class AdminPanel:
             tools=tools or [],
             topics=topics or [],
         )
-        return info.to_dict() if hasattr(info, 'to_dict') else {"agent_id": info.agent_id}
+        return info.to_dict() if hasattr(info, "to_dict") else {"agent_id": info.agent_id}
 
     def remove_agent(self, agent_id: str) -> bool:
         """移除 Agent。"""
@@ -138,12 +142,16 @@ class AdminPanel:
             return None
 
         agent = self.pm.instantiate(pat["id"], **overrides)
-        return {
-            "agent_id": agent.agent_id,
-            "role": agent.role,
-            "goal": agent.goal,
-            "pattern": pat["name"],
-        } if agent else None
+        return (
+            {
+                "agent_id": agent.agent_id,
+                "role": agent.role,
+                "goal": agent.goal,
+                "pattern": pat["name"],
+            }
+            if agent
+            else None
+        )
 
     def recommend_patterns(self, task: str = "", limit: int = 5) -> list[dict]:
         """推荐模式。"""
@@ -156,12 +164,13 @@ class AdminPanel:
     def list_checkpoints(self, status: str = "") -> list[dict]:
         """列出检查点。"""
         if status:
-            return self.cpm.load_by_status(status) if hasattr(self.cpm, 'load_by_status') else []
-        return self.cpm.list_recent() if hasattr(self.cpm, 'list_recent') else []
+            return self.cpm.load_by_status(status) if hasattr(self.cpm, "load_by_status") else []
+        return self.cpm.list_recent() if hasattr(self.cpm, "list_recent") else []
 
     def recover_agent(self, agent_id: str) -> dict | None:
         """从 checkpoint 恢复 Agent。"""
         from .role_agent import RoleAgent
+
         agent = RoleAgent.recover(agent_id)
         if not agent:
             return None
@@ -173,7 +182,7 @@ class AdminPanel:
 
     def cleanup_checkpoints(self, hours: int = 24) -> int:
         """清理旧检查点。"""
-        return self.cpm.cleanup(hours) if hasattr(self.cpm, 'cleanup') else 0
+        return self.cpm.cleanup(hours) if hasattr(self.cpm, "cleanup") else 0
 
     # ═══════════════════════════════════════════
     # 追踪管理
@@ -181,15 +190,15 @@ class AdminPanel:
 
     def list_traces(self, limit: int = 10) -> list[dict]:
         """列出最近追踪。"""
-        return self.te.list_traces(limit) if hasattr(self.te, 'list_traces') else []
+        return self.te.list_traces(limit) if hasattr(self.te, "list_traces") else []
 
     def view_trace(self, trace_id: str) -> dict | None:
         """查看追踪详情（树形）。"""
-        return self.te.get_trace(trace_id) if hasattr(self.te, 'get_trace') else None
+        return self.te.get_trace(trace_id) if hasattr(self.te, "get_trace") else None
 
     def trace_stats(self) -> dict:
         """追踪统计。"""
-        return self.te.get_stats() if hasattr(self.te, 'get_stats') else {}
+        return self.te.get_stats() if hasattr(self.te, "get_stats") else {}
 
     # ═══════════════════════════════════════════
     # 系统状态
@@ -197,11 +206,11 @@ class AdminPanel:
 
     def status(self) -> dict:
         """系统全面状态报告。"""
-        agents = self.sm.stats() if hasattr(self.sm, 'stats') else {}
-        patterns = self.pm.stats() if hasattr(self.pm, 'stats') else {}
+        agents = self.sm.stats() if hasattr(self.sm, "stats") else {}
+        patterns = self.pm.stats() if hasattr(self.pm, "stats") else {}
         traces = self.trace_stats()
         checkpoints = {
-            "total": self.cpm.count() if hasattr(self.cpm, 'count') else 0,
+            "total": self.cpm.count() if hasattr(self.cpm, "count") else 0,
         }
 
         # Phase 5: 执行池状态
@@ -252,19 +261,21 @@ class AdminPanel:
         else:
             lines.append(f"- 总数: {agent_stats}")
 
-        lines.extend([
-            "",
-            "### 📦 模式市场",
-            f"- 总模式: {s.get('patterns', {}).get('total', 0)}",
-            f"- 内置: {s.get('patterns', {}).get('builtin', 0)}",
-            f"- 自定义: {s.get('patterns', {}).get('custom', 0)}",
-            f"- 总使用次数: {s.get('patterns', {}).get('total_usage', 0)}",
-            "",
-            "### 💾 检查点",
-            f"- 总数: {s.get('checkpoints', {}).get('total', 0)}",
-            "",
-            "### 📊 Trace 统计",
-        ])
+        lines.extend(
+            [
+                "",
+                "### 📦 模式市场",
+                f"- 总模式: {s.get('patterns', {}).get('total', 0)}",
+                f"- 内置: {s.get('patterns', {}).get('builtin', 0)}",
+                f"- 自定义: {s.get('patterns', {}).get('custom', 0)}",
+                f"- 总使用次数: {s.get('patterns', {}).get('total_usage', 0)}",
+                "",
+                "### 💾 检查点",
+                f"- 总数: {s.get('checkpoints', {}).get('total', 0)}",
+                "",
+                "### 📊 Trace 统计",
+            ]
+        )
 
         trace_stats = s.get("traces", {})
         if isinstance(trace_stats, dict):
@@ -346,19 +357,21 @@ class AdminPanel:
             for k, v in agent_stats.items():
                 lines.append(f"   {k}: {v}")
 
-        lines.extend([
-            "",
-            "📦 模式市场:",
-            f"   总数: {s.get('patterns', {}).get('total', 0)}",
-            f"   内置: {s.get('patterns', {}).get('builtin', 0)}",
-            f"   自定义: {s.get('patterns', {}).get('custom', 0)}",
-            f"   总使用: {s.get('patterns', {}).get('total_usage', 0)}",
-            "",
-            "💾 检查点:",
-            f"   总数: {s.get('checkpoints', {}).get('total', 0)}",
-            "",
-            "📊 Traces:",
-        ])
+        lines.extend(
+            [
+                "",
+                "📦 模式市场:",
+                f"   总数: {s.get('patterns', {}).get('total', 0)}",
+                f"   内置: {s.get('patterns', {}).get('builtin', 0)}",
+                f"   自定义: {s.get('patterns', {}).get('custom', 0)}",
+                f"   总使用: {s.get('patterns', {}).get('total_usage', 0)}",
+                "",
+                "💾 检查点:",
+                f"   总数: {s.get('checkpoints', {}).get('total', 0)}",
+                "",
+                "📊 Traces:",
+            ]
+        )
         trace_stats = s.get("traces", {})
         if isinstance(trace_stats, dict):
             for k, v in trace_stats.items():
@@ -379,9 +392,9 @@ class AdminPanel:
         ]
         for a in agents:
             lines.append(
-                f"  [{a.get('status','?')}] {a.get('agent_id','?'):20s} "
-                f"{a.get('role','?'):15s} "
-                f"tasks: {a.get('metrics',{}).get('tasks_completed',0)}✓/{a.get('metrics',{}).get('tasks_failed',0)}✗"
+                f"  [{a.get('status', '?')}] {a.get('agent_id', '?'):20s} "
+                f"{a.get('role', '?'):15s} "
+                f"tasks: {a.get('metrics', {}).get('tasks_completed', 0)}✓/{a.get('metrics', {}).get('tasks_failed', 0)}✗"
             )
         lines.append("=" * 60)
         return "\n".join(lines)
@@ -399,10 +412,7 @@ class AdminPanel:
         ]
         for p in patterns:
             tags = ",".join(p.get("tags", []))[:30]
-            lines.append(
-                f"  [{p.get('usage_count',0)}次] {p.get('name','?'):20s} "
-                f"→ {p.get('role','?'):15s} [{tags}]"
-            )
+            lines.append(f"  [{p.get('usage_count', 0)}次] {p.get('name', '?'):20s} → {p.get('role', '?'):15s} [{tags}]")
         lines.append("=" * 60)
         return "\n".join(lines)
 
@@ -418,10 +428,7 @@ class AdminPanel:
             "=" * 60,
         ]
         for cp in checkpoints:
-            lines.append(
-                f"  [{cp.get('status','?')}] {cp.get('agent_id','?'):20s} "
-                f"{cp.get('task','')[:50]}"
-            )
+            lines.append(f"  [{cp.get('status', '?')}] {cp.get('agent_id', '?'):20s} {cp.get('task', '')[:50]}")
         lines.append("=" * 60)
         return "\n".join(lines)
 
@@ -437,11 +444,7 @@ class AdminPanel:
             "=" * 60,
         ]
         for t in traces:
-            lines.append(
-                f"  [{t.get('status','?')}] {t.get('trace_id','?'):20s} "
-                f"{t.get('task','')[:50]} "
-                f"({t.get('duration_ms',0)}ms)"
-            )
+            lines.append(f"  [{t.get('status', '?')}] {t.get('trace_id', '?'):20s} {t.get('task', '')[:50]} ({t.get('duration_ms', 0)}ms)")
         lines.append("=" * 60)
         return "\n".join(lines)
 
@@ -494,12 +497,12 @@ class AdminPanel:
         lines.append("=" * 60)
         lines.append("")
         lines.append("💡 快速开始:")
-        lines.append('  from tea_agent.multi_agent import WorkflowDAG, WorkflowNode, NodeType')
-        lines.append('  dag = WorkflowDAG()')
+        lines.append("  from tea_agent.multi_agent import WorkflowDAG, WorkflowNode, NodeType")
+        lines.append("  dag = WorkflowDAG()")
         lines.append('  dag.add_node(WorkflowNode("start", NodeType.TASK, fn=...))')
-        lines.append('  wf = WorkflowExec(dag).run()')
+        lines.append("  wf = WorkflowExec(dag).run()")
         lines.append("=" * 60)
         return "\n".join(lines)
 
     def __repr__(self):
-        return f"AdminPanel(uptime={(datetime.now()-self._start_time).total_seconds():.0f}s)"
+        return f"AdminPanel(uptime={(datetime.now() - self._start_time).total_seconds():.0f}s)"

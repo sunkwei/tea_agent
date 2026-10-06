@@ -3,33 +3,38 @@ import logging
 logger = logging.getLogger("toolkit")
 
 # ── 模块级缓存：快速读写，DB 仅做持久化 ──
-_todos = []          # [{"desc":str, "done":bool, "idx":int}, ...]
-_restored = False    # 是否已从 DB 恢复
-_last_topic = None   # 上次操作的 topic_id, 用于检测主题切换
+_todos = []  # [{"desc":str, "done":bool, "idx":int}, ...]
+_restored = False  # 是否已从 DB 恢复
+_last_topic = None  # 上次操作的 topic_id, 用于检测主题切换
+
 
 def _get_db():
     """获取当前 DB 连接（通过 session_ref → agent → db）"""
     try:
         from tea_agent.session_ref import get_agent
+
         agent = get_agent()
-        if agent is not None and hasattr(agent, 'db'):
+        if agent is not None and hasattr(agent, "db"):
             return agent.db
     except Exception:
-        logger.exception('op_failed')
+        logger.exception("op_failed")
 
     return None
+
 
 def _get_topic_id():
     """获取当前 topic_id"""
     try:
         from tea_agent.session_ref import get_agent
+
         agent = get_agent()
         if agent is not None:
-            return getattr(agent, 'current_topic_id', None)
+            return getattr(agent, "current_topic_id", None)
     except Exception:
-        logger.exception('op_failed')
+        logger.exception("op_failed")
 
     return None
+
 
 def _ensure_table(db):
     """确保 todo_items 表存在（兼容旧 DB 未迁移的情况）"""
@@ -50,6 +55,7 @@ def _ensure_table(db):
         c.close()
     except Exception as e:
         logger.warning(f"todo ensure_table failed: {e}")
+
 
 def _sync_to_db():
     """将内存 _todos 全量写入 DB (DELETE + INSERT)"""
@@ -75,6 +81,7 @@ def _sync_to_db():
     except Exception as e:
         logger.warning(f"todo sync to db failed: {e}")
 
+
 def _sync_item(idx, done):
     """单条更新 DB"""
     topic_id = _get_topic_id()
@@ -94,6 +101,7 @@ def _sync_item(idx, done):
         c.close()
     except Exception as e:
         logger.warning(f"todo sync item failed: {e}")
+
 
 def _restore_from_db():
     """从 DB 恢复当前 topic 的 TODO"""
@@ -130,12 +138,14 @@ def _restore_from_db():
     finally:
         _restored = True
 
+
 def _auto_restore():
     """自动恢复（首次调用 + 主题切换时）"""
     global _restored, _last_topic, _todos
     topic_id = _get_topic_id()
     if not _restored or (topic_id and topic_id != _last_topic):
         _restore_from_db()
+
 
 def toolkit_todo(action: str, items: list = None, index: int = None) -> dict:
     """TODO checklist: create before modifying code, check off step by step.
@@ -171,7 +181,7 @@ def toolkit_todo(action: str, items: list = None, index: int = None) -> dict:
                     "progress": f"{_done()}/{len(_todos)}",
                     "todo": _fmt(),
                 }
-            return {"ok": False, "error": f"index {index} out of range (0..{len(_todos)-1})"}
+            return {"ok": False, "error": f"index {index} out of range (0..{len(_todos) - 1})"}
 
         if action == "show":
             if not _todos:
@@ -220,9 +230,11 @@ def toolkit_todo(action: str, items: list = None, index: int = None) -> dict:
         logger.exception("toolkit_todo")
         return {"ok": False, "error": str(e)[:300]}
 
+
 def _done():
     """Internal: done."""
     return sum(1 for t in _todos if t["done"])
+
 
 def _fmt():
     """Internal: fmt."""
@@ -232,15 +244,17 @@ def _fmt():
         lines.append(f"[{icon}] [{t['idx']}] {t['desc']}")
     return "\n".join(lines)
 
+
 def _signal_todo_created():
     """写库后主动触发 GUI 任务面板弹出（通过 session_ref 查找 GUI 实例）。"""
     try:
         from tea_agent.session_ref import get_agent
+
         agent = get_agent()
         if agent is None:
             return
         # 尝试调用 GUI 特有的 _check_and_show_todo 方法
-        show = getattr(agent, '_check_and_show_todo', None)
+        show = getattr(agent, "_check_and_show_todo", None)
         if show:
             show()
     except Exception:

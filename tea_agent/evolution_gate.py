@@ -87,8 +87,7 @@ def _restore_latest_backup(rel_path: str) -> dict:
     return {"ok": True, "restored_from": os.path.basename(latest)}
 
 
-def evaluate_evolution(kind: str = "safety", threshold: float | None = None,
-                       tag: str = "post-evolve") -> dict:
+def evaluate_evolution(kind: str = "safety", threshold: float | None = None, tag: str = "post-evolve") -> dict:
     """跑基准 + 记录曲线 + 与上一数据点对比 → keep/rollback 建议。
 
     Args:
@@ -146,9 +145,9 @@ def install_evolution_gate(registry) -> None:
         try:
             from tea_agent.audit_log import audit_log
 
-            audit_log.record("evolve/gate", tool=tool_name,
-                             status=str(info.get("decision") or "unknown"),
-                             detail={k: v for k, v in info.items() if k != "advice"})
+            audit_log.record(
+                "evolve/gate", tool=tool_name, status=str(info.get("decision") or "unknown"), detail={k: v for k, v in info.items() if k != "advice"}
+            )
         except Exception:  # noqa: BLE001 — 审计不可用不影响结论
             pass
 

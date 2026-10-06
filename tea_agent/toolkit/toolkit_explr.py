@@ -12,6 +12,7 @@
 
 查询接口: symbol(符号定位), callers(谁调此函数), callees(此函数调谁), module(模块概览)
 """
+
 import ast
 import json
 import os
@@ -20,30 +21,156 @@ import subprocess
 import time
 from collections import defaultdict
 
-_PYTHON_BUILTINS = frozenset({
-    'abs', 'all', 'any', 'ascii', 'bin', 'bool', 'breakpoint', 'bytearray', 'bytes',
-    'callable', 'chr', 'classmethod', 'compile', 'complex', 'copyright', 'credits',
-    'delattr', 'dict', 'dir', 'divmod', 'enumerate', 'eval', 'exec', 'exit', 'filter',
-    'float', 'format', 'frozenset', 'getattr', 'globals', 'hasattr', 'hash', 'help',
-    'hex', 'id', 'input', 'int', 'isinstance', 'issubclass', 'iter', 'len', 'license',
-    'list', 'locals', 'map', 'max', 'memoryview', 'min', 'next', 'object', 'oct',
-    'open', 'ord', 'pow', 'print', 'property', 'quit', 'range', 'repr', 'reversed',
-    'round', 'set', 'setattr', 'slice', 'sorted', 'staticmethod', 'str', 'sum',
-    'super', 'tuple', 'type', 'vars', 'zip', '__import__',
-    # 常见方法名（ast.Attribute 产生的 .append .strip .join 等）
-    'append', 'strip', 'join', 'split', 'replace', 'startswith',
-    'endswith', 'get', 'items', 'keys', 'values', 'update', 'pop', 'clear',
-    'copy', 'read', 'write', 'close', 'seek', 'find', 'index', 'count',
-    'remove', 'insert', 'sort', 'reverse', 'extend', 'upper', 'lower',
-    'encode', 'decode', 'search', 'match', 'sub', 'group', 'groups',
-    'add', 'difference', 'intersection', 'union', 'discard',
-    '__init__', '__str__', '__repr__', '__call__', '__len__', '__getitem__',
-    '__setitem__', '__delitem__', '__iter__', '__next__', '__enter__', '__exit__',
-    '__contains__', '__eq__', '__ne__', '__lt__', '__gt__', '__hash__',
-    # Logging 和 traceback 等标准库常用方法
-    'info', 'debug', 'warning', 'error', 'critical', 'exception', 'log',
-    'print_exc', 'format_exc', 'getLogger', 'basicConfig',
-})
+_PYTHON_BUILTINS = frozenset(
+    {
+        "abs",
+        "all",
+        "any",
+        "ascii",
+        "bin",
+        "bool",
+        "breakpoint",
+        "bytearray",
+        "bytes",
+        "callable",
+        "chr",
+        "classmethod",
+        "compile",
+        "complex",
+        "copyright",
+        "credits",
+        "delattr",
+        "dict",
+        "dir",
+        "divmod",
+        "enumerate",
+        "eval",
+        "exec",
+        "exit",
+        "filter",
+        "float",
+        "format",
+        "frozenset",
+        "getattr",
+        "globals",
+        "hasattr",
+        "hash",
+        "help",
+        "hex",
+        "id",
+        "input",
+        "int",
+        "isinstance",
+        "issubclass",
+        "iter",
+        "len",
+        "license",
+        "list",
+        "locals",
+        "map",
+        "max",
+        "memoryview",
+        "min",
+        "next",
+        "object",
+        "oct",
+        "open",
+        "ord",
+        "pow",
+        "print",
+        "property",
+        "quit",
+        "range",
+        "repr",
+        "reversed",
+        "round",
+        "set",
+        "setattr",
+        "slice",
+        "sorted",
+        "staticmethod",
+        "str",
+        "sum",
+        "super",
+        "tuple",
+        "type",
+        "vars",
+        "zip",
+        "__import__",
+        # 常见方法名（ast.Attribute 产生的 .append .strip .join 等）
+        "append",
+        "strip",
+        "join",
+        "split",
+        "replace",
+        "startswith",
+        "endswith",
+        "get",
+        "items",
+        "keys",
+        "values",
+        "update",
+        "pop",
+        "clear",
+        "copy",
+        "read",
+        "write",
+        "close",
+        "seek",
+        "find",
+        "index",
+        "count",
+        "remove",
+        "insert",
+        "sort",
+        "reverse",
+        "extend",
+        "upper",
+        "lower",
+        "encode",
+        "decode",
+        "search",
+        "match",
+        "sub",
+        "group",
+        "groups",
+        "add",
+        "difference",
+        "intersection",
+        "union",
+        "discard",
+        "__init__",
+        "__str__",
+        "__repr__",
+        "__call__",
+        "__len__",
+        "__getitem__",
+        "__setitem__",
+        "__delitem__",
+        "__iter__",
+        "__next__",
+        "__enter__",
+        "__exit__",
+        "__contains__",
+        "__eq__",
+        "__ne__",
+        "__lt__",
+        "__gt__",
+        "__hash__",
+        # Logging 和 traceback 等标准库常用方法
+        "info",
+        "debug",
+        "warning",
+        "error",
+        "critical",
+        "exception",
+        "log",
+        "print_exc",
+        "format_exc",
+        "getLogger",
+        "basicConfig",
+    }
+)
 
 import logging  # noqa: E402
 
@@ -95,6 +222,7 @@ def _log(msg):
     """打印构建日志到 stdout。"""
     print(f"[explr] {msg}")
 
+
 def _build_ctags(directory, run_dir):
     """生成 ctags JSON 索引"""
     ctags_bin = shutil.which("ctags") or shutil.which("ctags-universal")
@@ -105,13 +233,13 @@ def _build_ctags(directory, run_dir):
     src_dirs = []
     for entry in sorted(os.listdir(directory)):
         epath = os.path.join(directory, entry)
-        if os.path.isdir(epath) and not entry.startswith('.') and entry not in _SKIP_DIRS:
+        if os.path.isdir(epath) and not entry.startswith(".") and entry not in _SKIP_DIRS:
             for _root, _dirs, files in os.walk(epath):
                 # 必须裁剪：否则会深入 node_modules 才发现 .py，把
                 # agent-calendar-viewer 这类「自身无 Python 但依赖里全是」的
                 # 目录误判为源码目录并整体纳入 ctags 扫描
                 _prune_dirs(_dirs)
-                if any(f.endswith('.py') for f in files):
+                if any(f.endswith(".py") for f in files):
                     src_dirs.append(epath)
                     break
 
@@ -124,50 +252,54 @@ def _build_ctags(directory, run_dir):
     # node_modules / build_mini_dist 会被整体递归索引（实测 97 MB ctags.json）
     exclude_args = []
     for _d in sorted(_SKIP_DIRS):
-        exclude_args += [f'--exclude={_d}']
+        exclude_args += [f"--exclude={_d}"]
     try:
         result = subprocess.run(
-            [ctags_bin, '-R', '--languages=Python',
-             '--fields=+nKzS', '--python-kinds=+cfmv', '--output-format=json']
-            + exclude_args + src_dirs,
-            capture_output=True, text=True, encoding='utf-8', errors='replace',
-            timeout=60, cwd=directory
+            [ctags_bin, "-R", "--languages=Python", "--fields=+nKzS", "--python-kinds=+cfmv", "--output-format=json"] + exclude_args + src_dirs,
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            timeout=60,
+            cwd=directory,
         )
     except Exception as e:
         _log(f"⚠ ctags 执行失败: {e}")
         return None, {}
 
-    lines = [l for l in result.stdout.strip().split('\n') if l.strip()]
+    lines = [ln for ln in result.stdout.strip().split("\n") if ln.strip()]
     _log(f"ctags: {len(lines)} 条目")
 
     ctags_path = os.path.join(run_dir, "ctags.json")
-    with open(ctags_path, 'w', encoding='utf-8') as f:
+    with open(ctags_path, "w", encoding="utf-8") as f:
         f.write(result.stdout)
 
     index = {}
     for line in lines:
         try:
             entry = json.loads(line)
-            name = entry.get('name', '')
-            path = entry.get('path', '')
-            line_num = entry.get('line', '')
-            kind = entry.get('kind', '')
+            name = entry.get("name", "")
+            path = entry.get("path", "")
+            line_num = entry.get("line", "")
+            kind = entry.get("kind", "")
             if name:
                 _rel = os.path.relpath(path, directory) if os.path.isabs(path) else path
                 if _is_junk_path(_rel):
                     continue  # 双保险：ctags 若因版本差异未支持 --exclude，此处兜住
                 if name not in index:
                     index[name] = []
-                index[name].append({
-                    'kind': kind,
-                    'path': _rel,
-                    'line': line_num,
-                })
+                index[name].append(
+                    {
+                        "kind": kind,
+                        "path": _rel,
+                        "line": line_num,
+                    }
+                )
         except json.JSONDecodeError:
-            logger.exception('op_failed')
-
+            logger.exception("op_failed")
 
     return ctags_path, index
+
 
 def _build_call_graph(directory):
     """用 AST 分析函数调用图"""
@@ -177,6 +309,7 @@ def _build_call_graph(directory):
 
     class _CallVisitor(ast.NodeVisitor):
         """AST 访问器：收集函数定义、调用关系和类定义。"""
+
         def __init__(self, relpath, defs, calls, classes):
             self.relpath = relpath
             self._defs = defs
@@ -184,7 +317,7 @@ def _build_call_graph(directory):
             self._classes = classes
 
         def visit_FunctionDef(self, node):
-            self._defs[node.name] = {'file': self.relpath, 'line': node.lineno}
+            self._defs[node.name] = {"file": self.relpath, "line": node.lineno}
             called = set()
             for child in ast.walk(node):
                 if isinstance(child, ast.Call):
@@ -200,18 +333,18 @@ def _build_call_graph(directory):
             self.visit_FunctionDef(node)
 
         def visit_ClassDef(self, node):
-            self._classes[node.name] = {'file': self.relpath, 'line': node.lineno}
+            self._classes[node.name] = {"file": self.relpath, "line": node.lineno}
             self.generic_visit(node)
 
     for root, dirs, files in os.walk(directory):
         _prune_dirs(dirs)
         for fname in files:
-            if not fname.endswith('.py'):
+            if not fname.endswith(".py"):
                 continue
             fpath = os.path.join(root, fname)
             relpath = os.path.relpath(fpath, directory)
             try:
-                with open(fpath, encoding='utf-8') as fh:
+                with open(fpath, encoding="utf-8") as fh:
                     source = fh.read()
                 tree = ast.parse(source, filename=relpath)
             except (SyntaxError, UnicodeDecodeError) as e:
@@ -222,6 +355,7 @@ def _build_call_graph(directory):
 
     _log(f"AST: {len(defs)} 函数, {len(classes)} 类, {sum(len(v) for v in calls.values())} 调用边")
     return calls, defs, classes
+
 
 def _build_dot_flow(calls, defs, run_dir):
     """生成关键调用流程 DOT 图"""
@@ -237,11 +371,11 @@ def _build_dot_flow(calls, defs, run_dir):
     top = sorted(callers.items(), key=lambda x: -len(x[1]))[:30]
     {n for n, _ in top}
 
-    dot = ['digraph G {', '  rankdir=TB;', '  node [shape=box, style=filled, fillcolor=lightyellow, fontsize=10];']
+    dot = ["digraph G {", "  rankdir=TB;", "  node [shape=box, style=filled, fillcolor=lightyellow, fontsize=10];"]
     for i, (name, clrs) in enumerate(top):
         count = len(clrs)
-        color = 'lightsalmon' if count > 20 else 'lightyellow'
-        short_name = name[:25] + ('..' if len(name) > 25 else '')
+        color = "lightsalmon" if count > 20 else "lightyellow"
+        short_name = name[:25] + (".." if len(name) > 25 else "")
         dot.append(f'  n{i} [label="{short_name}\\n({count} callers)" fillcolor={color}];')
 
     name_to_id = {n: f"n{i}" for i, (n, _) in enumerate(top)}
@@ -250,17 +384,17 @@ def _build_dot_flow(calls, defs, run_dir):
             continue
         for callee in callees:
             if callee in name_to_id:
-                dot.append(f'  {name_to_id[caller]} -> {name_to_id[callee]};')
+                dot.append(f"  {name_to_id[caller]} -> {name_to_id[callee]};")
 
-    dot.append('}')
+    dot.append("}")
     dot_path = os.path.join(run_dir, "call_flow.dot")
-    with open(dot_path, 'w') as f:
-        f.write('\n'.join(dot))
+    with open(dot_path, "w") as f:
+        f.write("\n".join(dot))
 
     svg_path = os.path.join(run_dir, "call_flow.svg")
-    subprocess.run([dot_bin, '-Tsvg', dot_path, '-o', svg_path],
-                   capture_output=True, timeout=15)
+    subprocess.run([dot_bin, "-Tsvg", dot_path, "-o", svg_path], capture_output=True, timeout=15)
     _log(f"DOT: {dot_path}, {svg_path}")
+
 
 def _build_kb_md(directory, index, calls, defs, classes, run_dir):
     """生成人类可读知识库 Markdown"""
@@ -271,12 +405,12 @@ def _build_kb_md(directory, index, calls, defs, classes, run_dir):
     for root, dirs, files in os.walk(directory):
         _prune_dirs(dirs)
         for fname in files:
-            if not fname.endswith('.py'):
+            if not fname.endswith(".py"):
                 continue
             fpath = os.path.join(root, fname)
             relpath = os.path.relpath(fpath, directory)
             try:
-                with open(fpath, encoding='utf-8') as fh:
+                with open(fpath, encoding="utf-8") as fh:
                     lines = fh.readlines()
             except Exception:
                 continue
@@ -286,20 +420,20 @@ def _build_kb_md(directory, index, calls, defs, classes, run_dir):
             lines_count = len(lines)
             for line in lines:
                 s = line.strip()
-                if s.startswith('class '):
-                    name = s.split('(')[0].replace('class ', '').strip().rstrip(':')
+                if s.startswith("class "):
+                    name = s.split("(")[0].replace("class ", "").strip().rstrip(":")
                     mod_classes.append(name)
-                elif s.startswith('def ') and not s.startswith((' ', '\t')):
-                    name = s.split('(')[0].replace('def ', '').strip()
-                    if not name.startswith('_'):
+                elif s.startswith("def ") and not s.startswith((" ", "\t")):
+                    name = s.split("(")[0].replace("def ", "").strip()
+                    if not name.startswith("_"):
                         mod_funcs.append(name)
 
-            modules[relpath] = {'classes': mod_classes, 'funcs': mod_funcs, 'lines': lines_count}
+            modules[relpath] = {"classes": mod_classes, "funcs": mod_funcs, "lines": lines_count}
 
     kind_counts = defaultdict(int)
     for entries in index.values():
         for e in entries:
-            kind_counts[e['kind']] += 1
+            kind_counts[e["kind"]] += 1
 
     md = f"""# {project_name} 项目知识库
 
@@ -324,8 +458,8 @@ def _build_kb_md(directory, index, calls, defs, classes, run_dir):
 """
     for path in sorted(modules.keys()):
         info = modules[path]
-        cls_str = ', '.join(info['classes'][:3]) or '—'
-        fn_str = ', '.join(info['funcs'][:3]) or '—'
+        cls_str = ", ".join(info["classes"][:3]) or "—"
+        fn_str = ", ".join(info["funcs"][:3]) or "—"
         md += f"| {path} | {info['lines']} | {cls_str} | {fn_str} |\n"
 
     md += """
@@ -340,8 +474,8 @@ def _build_kb_md(directory, index, calls, defs, classes, run_dir):
             callers[callee].append(caller)
     for name, clrs in sorted(callers.items(), key=lambda x: -len(x[1]))[:20]:
         loc = defs.get(name, {})
-        fp = loc.get('file', '?')
-        ln = loc.get('line', '?')
+        fp = loc.get("file", "?")
+        ln = loc.get("line", "?")
         md += f"| `{name}` | {fp}:{ln} | {len(clrs)} |\n"
 
     md += """
@@ -357,9 +491,10 @@ def _build_kb_md(directory, index, calls, defs, classes, run_dir):
 | kb.md | 本文档 |
 """
     kb_path = os.path.join(run_dir, "kb.md")
-    with open(kb_path, 'w', encoding='utf-8') as f:
+    with open(kb_path, "w", encoding="utf-8") as f:
         f.write(md)
     _log(f"KB: {kb_path} ({len(md):,} chars)")
+
 
 def _check_index_stale(directory, run_dir):
     """检查索引是否比源码文件旧。
@@ -374,7 +509,7 @@ def _check_index_stale(directory, run_dir):
         # 跳过隐藏目录和虚拟环境
         _prune_dirs(dirs)
         for f in files:
-            if f.endswith('.py'):
+            if f.endswith(".py"):
                 mtime = os.path.getmtime(os.path.join(root, f))
                 if mtime > max_src_mtime:
                     max_src_mtime = mtime
@@ -398,7 +533,7 @@ def _action_build(directory, force):
             # 新鲜度检查：索引是否比源码旧
             stale = _check_index_stale(directory, run_dir)
             if not stale:
-                return f"✅ 知识库已存在 (更新于 {age/60:.0f} 分钟前)，使用 force=true 强制重建"
+                return f"✅ 知识库已存在 (更新于 {age / 60:.0f} 分钟前)，使用 force=true 强制重建"
             _log("⚠ 检测到源码变更，自动重建索引")
 
     _log(f"🏗 构建项目知识库: {directory}")
@@ -409,20 +544,20 @@ def _action_build(directory, force):
 
     if not index and defs:
         for name, info in defs.items():
-            index[name] = [{'kind': 'function', 'path': info['file'], 'line': info['line']}]
+            index[name] = [{"kind": "function", "path": info["file"], "line": info["line"]}]
         for name, info in classes.items():
             if name not in index:
-                index[name] = [{'kind': 'class', 'path': info['file'], 'line': info['line']}]
+                index[name] = [{"kind": "class", "path": info["file"], "line": info["line"]}]
             else:
-                index[name].append({'kind': 'class', 'path': info['file'], 'line': info['line']})
+                index[name].append({"kind": "class", "path": info["file"], "line": info["line"]})
         _log(f"ctags 回退: AST {len(index)} 符号作为索引")
 
     cg_path = os.path.join(run_dir, "call_graph.json")
-    with open(cg_path, 'w', encoding='utf-8') as f:
-        json.dump({'functions': defs, 'classes': classes, 'calls': calls}, f, indent=2, ensure_ascii=False)
+    with open(cg_path, "w", encoding="utf-8") as f:
+        json.dump({"functions": defs, "classes": classes, "calls": calls}, f, indent=2, ensure_ascii=False)
 
     idx_path = os.path.join(run_dir, "symbol_index.json")
-    with open(idx_path, 'w', encoding='utf-8') as f:
+    with open(idx_path, "w", encoding="utf-8") as f:
         json.dump(index, f, indent=2, ensure_ascii=False)
 
     _build_dot_flow(calls, defs, run_dir)
@@ -431,6 +566,7 @@ def _action_build(directory, force):
     # Build SymbolIndex (SQLite 持久化符号/调用图索引，关键词检索)
     try:
         from tea_agent.lsp.symbol_index import SymbolIndex
+
         si = SymbolIndex(directory)
         si.build_index(force=True)
         si.close()
@@ -448,6 +584,7 @@ def _action_build(directory, force):
     )
     return summary
 
+
 def _action_query(directory, symbol, query_type):
     """查询知识库：symbol/callers/callees/module/semantic 等查询类型。
 
@@ -460,31 +597,31 @@ def _action_query(directory, symbol, query_type):
     idx_path = os.path.join(run_dir, "symbol_index.json")
     cg_path = os.path.join(run_dir, "call_graph.json")
 
-    if query_type == 'module':
+    if query_type == "module":
         kb_path = os.path.join(run_dir, "kb.md")
         if os.path.exists(kb_path):
-            with open(kb_path, encoding='utf-8') as f:
+            with open(kb_path, encoding="utf-8") as f:
                 content = f.read()
             in_table = False
             lines = []
-            for line in content.split('\n'):
-                if '## 模块索引' in line:
+            for line in content.split("\n"):
+                if "## 模块索引" in line:
                     in_table = True
                     continue
-                if in_table and line.startswith('## '):
+                if in_table and line.startswith("## "):
                     break
                 if in_table:
                     lines.append(line)
-            return '\n'.join(lines[:50])
+            return "\n".join(lines[:50])
         return "❌ 无知识库，请先 build"
 
     if not symbol:
         return "❌ query 需要 symbol 参数"
 
-    if query_type == 'symbol':
+    if query_type == "symbol":
         if not os.path.exists(idx_path):
             return "❌ 无索引，请先 build"
-        with open(idx_path, encoding='utf-8') as f:
+        with open(idx_path, encoding="utf-8") as f:
             index = json.load(f)
 
         if symbol in index:
@@ -492,27 +629,28 @@ def _action_query(directory, symbol, query_type):
             parts = [f"## `{symbol}` ({len(entries)} 处定义)"]
             for e in entries[:10]:
                 parts.append(f"- [{e['kind']}] `{e['path']}:{e['line']}`")
-            return '\n'.join(parts)
+            return "\n".join(parts)
         matches = [k for k in index if symbol.lower() in k.lower()]
         if matches:
             if len(matches) == 1:
-                return _action_query(directory, matches[0], 'symbol')
+                return _action_query(directory, matches[0], "symbol")
             return f"未找到 `{symbol}`，相关: {', '.join(f'`{m}`' for m in matches[:15])}"
         return f"❌ 未找到 `{symbol}`"
 
     if not os.path.exists(cg_path):
         return "❌ 无调用图，请先 build"
-    with open(cg_path, encoding='utf-8') as f:
+    with open(cg_path, encoding="utf-8") as f:
         cg = json.load(f)
 
-    calls = cg.get('calls', {})
-    defs = cg.get('functions', {})
+    calls = cg.get("calls", {})
+    defs = cg.get("functions", {})
 
-    if query_type == 'semantic':
+    if query_type == "semantic":
         # 向量语义搜索已下线；此分支保留为**关键词模糊匹配**（向后兼容老调用，
         # 避免模型传 semantic 时报「未知类型」）。精确按名查请用 symbol。
         try:
             from tea_agent.lsp.symbol_index import SymbolIndex
+
             si = SymbolIndex(directory)
             results = si.search_natural(symbol, top_k=10)
             si.close()
@@ -520,14 +658,14 @@ def _action_query(directory, symbol, query_type):
                 return f"关键词搜索无结果: {symbol}（可改用 query_type=symbol 精确查找）"
             parts = [f"## 关键词搜索: {symbol}"]
             for r in results:
-                p = r.get('parent', '')
-                name = f'{p}.{r["name"]}' if p else r['name']
+                p = r.get("parent", "")
+                name = f"{p}.{r['name']}" if p else r["name"]
                 parts.append(f"- [score={r['similarity']:.3f}] {name} ({r['file_path']}:{r['line']})")
             return chr(10).join(parts)
         except Exception as e:
             return f"关键词搜索失败: {e}"
 
-    if query_type == 'callers':
+    if query_type == "callers":
         callers = defaultdict(list)
         for caller, callees in calls.items():
             for callee in callees:
@@ -535,33 +673,32 @@ def _action_query(directory, symbol, query_type):
         if symbol in callers:
             project_callers = [c for c in callers[symbol] if c not in _PYTHON_BUILTINS]
             builtin_count = len(callers[symbol]) - len(project_callers)
-            parts = [f"## `{symbol}` 被 {len(project_callers)} 个项目函数调用" +
-                     (f" (+{builtin_count} 内置)" if builtin_count > 0 else "") + ":"]
+            parts = [f"## `{symbol}` 被 {len(project_callers)} 个项目函数调用" + (f" (+{builtin_count} 内置)" if builtin_count > 0 else "") + ":"]
             if not project_callers:
                 parts.append("_(无项目内调用者)_")
             for c in sorted(project_callers)[:30]:
-                loc = defs.get(c, {}).get('file', '?')
-                ln = defs.get(c, {}).get('line', '?')
+                loc = defs.get(c, {}).get("file", "?")
+                ln = defs.get(c, {}).get("line", "?")
                 parts.append(f"- `{c}` ({loc}:{ln})")
-            return '\n'.join(parts)
+            return "\n".join(parts)
         return f"❌ `{symbol}` 无调用者记录"
 
-    if query_type == 'callees':
+    if query_type == "callees":
         if symbol in calls:
             project_callees = [c for c in calls[symbol] if c not in _PYTHON_BUILTINS]
             builtin_count = len(calls[symbol]) - len(project_callees)
-            parts = [f"## `{symbol}` 调用 {len(project_callees)} 个项目函数" +
-                     (f" (+{builtin_count} 内置)" if builtin_count > 0 else "") + ":"]
+            parts = [f"## `{symbol}` 调用 {len(project_callees)} 个项目函数" + (f" (+{builtin_count} 内置)" if builtin_count > 0 else "") + ":"]
             if not project_callees:
                 parts.append("_(无项目内调用)_")
             for c in sorted(project_callees)[:30]:
-                loc = defs.get(c, {}).get('file', '?')
-                ln = defs.get(c, {}).get('line', '?')
+                loc = defs.get(c, {}).get("file", "?")
+                ln = defs.get(c, {}).get("line", "?")
                 parts.append(f"- `{c}` ({loc}:{ln})")
-            return '\n'.join(parts)
+            return "\n".join(parts)
         return f"❌ `{symbol}` 无被调用记录"
 
     return "❌ 未知 query_type"
+
 
 def _action_generate_docs(directory):
     """生成结构化项目文档（codegen-doc 风格）。
@@ -589,14 +726,14 @@ def _action_generate_docs(directory):
         _action_build(directory, force=True)
 
     # 加载数据
-    with open(cg_path, encoding='utf-8') as f:
+    with open(cg_path, encoding="utf-8") as f:
         cg = json.load(f)
-    calls = cg.get('calls', {})
-    defs = cg.get('functions', {})
-    classes = cg.get('classes', {})
+    calls = cg.get("calls", {})
+    defs = cg.get("functions", {})
+    classes = cg.get("classes", {})
 
     if os.path.exists(idx_path):
-        with open(idx_path, encoding='utf-8') as f:
+        with open(idx_path, encoding="utf-8") as f:
             index = json.load(f)
     else:
         index = {}
@@ -620,11 +757,11 @@ def _action_generate_docs(directory):
     module_api = defaultdict(lambda: {"classes": [], "funcs": []})
     for sym, entries in index.items():
         for e in entries:
-            path = e.get('path', '')
-            kind = e.get('kind', '')
-            line = e.get('line', '')
+            path = e.get("path", "")
+            kind = e.get("kind", "")
+            line = e.get("line", "")
             module = os.path.dirname(path) or "root"
-            if 'class' in kind or kind == 'member':
+            if "class" in kind or kind == "member":
                 module_api[module]["classes"].append((sym, path, line, kind))
             else:
                 module_api[module]["funcs"].append((sym, path, line, kind))
@@ -674,8 +811,8 @@ def _action_generate_docs(directory):
         if len(api_lines) > 2000:
             break
 
-    with open(os.path.join(doc_dir, "API参考.md"), 'w', encoding='utf-8') as f:
-        f.write('\n'.join(api_lines))
+    with open(os.path.join(doc_dir, "API参考.md"), "w", encoding="utf-8") as f:
+        f.write("\n".join(api_lines))
 
     # ── 2. 模块概览.md ──
     _log("生成 模块概览.md ...")
@@ -688,37 +825,37 @@ def _action_generate_docs(directory):
     # 收集模块级统计
     mod_stats = defaultdict(lambda: {"lines": 0, "funcs": 0, "classes": 0, "imports": set()})
     for root, dirs, files in os.walk(directory):
-        _prune_dirs(dirs, extra=('docs',))
+        _prune_dirs(dirs, extra=("docs",))
         for fname in files:
-            if not fname.endswith('.py'):
+            if not fname.endswith(".py"):
                 continue
             fpath = os.path.join(root, fname)
-            relpath = os.path.relpath(fpath, directory).replace('\\', '/')
+            relpath = os.path.relpath(fpath, directory).replace("\\", "/")
             try:
-                with open(fpath, encoding='utf-8') as fh:
+                with open(fpath, encoding="utf-8") as fh:
                     src = fh.readlines()
             except Exception:
                 continue
             mod_stats[relpath]["lines"] = len(src)
             for line in src:
                 s = line.strip()
-                if s.startswith('class '):
+                if s.startswith("class "):
                     mod_stats[relpath]["classes"] += 1
-                elif s.startswith('def ') and not s.startswith((' ', '\t')):
+                elif s.startswith("def ") and not s.startswith((" ", "\t")):
                     mod_stats[relpath]["funcs"] += 1
-                elif s.startswith(('import ', 'from ')):
+                elif s.startswith(("import ", "from ")):
                     mod_stats[relpath]["imports"].add(s)
 
     mod_lines.append("| 模块 | 行数 | 类 | 函数 | 导入 |")
     mod_lines.append("|------|:----:|:---:|:----:|------|")
     for mp in sorted(mod_stats.keys()):
         s = mod_stats[mp]
-        imps = ', '.join(sorted(s["imports"])[:3]) or "—"
+        imps = ", ".join(sorted(s["imports"])[:3]) or "—"
         mod_lines.append(f"| `{mp}` | {s['lines']} | {s['classes']} | {s['funcs']} | {imps[:60]} |")
 
     mod_lines.append("")
-    with open(os.path.join(doc_dir, "模块概览.md"), 'w', encoding='utf-8') as f:
-        f.write('\n'.join(mod_lines))
+    with open(os.path.join(doc_dir, "模块概览.md"), "w", encoding="utf-8") as f:
+        f.write("\n".join(mod_lines))
 
     # ── 3. 调用图分析.md ──
     _log("生成 调用图分析.md ...")
@@ -740,8 +877,8 @@ def _action_generate_docs(directory):
     top_callees = sorted(callers_map.items(), key=lambda x: -len(x[1]))[:20]
     for name, clrs in top_callees:
         loc = defs.get(name, {})
-        fp = loc.get('file', '?')
-        ln = loc.get('line', '?')
+        fp = loc.get("file", "?")
+        ln = loc.get("line", "?")
         call_lines.append(f"| `{name}` | {len(clrs)} | `{fp}:{ln}` |")
 
     call_lines.append("")
@@ -752,13 +889,13 @@ def _action_generate_docs(directory):
     top_callers = sorted(calls.items(), key=lambda x: -len(x[1]))[:20]
     for name, callees in top_callers:
         loc = defs.get(name, {})
-        fp = loc.get('file', '?')
-        ln = loc.get('line', '?')
+        fp = loc.get("file", "?")
+        ln = loc.get("line", "?")
         call_lines.append(f"| `{name}` | {len(callees)} | `{fp}:{ln}` |")
 
     call_lines.append("")
-    with open(os.path.join(doc_dir, "调用图分析.md"), 'w', encoding='utf-8') as f:
-        f.write('\n'.join(call_lines))
+    with open(os.path.join(doc_dir, "调用图分析.md"), "w", encoding="utf-8") as f:
+        f.write("\n".join(call_lines))
 
     # ── 4. 架构总览.md ──
     _log("生成 架构总览.md ...")
@@ -790,7 +927,7 @@ def _action_generate_docs(directory):
             entry_points.append((name, callee_count, caller_count))
     for name, cc, cr in sorted(entry_points, key=lambda x: -x[1])[:10]:
         loc = defs.get(name, {})
-        arch_lines.append(f"- **`{name}`** → 调用 {cc} 个函数，被 {cr} 个调用 (`{loc.get('file','?')}:{loc.get('line','?')}`)")
+        arch_lines.append(f"- **`{name}`** → 调用 {cc} 个函数，被 {cr} 个调用 (`{loc.get('file', '?')}:{loc.get('line', '?')}`)")
 
     arch_lines.append("")
     arch_lines.append("## 生成文档")
@@ -803,8 +940,8 @@ def _action_generate_docs(directory):
     arch_lines.append("| [架构总览.md](架构总览.md) | 本文档 |")
     arch_lines.append("")
 
-    with open(os.path.join(doc_dir, "架构总览.md"), 'w', encoding='utf-8') as f:
-        f.write('\n'.join(arch_lines))
+    with open(os.path.join(doc_dir, "架构总览.md"), "w", encoding="utf-8") as f:
+        f.write("\n".join(arch_lines))
 
     file_count = 4
     return (
@@ -837,16 +974,17 @@ def _action_status(directory):
     idx_path = os.path.join(run_dir, "symbol_index.json")
     cg_path = os.path.join(run_dir, "call_graph.json")
     if os.path.exists(idx_path):
-        with open(idx_path, encoding='utf-8') as f:
+        with open(idx_path, encoding="utf-8") as f:
             index = json.load(f)
         lines.append(f"\n🏷 {len(index)} 符号")
     if os.path.exists(cg_path):
-        with open(cg_path, encoding='utf-8') as f:
+        with open(cg_path, encoding="utf-8") as f:
             cg = json.load(f)
         lines.append(f"🔗 {len(cg.get('calls', {}))} 函数有调用关系, {sum(len(v) for v in cg.get('calls', {}).values())} 调用边")
 
     lines.append(f"\n💾 总计 {total:,} bytes")
-    return '\n'.join(lines)
+    return "\n".join(lines)
+
 
 def _extract_arch_context(directory, symbol=None):
     """提取项目或符号的架构上下文，辅助自进化决策"""
@@ -857,12 +995,12 @@ def _extract_arch_context(directory, symbol=None):
     if not os.path.exists(cg_path):
         return "❌ 无调用图索引，请先 build"
 
-    with open(cg_path, encoding='utf-8') as f:
+    with open(cg_path, encoding="utf-8") as f:
         cg = json.load(f)
 
-    calls = cg.get('calls', {})
-    defs = cg.get('functions', {})
-    classes = cg.get('classes', {})
+    calls = cg.get("calls", {})
+    defs = cg.get("functions", {})
+    classes = cg.get("classes", {})
 
     # 1. 项目级上下文
     if not symbol:
@@ -896,10 +1034,12 @@ def _extract_arch_context(directory, symbol=None):
 
     return "\n".join(lines)
 
+
 # @2026-05-19 gen by claude, 影响分析 — 基于 tree-sitter 的仓库级上下文
 def _action_impact(directory, symbol, filepath=None):
     """影响分析：修改 symbol 会影响哪些代码？"""
     from tea_agent.lsp.ts_analyzer import impact_analysis
+
     directory = os.path.abspath(directory)
 
     # 如果没提供 filepath，尝试从索引中查找
@@ -907,17 +1047,17 @@ def _action_impact(directory, symbol, filepath=None):
         run_dir = os.path.join(directory, _RUN_DIR)
         idx_path = os.path.join(run_dir, "symbol_index.json")
         if os.path.exists(idx_path):
-            with open(idx_path, encoding='utf-8') as f:
+            with open(idx_path, encoding="utf-8") as f:
                 index = json.load(f)
             if symbol in index:
                 entries = index[symbol]
-                filepath = os.path.join(directory, entries[0]['path'])
+                filepath = os.path.join(directory, entries[0]["path"])
             else:
                 # 模糊匹配
                 matches = [k for k in index if symbol.lower() in k.lower()]
                 if len(matches) == 1:
                     symbol = matches[0]
-                    filepath = os.path.join(directory, index[symbol][0]['path'])
+                    filepath = os.path.join(directory, index[symbol][0]["path"])
 
     if not filepath or not os.path.isfile(filepath):
         return f"❌ 无法定位符号 `{symbol}` 的文件，请提供 filepath 参数"
@@ -945,7 +1085,7 @@ def _action_impact(directory, symbol, filepath=None):
     if callers:
         lines.append(f"### 👆 直接调用者 ({len(callers)})")
         for c in callers[:15]:
-            fname = os.path.relpath(c['file'], directory) if c.get('file') else '?'
+            fname = os.path.relpath(c["file"], directory) if c.get("file") else "?"
             lines.append(f"- `{c.get('name', '?')}` → `{fname}:{c.get('line', '?')}`")
         lines.append("")
 
@@ -954,7 +1094,7 @@ def _action_impact(directory, symbol, filepath=None):
     if indirect:
         lines.append(f"### 🔄 间接影响 ({len(indirect)})")
         for c in indirect[:10]:
-            fname = os.path.relpath(c['file'], directory) if c.get('file') else '?'
+            fname = os.path.relpath(c["file"], directory) if c.get("file") else "?"
             lines.append(f"- `{c.get('name', '?')}` → `{fname}:{c.get('line', '?')}`")
         lines.append("")
 
@@ -966,12 +1106,14 @@ def _action_impact(directory, symbol, filepath=None):
         lines.append("")
 
     lines.append(f"---\n> {result.get('hint', '')}")
-    return '\n'.join(lines)
+    return "\n".join(lines)
+
 
 # @2026-05-19 gen by claude, 模块依赖图分析
 def _action_deps(directory):
     """构建项目模块依赖图，检测循环依赖和孤立模块"""
     from tea_agent.lsp.ts_analyzer import build_dependency_graph
+
     directory = os.path.abspath(directory)
     result = build_dependency_graph(directory)
 
@@ -997,9 +1139,7 @@ def _action_deps(directory):
         lines.append("")
 
     # Top importers
-    top = sorted(result["modules"].items(),
-                 key=lambda x: len(x[1].get("imported_by", [])),
-                 reverse=True)[:10]
+    top = sorted(result["modules"].items(), key=lambda x: len(x[1].get("imported_by", [])), reverse=True)[:10]
     if top:
         lines.append("### 📌 最被依赖的模块 (Top 10)")
         for mod, info in top:
@@ -1009,11 +1149,14 @@ def _action_deps(directory):
         lines.append("")
 
     lines.append(f"---\n> {result.get('hint', '')}")
-    return '\n'.join(lines)
+    return "\n".join(lines)
+
 
 def toolkit_explr(action="build", directory=".", symbol=None, query_type="symbol", force="false", filepath=None):
     """项目知识库构建与查询。action=build 构建索引，action=generate_docs 生成文档，action=query 查询符号/调用者/影响分析/依赖图。"""
-    logger.info(f"toolkit_explr called: action={action!r}, directory={repr(directory)[:80]}, symbol={symbol!r}, query_type={query_type!r}, force={force!r}")
+    logger.info(
+        f"toolkit_explr called: action={action!r}, directory={repr(directory)[:80]}, symbol={symbol!r}, query_type={query_type!r}, force={force!r}"
+    )
     force_bool = force in ("true", "True", "1")
     if action == "build":
         return _action_build(directory, force_bool)
@@ -1031,7 +1174,35 @@ def toolkit_explr(action="build", directory=".", symbol=None, query_type="symbol
         return _action_status(directory)
     return f"❌ 未知 action: {action}"
 
+
 # @2026-05-19 gen by claude, 新增 impact(影响分析) / deps(依赖图) 查询类型 + filepath 参数
 def meta_toolkit_explr() -> dict:
     """Meta toolkit explr."""
-    return {"type": "function", "function": {"name": "toolkit_explr", "description": "项目知识库构建与查询。action=build 构建符号索引+AST调用图+流程图+kb.md；action=generate_docs 生成结构化项目文档到docs/；action=query 查询符号位置/调用者/被调用者/影响分析/依赖图；action=status 查看知识库状态。默认存储于当前目录 .tea_agent_run/。", "parameters": {"type": "object", "properties": {"action": {"type": "string", "enum": ["build", "generate_docs", "query", "status"], "description": "build/generate_docs/query/status"}, "directory": {"type": "string", "description": "项目目录，默认当前目录", "default": "."}, "symbol": {"type": "string", "description": "要查询的符号名"}, "query_type": {"type": "string", "enum": ["symbol", "callers", "callees", "module", "semantic", "arch_context", "impact", "deps"], "description": "查询类型：symbol=符号定位, callers=谁调此函数, callees=此函数调谁, module=模块概览, semantic=关键词模糊匹配（向量语义已下线）, arch_context=架构上下文, impact=影响分析, deps=模块依赖图", "default": "symbol"}, "force": {"type": "string", "enum": ["true", "false"], "description": "true=强制重建，忽略已有索引", "default": "false"}, "filepath": {"type": "string", "description": "符号所在的文件路径"}}, "required": ["action"]}}}
+    return {
+        "type": "function",
+        "function": {
+            "name": "toolkit_explr",
+            "description": "项目知识库构建与查询。action=build 构建符号索引+AST调用图+流程图+kb.md；action=generate_docs 生成结构化项目文档到docs/；action=query 查询符号位置/调用者/被调用者/影响分析/依赖图；action=status 查看知识库状态。默认存储于当前目录 .tea_agent_run/。",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "action": {
+                        "type": "string",
+                        "enum": ["build", "generate_docs", "query", "status"],
+                        "description": "build/generate_docs/query/status",
+                    },
+                    "directory": {"type": "string", "description": "项目目录，默认当前目录", "default": "."},
+                    "symbol": {"type": "string", "description": "要查询的符号名"},
+                    "query_type": {
+                        "type": "string",
+                        "enum": ["symbol", "callers", "callees", "module", "semantic", "arch_context", "impact", "deps"],
+                        "description": "查询类型：symbol=符号定位, callers=谁调此函数, callees=此函数调谁, module=模块概览, semantic=关键词模糊匹配（向量语义已下线）, arch_context=架构上下文, impact=影响分析, deps=模块依赖图",
+                        "default": "symbol",
+                    },
+                    "force": {"type": "string", "enum": ["true", "false"], "description": "true=强制重建，忽略已有索引", "default": "false"},
+                    "filepath": {"type": "string", "description": "符号所在的文件路径"},
+                },
+                "required": ["action"],
+            },
+        },
+    }

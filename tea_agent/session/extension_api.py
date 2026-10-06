@@ -43,6 +43,7 @@ logger = logging.getLogger("session.extension_api")
 
 # ═══ 事件系统 ═══════════════════════════════════════════
 
+
 class EventBus:
     """事件总线 — 管理事件的注册与触发。
 
@@ -66,10 +67,12 @@ class EventBus:
         """
         if event not in self._handlers:
             self._handlers[event] = []
-        self._handlers[event].append({
-            "handler": handler,
-            "priority": priority,
-        })
+        self._handlers[event].append(
+            {
+                "handler": handler,
+                "priority": priority,
+            }
+        )
         # 按优先级降序排列
         self._handlers[event].sort(key=lambda h: h["priority"], reverse=True)
         logger.debug(f"📡 注册事件处理器: {event}")
@@ -86,10 +89,7 @@ class EventBus:
         if handler is None:
             del self._handlers[event]
         else:
-            self._handlers[event] = [
-                h for h in self._handlers[event]
-                if h["handler"] != handler
-            ]
+            self._handlers[event] = [h for h in self._handlers[event] if h["handler"] != handler]
 
     def emit(self, event: str, context: Any = None, **data) -> list[Any]:
         """触发同步事件。
@@ -138,18 +138,18 @@ class EventBus:
 
 # 预定义事件列表
 EVENTS = [
-    "session_start",          # 会话开始
-    "session_shutdown",       # 会话关闭
-    "before_tool_call",       # 工具调用前（可拦截）
-    "after_tool_call",        # 工具调用后
-    "before_llm_call",        # LLM 调用前
-    "after_llm_call",         # LLM 调用后
-    "message_received",       # 收到用户消息
-    "message_sent",           # 发送助理消息
-    "tool_result",            # 工具返回结果
-    "error_occurred",         # 发生错误
-    "extension_loaded",       # 扩展加载完成
-    "extension_unloaded",     # 扩展卸载
+    "session_start",  # 会话开始
+    "session_shutdown",  # 会话关闭
+    "before_tool_call",  # 工具调用前（可拦截）
+    "after_tool_call",  # 工具调用后
+    "before_llm_call",  # LLM 调用前
+    "after_llm_call",  # LLM 调用后
+    "message_received",  # 收到用户消息
+    "message_sent",  # 发送助理消息
+    "tool_result",  # 工具返回结果
+    "error_occurred",  # 发生错误
+    "extension_loaded",  # 扩展加载完成
+    "extension_unloaded",  # 扩展卸载
 ]
 
 
@@ -305,6 +305,7 @@ class ExtensionLoader:
         # 系统级
         try:
             from tea_agent import __file__ as ta_file
+
             sys_ext = Path(ta_file).parent / "extensions"
             if sys_ext.exists():
                 paths.append(sys_ext)
@@ -350,9 +351,7 @@ class ExtensionLoader:
 
         try:
             # 动态导入模块
-            spec = importlib.util.spec_from_file_location(
-                f"tea_agent_ext_{ext_name}", filepath
-            )
+            spec = importlib.util.spec_from_file_location(f"tea_agent_ext_{ext_name}", filepath)
             if spec is None or spec.loader is None:
                 logger.warning(f"加载扩展失败: {filepath} (spec is None)")
                 return None
@@ -452,6 +451,7 @@ class ExtensionLoader:
 
 # ═══ 生命周期钩子（集成到 Agent） ════════════════════════
 
+
 class LifecycleHooks:
     """生命周期钩子 — 将 EventBus 集成到 Agent 的关键路径。
 
@@ -478,8 +478,7 @@ class LifecycleHooks:
         Returns:
             None 或 {"block": True, "reason": "..."} 表示拦截
         """
-        results = self.event_bus.emit("before_tool_call", None,
-                                       tool_name=tool_name, args=args)
+        results = self.event_bus.emit("before_tool_call", None, tool_name=tool_name, args=args)
         for r in results:
             if isinstance(r, dict) and r.get("block"):
                 return r
@@ -487,8 +486,7 @@ class LifecycleHooks:
 
     def after_tool_call(self, tool_name: str, args: dict, result: str):
         """工具调用后触发。"""
-        return self.event_bus.emit("after_tool_call", None,
-                                    tool_name=tool_name, args=args, result=result)
+        return self.event_bus.emit("after_tool_call", None, tool_name=tool_name, args=args, result=result)
 
     def on_message_received(self, content: str):
         """收到用户消息时触发。"""

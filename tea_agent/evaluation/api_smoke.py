@@ -122,8 +122,7 @@ def _value_for(pname: str, ann, pool: dict):
         return []
     if "dict" in low or "params" in low or "usage" in low:
         return {}
-    if any(k in low for k in ("title", "name", "content", "msg", "text", "query",
-                              "prompt", "summary", "path", "cmd", "command", "key")):
+    if any(k in low for k in ("title", "name", "content", "msg", "text", "query", "prompt", "summary", "path", "cmd", "command", "key")):
         return "smoke"
     return None
 
@@ -169,15 +168,14 @@ def smoke(entries: list, pool: dict | None = None) -> Result:
             # 合法拒绝：入口通了，只是最小入参不是有效业务输入
             logger.debug("api_smoke: %s 拒绝最小入参 %s", e.label, type(ex).__name__)
         except FATAL_EXCS as ex:
-            res.failures.append({"label": e.label, "exc": type(ex).__name__,
-                                 "msg": str(ex)[:200]})
+            res.failures.append({"label": e.label, "exc": type(ex).__name__, "msg": str(ex)[:200]})
         except Exception as ex:  # noqa: BLE001 — 归入待审阅，不直接判失败
-            res.unexpected.append({"label": e.label, "exc": type(ex).__name__,
-                                   "msg": str(ex)[:200]})
+            res.unexpected.append({"label": e.label, "exc": type(ex).__name__, "msg": str(ex)[:200]})
     return res
 
 
 # ── 入口发现 ────────────────────────────────────────────────────────
+
 
 def discover_public() -> list:
     """包公开名（`tea_agent.__all__`）—— 解析本身即验证公开契约。"""
@@ -192,8 +190,7 @@ def discover_public() -> list:
         if obj is _MISSING:
             # 解析失败：构造一个「调用即抛 ImportError」的入口，使公开契约破损
             # 走与其它失败相同的报告通道（kind=call 保证它会被实际调用）
-            out.append(Entry(f"tea_agent.{name}", _raise(ImportError(
-                f"__all__ 声明但运行时不可用: {name}")), "call"))
+            out.append(Entry(f"tea_agent.{name}", _raise(ImportError(f"__all__ 声明但运行时不可用: {name}")), "call"))
         else:
             out.append(Entry(f"tea_agent.{name}", obj, "resolve"))
     return out
@@ -201,8 +198,10 @@ def discover_public() -> list:
 
 def _raise(ex):
     """构造一个「调用即抛既定异常」的入口，用于把解析失败纳入同一报告。"""
+
     def _fn(*_a, **_k):
         raise ex
+
     return _fn
 
 

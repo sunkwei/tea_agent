@@ -80,7 +80,7 @@ def parse_image_ref(value) -> int | None:
     if isinstance(value, str):
         if not value.startswith(IMAGE_REF_PREFIX):
             return None
-        tail = value[len(IMAGE_REF_PREFIX):].strip()
+        tail = value[len(IMAGE_REF_PREFIX) :].strip()
         if tail.isdigit() and int(tail) > 0:
             return int(tail)
     return None
@@ -110,7 +110,7 @@ def parse_data_url(value: str) -> tuple[str, bytes | None]:
         header, _, payload = value.partition(",")
         if not payload:
             return "image/png", None
-        mime = header[len("data:"):].split(";")[0].strip() or "image/png"
+        mime = header[len("data:") :].split(";")[0].strip() or "image/png"
         if "base64" not in header:
             # 非 base64（如 URL 编码）形态本项目不产出，按解析失败处理
             return mime, None

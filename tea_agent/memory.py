@@ -10,10 +10,10 @@ import re
 logger = logging.getLogger("MemoryManager")
 
 # 优先级常量
-PRIORITY_CRITICAL = 0   # 有效指令，必须遵循
-PRIORITY_HIGH = 1       # 用户偏好、项目关键决策
-PRIORITY_MEDIUM = 2     # 经验教训、工具使用技巧
-PRIORITY_LOW = 3        # 一般参考信息
+PRIORITY_CRITICAL = 0  # 有效指令，必须遵循
+PRIORITY_HIGH = 1  # 用户偏好、项目关键决策
+PRIORITY_MEDIUM = 2  # 经验教训、工具使用技巧
+PRIORITY_LOW = 3  # 一般参考信息
 
 PRIORITY_LABELS = {
     0: "CRITICAL",
@@ -24,9 +24,9 @@ PRIORITY_LABELS = {
 
 MAX_INJECT = 30  # 每次会话注入上限
 MAX_CRITICAL_INJECT = 10  # CRITICAL 注入上限，超出留给其他优先级
-MIN_HIGH_INJECT = 3   # HIGH 保底
+MIN_HIGH_INJECT = 3  # HIGH 保底
 MIN_MEDIUM_INJECT = 2  # MEDIUM 保底
-MIN_LOW_INJECT = 1    # LOW 保底（至少1条）
+MIN_LOW_INJECT = 1  # LOW 保底（至少1条）
 
 # 字符预算：注入记忆总字符数上限，防止记忆挤占上下文窗口。
 # 长记忆占预算多 → 实际条数自动减少；短记忆 → 条数增多（动态条数效果）。
@@ -37,14 +37,15 @@ LOW_RELEVANCE_THRESHOLD = 0.15
 
 # 年龄衰减阈值（天）— 基础值，会被动态遗忘机制调整
 # 动态调整范围：基础值 × [0.3, 3.0]
-_BASE_CRITICAL_DEGRADE_DAYS = 30   # CRITICAL → HIGH
-_BASE_HIGH_DEGRADE_DAYS = 60       # HIGH → MEDIUM
-_BASE_MEDIUM_DEGRADE_DAYS = 90     # MEDIUM → LOW
+_BASE_CRITICAL_DEGRADE_DAYS = 30  # CRITICAL → HIGH
+_BASE_HIGH_DEGRADE_DAYS = 60  # HIGH → MEDIUM
+_BASE_MEDIUM_DEGRADE_DAYS = 90  # MEDIUM → LOW
 
 # 当前实际使用的阈值（动态调整后）
 CRITICAL_DEGRADE_DAYS = 30
 HIGH_DEGRADE_DAYS = 60
 MEDIUM_DEGRADE_DAYS = 90
+
 
 class MemoryManager:
     """记忆管理器：选择、格式化、提取"""
@@ -113,11 +114,7 @@ class MemoryManager:
 
         # 1. CRITICAL 入选（上限 MAX_CRITICAL_INJECT, FIFO取最新），字符预算豁免
         critical_slots = min(limit, MAX_CRITICAL_INJECT)
-        selected: list[tuple[float, dict]] = [
-            (1e9, m) for m in (
-                critical[-critical_slots:] if len(critical) > critical_slots else list(critical)
-            )
-        ]
+        selected: list[tuple[float, dict]] = [(1e9, m) for m in (critical[-critical_slots:] if len(critical) > critical_slots else list(critical))]
 
         # 2. 非 CRITICAL 打分排序（关键词相关性 + 重要度/时效/优先级）
         others = high + medium + low
@@ -237,7 +234,7 @@ class MemoryManager:
         # 中文：对每个连续汉字段做相邻字 bigram
         for run in re.findall(r"[\u4e00-\u9fff]+", text):
             for i in range(len(run) - 1):
-                keywords.add(run[i:i + 2])
+                keywords.add(run[i : i + 2])
         # 英文单词（3 字母以上）
         keywords.update(w.lower() for w in re.findall(r"[a-zA-Z]{3,}", text))
         return keywords
@@ -254,13 +251,14 @@ class MemoryManager:
         - 超过90天或从未访问: 0.3
         """
         from datetime import datetime, timezone
+
         last = memory.get("last_accessed_at")
         if not last:
             return 0.3  # 从未访问，给低分
         try:
             # 兼容 SQLite 格式 'YYYY-MM-DD HH:MM:SS' 和 ISO 格式
             if isinstance(last, str):
-                last_dt = datetime.strptime(last, '%Y-%m-%d %H:%M:%S') if ' ' in last and 'T' not in last else datetime.fromisoformat(last)
+                last_dt = datetime.strptime(last, "%Y-%m-%d %H:%M:%S") if " " in last and "T" not in last else datetime.fromisoformat(last)
             else:
                 return 0.3
             # 确保 naive datetime 可比较
@@ -286,7 +284,6 @@ class MemoryManager:
             except Exception as e:
                 logger.exception(f"touch_memory #{m.get('id')} 失败: {e}")
 
-
     # ------------------------------------------------------------------
     # 优先级自动调整
     # ------------------------------------------------------------------
@@ -294,7 +291,6 @@ class MemoryManager:
     # ------------------------------------------------------------------
     # 动态遗忘：根据记忆插入频率调整衰减阈值
     # ------------------------------------------------------------------
-
 
     def _update_dynamic_thresholds(self):
         """
@@ -314,6 +310,7 @@ class MemoryManager:
 
         try:
             from datetime import datetime, timedelta
+
             now = datetime.now()
 
             # 查询不同时间窗口的记忆数量
@@ -321,10 +318,9 @@ class MemoryManager:
             counts = {}
             c = self.storage.conn.cursor()
             for days in windows:
-                since = (now - timedelta(days=days)).strftime('%Y-%m-%d %H:%M:%S')
+                since = (now - timedelta(days=days)).strftime("%Y-%m-%d %H:%M:%S")
                 c.execute(
-                    "SELECT COUNT(*) FROM memories "
-                    "WHERE is_active = 1 AND created_at >= ?",
+                    "SELECT COUNT(*) FROM memories WHERE is_active = 1 AND created_at >= ?",
                     (since,),
                 )
                 counts[days] = c.fetchone()[0]
@@ -390,6 +386,7 @@ class MemoryManager:
             调整的记忆条数
         """
         from datetime import datetime
+
         now = datetime.now()
 
         # 先根据插入频率动态调整阈值
@@ -432,11 +429,7 @@ class MemoryManager:
             if new_priority is not None:
                 self.storage.update_memory(m["id"], priority=new_priority)
                 adjusted += 1
-                logger.info(
-                    f"年龄衰减: #{m['id']} priority "
-                    f"{PRIORITY_LABELS[old_priority]}→{PRIORITY_LABELS[new_priority]} "
-                    f"(年龄={days}天)"
-                )
+                logger.info(f"年龄衰减: #{m['id']} priority {PRIORITY_LABELS[old_priority]}→{PRIORITY_LABELS[new_priority]} (年龄={days}天)")
 
         if adjusted:
             logger.info(f"年龄衰减完成: {adjusted} 条记忆降级")
@@ -460,17 +453,11 @@ class MemoryManager:
         if not memories:
             return ""
 
-        lines = [
-            f"[系统记忆 — 以下为需要遵循的有效信息和规则，共 {len(memories)} 条]",
-            ""
-        ]
+        lines = [f"[系统记忆 — 以下为需要遵循的有效信息和规则，共 {len(memories)} 条]", ""]
 
         for m in memories:
             prefix = MemoryManager._prefix_for(m)
-            lines.append("{prefix} {content}".format(
-                prefix=prefix,
-                content=m["content"]
-            ))
+            lines.append("{prefix} {content}".format(prefix=prefix, content=m["content"]))
 
         return "\n".join(lines)
 
@@ -525,7 +512,7 @@ importance 评分：
         """构建记忆提取的 API 消息列表"""
         return [
             {"role": "system", "content": self.EXTRACTION_SYSTEM_PROMPT},
-            {"role": "user", "content": f"请从以下对话中提取值得保留的记忆：\n\n{conversations_text}"}
+            {"role": "user", "content": f"请从以下对话中提取值得保留的记忆：\n\n{conversations_text}"},
         ]
 
     @staticmethod
@@ -557,11 +544,10 @@ importance 评分：
                     if key in data and isinstance(data[key], list):
                         return data[key]
         except (json.JSONDecodeError, ValueError):
-            logger.exception('op_failed')
-
+            logger.exception("op_failed")
 
         # 2. 处理 markdown 代码块
-        code_block_pattern = r'```(?:json)?\s*\n?(.*?)\n?\s*```'
+        code_block_pattern = r"```(?:json)?\s*\n?(.*?)\n?\s*```"
         matches = re.findall(code_block_pattern, text, re.DOTALL)
         for match in matches:
             try:
@@ -576,7 +562,7 @@ importance 评分：
                 continue
 
         # 3. 尝试提取文本中的 JSON 数组（处理前后有额外文本的情况）
-        array_pattern = r'\[\s*\{.*?\}\s*\]'
+        array_pattern = r"\[\s*\{.*?\}\s*\]"
         array_matches = re.findall(array_pattern, text, re.DOTALL)
         for match in array_matches:
             try:
@@ -625,13 +611,11 @@ importance 评分：
         """
         # 0. content_hash 精确匹配（最快，O(n) 短路）
         import hashlib
-        content_hash = hashlib.sha256(content.encode('utf-8')).hexdigest()[:16]
+
+        content_hash = hashlib.sha256(content.encode("utf-8")).hexdigest()[:16]
         for mem in existing:
             if mem.get("content_hash") == content_hash:
-                logger.info(
-                    f"发现重复记忆 #{mem['id']} (content_hash 精确匹配): "
-                    f"\"{content[:50]}...\""
-                )
+                logger.info(f'发现重复记忆 #{mem["id"]} (content_hash 精确匹配): "{content[:50]}..."')
                 return mem
 
         # 1. Jaccard 关键词相似度
@@ -648,10 +632,7 @@ importance 评分：
                 best = mem
 
         if best and best_score >= self._dedup_threshold:
-            logger.info(
-                f"发现重复记忆 #{best['id']} (相似度={best_score:.2f}>={self._dedup_threshold}): "
-                f"\"{content[:50]}...\""
-            )
+            logger.info(f'发现重复记忆 #{best["id"]} (相似度={best_score:.2f}>={self._dedup_threshold}): "{content[:50]}..."')
             return best
         return None
 
@@ -696,10 +677,7 @@ importance 评分：
         merged_priority = min(old_priority, new_priority)
 
         # 重要度取更高
-        merged_importance = max(
-            existing.get("importance", 3),
-            new_item.get("importance", 3)
-        )
+        merged_importance = max(existing.get("importance", 3), new_item.get("importance", 3))
 
         # 过期时间取更早
         old_expires = existing.get("expires_at")
@@ -719,7 +697,7 @@ importance 评分：
             f"合并记忆 #{existing['id']}: "
             f"priority {old_priority}→{merged_priority}, "
             f"importance {existing.get('importance')}→{merged_importance}, "
-            f"tags \"{existing.get('tags','')}\"→\"{merged_tags}\""
+            f'tags "{existing.get("tags", "")}"→"{merged_tags}"'
         )
         return merged
 
@@ -823,35 +801,33 @@ importance 评分：
         try:
             # 通过 storage API 读取两条记忆
             all_mems = self.storage.get_active_memories(limit=500)
-            keep = next((m for m in all_mems if m['id'] == keep_id), None)
-            remove = next((m for m in all_mems if m['id'] == remove_id), None)
+            keep = next((m for m in all_mems if m["id"] == keep_id), None)
+            remove = next((m for m in all_mems if m["id"] == remove_id), None)
             if not keep or not remove:
-                logger.warning(f'Merge failed: memory not found keep={keep_id} remove={remove_id}')
+                logger.warning(f"Merge failed: memory not found keep={keep_id} remove={remove_id}")
                 return False
 
             # Merge content
-            merged = keep['content']
-            if remove['content'] not in merged:
-                merged = keep['content'] + '\n---\n' + remove['content']
+            merged = keep["content"]
+            if remove["content"] not in merged:
+                merged = keep["content"] + "\n---\n" + remove["content"]
 
             # Merge tags
-            ktags = {t.strip() for t in (keep.get('tags', '') or '').split(',') if t.strip()}
-            rtags = {t.strip() for t in (remove.get('tags', '') or '').split(',') if t.strip()}
-            merged_tags = ','.join(sorted(ktags | rtags))
+            ktags = {t.strip() for t in (keep.get("tags", "") or "").split(",") if t.strip()}
+            rtags = {t.strip() for t in (remove.get("tags", "") or "").split(",") if t.strip()}
+            merged_tags = ",".join(sorted(ktags | rtags))
 
             # Boost
-            new_priority = max(0, keep['priority'] - 1)
-            new_importance = min(5, (keep['importance'] or 3) + 1)
+            new_priority = max(0, keep["priority"] - 1)
+            new_importance = min(5, (keep["importance"] or 3) + 1)
 
-            self.storage.update_memory(keep_id,
-                content=merged, tags=merged_tags,
-                priority=new_priority, importance=new_importance)
+            self.storage.update_memory(keep_id, content=merged, tags=merged_tags, priority=new_priority, importance=new_importance)
             self.storage.deactivate_memory(remove_id)
-            logger.info(f'Merged: {remove_id} -> {keep_id}, priority={new_priority}, importance={new_importance}')
+            logger.info(f"Merged: {remove_id} -> {keep_id}, priority={new_priority}, importance={new_importance}")
             return True
 
         except Exception as e:
-            logger.error(f'Merge failed: {e}')
+            logger.error(f"Merge failed: {e}")
             return False
 
     def auto_dedup(self, threshold: float = 0.92) -> dict:
@@ -869,7 +845,7 @@ importance 评分：
                 processed.add(b_id)
             else:
                 errors += 1
-        return {'scanned': len(pairs), 'merged': merged, 'errors': errors, 'threshold': threshold}
+        return {"scanned": len(pairs), "merged": merged, "errors": errors, "threshold": threshold}
 
     def is_extraction_needed(self, unsummarized_count: int) -> bool:
         """判断是否需要触发记忆提取"""

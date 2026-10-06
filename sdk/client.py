@@ -1,6 +1,7 @@
 """
 Tea Agent Python SDK — Synchronous API wrapper using urllib.
 """
+
 import json
 import logging
 import urllib.request
@@ -33,7 +34,7 @@ def assemble_sse(raw_text: str) -> str:
             line = line.strip()
             if not line.startswith("data:"):
                 continue
-            payload = line[len("data:"):].strip()
+            payload = line[len("data:") :].strip()
             if not payload or payload == "[DONE]":
                 continue
             try:
@@ -62,8 +63,7 @@ class AgentSDK:
         >>> sdk.chat("Hello")
     """
 
-    def __init__(self, base_url="127.0.0.1:8081",
-                 api_key="", timeout=30):
+    def __init__(self, base_url="127.0.0.1:8081", api_key="", timeout=30):
         self.base_url = base_url.rstrip("/")
         self.api_key = api_key
         self.timeout = timeout
@@ -91,10 +91,7 @@ class AgentSDK:
         # urlparse 提不出 hostname，会让本分支静默失效（代理问题依旧）。
         opener = _no_proxy_opener() if urlparse(url).hostname in _LOCAL_HOSTS else None
         try:
-            if opener is not None:
-                resp = opener.open(req, timeout=self.timeout)
-            else:
-                resp = urlopen(req, timeout=self.timeout)
+            resp = opener.open(req, timeout=self.timeout) if opener is not None else urlopen(req, timeout=self.timeout)
             with resp as r:
                 return r.getcode(), self._decode(r.read())
         except HTTPError as e:
@@ -126,10 +123,8 @@ class AgentSDK:
             return parsed
         return {"data": parsed}
 
-    def chat(self, message, stream=False,
-             model="default", topic_id=""):
-        payload = {"messages": [{"role": "user", "content": message}],
-                   "stream": stream, "model": model}
+    def chat(self, message, stream=False, model="default", topic_id=""):
+        payload = {"messages": [{"role": "user", "content": message}], "stream": stream, "model": model}
         if topic_id:
             payload["topic_id"] = topic_id
         code, data = self._request("POST", "/v1/chat/completions", payload)
@@ -167,9 +162,7 @@ class AgentSDK:
 
     def run_tool(self, tool_name, arguments=None):
         arguments = arguments or {}
-        code, data = self._request("POST",
-            f"/v1/tools/{tool_name}/run",
-            {"arguments": arguments})
+        code, data = self._request("POST", f"/v1/tools/{tool_name}/run", {"arguments": arguments})
         return data
 
     def list_sessions(self, limit=20):
@@ -177,13 +170,13 @@ class AgentSDK:
         return data.get("data", [])
 
     def create_session(self, title="SDK 导入"):
-        code, data = self._request("POST", "/v1/sessions",
-                    {"title": title})
+        code, data = self._request("POST", "/v1/sessions", {"title": title})
         return data.get("id", "")
 
     def get_session(self, topic_id):
         code, data = self._request("GET", f"/v1/sessions/{topic_id}")
-        if code == 200: return data
+        if code == 200:
+            return data
         return None
 
     def delete_session(self, topic_id):

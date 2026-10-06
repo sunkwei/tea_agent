@@ -83,12 +83,13 @@ def _keyword_similarity(text_a: str, text_b: str) -> float:
     从未提供 ``cosine_similarity`` 方法，旧实现在引擎可用时会抛
     ``AttributeError`` 并被兜底成 corrected —— 即该分支实际上从未真正生效过。
     """
+
     def _tokens(text: str) -> set[str]:
         text = text or ""
         toks: set[str] = set()
         for run in re.findall(r"[\u4e00-\u9fff]+", text):
             for i in range(len(run) - 1):
-                toks.add(run[i:i + 2])
+                toks.add(run[i : i + 2])
         toks.update(w.lower() for w in re.findall(r"[a-zA-Z]{3,}", text))
         return toks
 
@@ -161,22 +162,31 @@ def extract_mode(result: dict):
     return None
 
 
-
-
-
-
 # ── 模块级纯函数（原 session_tools_builder）──
 
 # 核心工具集：任何任务都可能需要的常驻原语。
 # 当意图分析（未来）给出 required_tools 时，暴露 = 核心集 + 意图集，
 # 保证关键能力永不缺席，同时大幅缩小工具尾部（缓存未命中区）。
 CORE_TOOLS = [
-    "toolkit_exec", "toolkit_file", "toolkit_edit", "toolkit_diff",
-    "toolkit_search", "toolkit_lsp", "toolkit_question",
-    "toolkit_todo", "toolkit_plan", "toolkit_memory", "toolkit_kb",
-    "toolkit_subagent", "toolkit_subagent_msg",
-    "toolkit_config", "toolkit_mode",
-    "toolkit_save", "toolkit_reload", "toolkit_rollback", "toolkit_list_versions",
+    "toolkit_exec",
+    "toolkit_file",
+    "toolkit_edit",
+    "toolkit_diff",
+    "toolkit_search",
+    "toolkit_lsp",
+    "toolkit_question",
+    "toolkit_todo",
+    "toolkit_plan",
+    "toolkit_memory",
+    "toolkit_kb",
+    "toolkit_subagent",
+    "toolkit_subagent_msg",
+    "toolkit_config",
+    "toolkit_mode",
+    "toolkit_save",
+    "toolkit_reload",
+    "toolkit_rollback",
+    "toolkit_list_versions",
 ]
 
 
@@ -195,8 +205,6 @@ def filter_tools(tools: list, tool_filter: list = None) -> list:
 def has_tool(tools: list, name: str) -> bool:
     """检查工具列表中是否存在指定名称的工具。"""
     return any(t.get("function", {}).get("name") == name for t in tools)
-
-
 
 
 class OnlineToolSession(BaseChatSession):
@@ -317,9 +325,7 @@ class OnlineToolSession(BaseChatSession):
         # 工具暴露档位（auto=按窗口推导；显式档位优先）
         self.tool_profile = (tool_profile or "auto").strip().lower()
 
-        logger.info(
-            f"OnlineToolSession init ok: main model: {model}, cheap model: {cheap_model}"
-        )
+        logger.info(f"OnlineToolSession init ok: main model: {model}, cheap model: {cheap_model}")
 
         # 步骤5: 创建并初始化组件
         self._initialize_components()
@@ -375,7 +381,7 @@ class OnlineToolSession(BaseChatSession):
         """
         try:
             # 仅当 config 中的值为默认值时，才进行探测并保存
-            from tea_agent.config import get_active_config_path, get_config, save_config
+            from tea_agent.config import get_config, save_config
 
             cfg = get_config()
             # 检查是否为用户显式设置的（非默认值则跳过自动保存）
@@ -668,9 +674,7 @@ class OnlineToolSession(BaseChatSession):
         else:
             self.reflection_manager = None
             self.prompt_manager = None
-            logger.info(
-                "Storage not set, skipping ReflectionManager/PromptManager initialization"
-            )
+            logger.info("Storage not set, skipping ReflectionManager/PromptManager initialization")
 
     def _init_pipeline(self) -> None:
         """初始化Pipeline。"""
@@ -822,9 +826,7 @@ class OnlineToolSession(BaseChatSession):
             return
         try:
             topic_id = getattr(self, "current_topic_id", None)
-            storage = getattr(self, "storage", None) or getattr(
-                self.context, "storage", None
-            )
+            storage = getattr(self, "storage", None) or getattr(self.context, "storage", None)
             if not (topic_id and storage):
                 return
             events = getattr(storage, "events", None)
@@ -840,13 +842,13 @@ class OnlineToolSession(BaseChatSession):
             # ⚠️ 必须用 ``self.context``：OnlineToolSession **没有** ``ctx`` 属性
             # （那是 SessionComponent 的写法），误用会静默取到空串 → NULL。
             events.append_event(
-                topic_id, "assistant/chunk", payload,
+                topic_id,
+                "assistant/chunk",
+                payload,
                 conversation_id=getattr(self.context, "conversation_id", "") or "",
             )
         except Exception:
-            logger.debug(
-                "append assistant/chunk event failed (isolated)", exc_info=True
-            )
+            logger.debug("append assistant/chunk event failed (isolated)", exc_info=True)
 
     def _log_turn_end_marker(self, reason: str) -> None:
         """P2 事件溯源：记录 turn/end 标记（流式中断时用，审计"这轮未完成"）。
@@ -859,9 +861,7 @@ class OnlineToolSession(BaseChatSession):
         """
         try:
             topic_id = getattr(self, "current_topic_id", None)
-            storage = getattr(self, "storage", None) or getattr(
-                self.context, "storage", None
-            )
+            storage = getattr(self, "storage", None) or getattr(self.context, "storage", None)
             if not (topic_id and storage):
                 return
             events = getattr(storage, "events", None)
@@ -869,7 +869,9 @@ class OnlineToolSession(BaseChatSession):
                 return
             # 中断标记同样带 conversation_id：否则「哪一轮中断了」无法归属
             events.append_event(
-                topic_id, "turn/end", {"reason": reason},
+                topic_id,
+                "turn/end",
+                {"reason": reason},
                 conversation_id=getattr(self.context, "conversation_id", "") or "",
             )
         except Exception:
@@ -922,11 +924,9 @@ class OnlineToolSession(BaseChatSession):
         except Exception:
             logger.debug("storage notice emit failed (isolated)", exc_info=True)
 
-    def _record_decode_sample(self, usage, streaming: bool = True,
-                              t_first: float | None = None,
-                              t_end: float | None = None,
-                              est_text: str = "",
-                              clock=None) -> None:
+    def _record_decode_sample(
+        self, usage, streaming: bool = True, t_first: float | None = None, t_end: float | None = None, est_text: str = "", clock=None
+    ) -> None:
         """旁路记录一次模型调用的解码速率样本。
 
         纯观测用途：任何异常一律 debug 级吞掉，绝不把主调用带崩
@@ -984,9 +984,7 @@ class OnlineToolSession(BaseChatSession):
         except Exception as e:
             logger.debug(f"解码速率样本记录失败（已忽略）: {e}")
 
-    def _consume_non_stream_response(
-        self, response, callback
-    ) -> tuple[str, list[dict], str]:
+    def _consume_non_stream_response(self, response, callback) -> tuple[str, list[dict], str]:
         """消费非流式响应 → ``(content, tool_calls_data, reasoning_content)``。
 
         非流式无「解码阶段」可言（整段一次性返回），不做 tok/s 测量：用总耗时算出的
@@ -1180,17 +1178,12 @@ class OnlineToolSession(BaseChatSession):
                 # 可重试断流：先落盘"断流前已生成的部分"（审计发生了什么），再重置重试
                 _flush_chunk_buf()
                 stream_retries += 1
-                logger.warning(
-                    f"stream interrupted (attempt {stream_retries}/{max_stream_retries}): "
-                    f"{e}, retrying..."
-                )
+                logger.warning(f"stream interrupted (attempt {stream_retries}/{max_stream_retries}): {e}, retrying...")
                 # 丢弃已收部分重新生成（流式工具调用增量半截参数不可用）
                 content_parts = []
                 tool_calls_data = []
                 reasoning_parts = []
-                synth = MuseThinkingSynthesizer(
-                    self.context.model, self.context.enable_thinking
-                )
+                synth = MuseThinkingSynthesizer(self.context.model, self.context.enable_thinking)
                 # 解码速度计时同步前移：重试产出的 token 只统计最终那一版，
                 # 且首个增量时刻重新判定（上一版的首包不属于本版输出）。
                 self._decode_start_ts = time.monotonic()
@@ -1209,7 +1202,6 @@ class OnlineToolSession(BaseChatSession):
         if synth.needs_final_done(bool(reasoning_parts)):
             callback("[THINK_DONE]")
         return content, tool_calls_data, reasoning_content
-
 
     # ──────────────────────────────────────────────
     # Pipeline 设置
@@ -1241,17 +1233,12 @@ class OnlineToolSession(BaseChatSession):
             self.context._os_info_injected = _load_persisted_os_sig(topic_id)
 
         # OS 未变化且已有文本 → 跳过
-        if (
-            self.context._os_info_injected == current_sig
-            and self.context._injected_os_info_text
-        ):
+        if self.context._os_info_injected == current_sig and self.context._injected_os_info_text:
             return pipeline_ctx
 
         # OS 变化或首次 → 生成 OS 信息文本并写入上下文属性
         self.context._injected_os_info_text = generate_os_info_text(
-            toolkit_root_dir=(
-                self.context.toolkit.tool_dir if self.context.toolkit else ""
-            ),
+            toolkit_root_dir=(self.context.toolkit.tool_dir if self.context.toolkit else ""),
             interface_type=getattr(self.context, "interface_type", None),
         )
         self.context._os_info_injected = current_sig
@@ -1321,13 +1308,9 @@ class OnlineToolSession(BaseChatSession):
             self.context._token_exhausted = False
             if self.context.tool_log:
                 self.context.tool_log("⚠️ 上下文已用尽，强制压缩历史…")
-            self.summarizer_comp.summarize_old_history(
-                self.api, self._get_summarize_client, force=True
-            )
+            self.summarizer_comp.summarize_old_history(self.api, self._get_summarize_client, force=True)
         else:
-            self.summarizer_comp.summarize_old_history(
-                self.api, self._get_summarize_client
-            )
+            self.summarizer_comp.summarize_old_history(self.api, self._get_summarize_client)
         return context  # summarize_old_history 副作用修改 context，此处显式返回
 
     # ──────────────────────────────────────────────
@@ -1387,6 +1370,7 @@ class OnlineToolSession(BaseChatSession):
             for v in tracker.last_violations:
                 _log_turn_meta.error("运行时不变式违例 %s", v)
             from tea_agent import session_events as se
+
             if not hasattr(self, "_event_log"):
                 self._event_log = []
             se.append_event(
@@ -1398,9 +1382,12 @@ class OnlineToolSession(BaseChatSession):
                 data={"starts_request_series": starts},
             )
             se.persist_step_request(
-                getattr(self, "storage", None), getattr(self, "topic_id", "") or "online",
-                tracker.turns, len(tracker.steps),
-                {"starts_request_series": starts})
+                getattr(self, "storage", None),
+                getattr(self, "topic_id", "") or "online",
+                tracker.turns,
+                len(tracker.steps),
+                {"starts_request_series": starts},
+            )
         except Exception as e:  # noqa: BLE001 — 观测失败不影响请求
             _log_turn_meta.debug("turn_meta 观测跳过: %s", e)
 
@@ -1428,9 +1415,7 @@ class OnlineToolSession(BaseChatSession):
         all_tools = self.tools_comp.build_tools()
         if tool_filter:
             self.tools = filter_tools(all_tools, tool_filter)
-            logger.info(
-                f"[Pipe Dynamic] Tool Injection: enabled {len(self.tools)} tools based on intent"
-            )
+            logger.info(f"[Pipe Dynamic] Tool Injection: enabled {len(self.tools)} tools based on intent")
             return
         # 常规路径：按工具档位过滤（档位在会话启动时解析，保持会话内稳定）
         profile = resolve_tool_profile(
@@ -1439,9 +1424,7 @@ class OnlineToolSession(BaseChatSession):
         )
         self.tools = filter_tools_by_profile(all_tools, profile)
         if profile != "full":
-            logger.info(
-                f"[Tool Profile] {profile}: enabled {len(self.tools)}/{len(all_tools)} tools"
-            )
+            logger.info(f"[Tool Profile] {profile}: enabled {len(self.tools)}/{len(all_tools)} tools")
         # 长期未使用的工具默认屏蔽（数据源：项目 db 的 tool_usage 表）。
         # 只在常规路径生效：上面的 tool_filter 是意图驱动的临时注入，模型此刻
         # 明确需要那些工具，不该被历史使用数据否决。
@@ -1455,16 +1438,11 @@ class OnlineToolSession(BaseChatSession):
     def _auto_detect_mode(self, user_text: str):
         """根据用户输入自动检测并切换 Agent 模式。"""
         result = detect_mode(
-            call_tool_fn=lambda action, text: self.context.toolkit.call_tool(
-                "toolkit_mode", action=action, text=text
-            ),
+            call_tool_fn=lambda action, text: self.context.toolkit.call_tool("toolkit_mode", action=action, text=text),
             user_text=user_text,
         )
         if result.get("switched"):
-            logger.info(
-                f"🤖 自动切换模式: {result.get('from_mode')} → {result.get('to_mode')} "
-                f"(原因: {result.get('reason', 'N/A')})"
-            )
+            logger.info(f"🤖 自动切换模式: {result.get('from_mode')} → {result.get('to_mode')} (原因: {result.get('reason', 'N/A')})")
         new_mode = extract_mode(result)
         if new_mode:
             self._current_mode = new_mode
@@ -1510,9 +1488,7 @@ class OnlineToolSession(BaseChatSession):
         if storage is None:
             return None
         try:
-            rows = storage.query_interruptions(
-                topic_id=topic_id, status="pending", limit=1
-            )
+            rows = storage.query_interruptions(topic_id=topic_id, status="pending", limit=1)
             if not rows:
                 return None
             row = rows[0]
@@ -1525,17 +1501,13 @@ class OnlineToolSession(BaseChatSession):
                 "restored": True,
             }
             self._last_interruption = ev
-            logger.info(
-                f"[InterruptionKnowledge] 从 DB 恢复打断锚点 event_id={ev['id']} tool={ev['tool_name']}"
-            )
+            logger.info(f"[InterruptionKnowledge] 从 DB 恢复打断锚点 event_id={ev['id']} tool={ev['tool_name']}")
             return ev
         except Exception:
             logger.exception("restore interruption anchor failed")
             return None
 
-    def _inject_interruption_knowledge(
-        self, user_msg: str, topic_id: str | None = None
-    ) -> bool:
+    def _inject_interruption_knowledge(self, user_msg: str, topic_id: str | None = None) -> bool:
         """M2/M4: 上轮被打断 → 三分类（corrected/abandoned/silent）注入提示。
 
         打断是隐式负面反馈：上轮方向被否定。用户下一条消息决定信号类型：
@@ -1571,12 +1543,8 @@ class OnlineToolSession(BaseChatSession):
             return False
         try:
             # 1) 关键词相似度分类（纯本地，无外部依赖）
-            threshold = float(
-                icfg.get("similarity_threshold", INTERRUPT_SIMILARITY_THRESHOLD)
-            )
-            classification, similarity = classify_interruption(
-                ev, user_msg or "", threshold=threshold
-            )
+            threshold = float(icfg.get("similarity_threshold", INTERRUPT_SIMILARITY_THRESHOLD))
+            classification, similarity = classify_interruption(ev, user_msg or "", threshold=threshold)
 
             # 2) silent：不注入，仅回写事件（若有 id）
             if classification == "silent":
@@ -1592,9 +1560,7 @@ class OnlineToolSession(BaseChatSession):
                 iteration = ev.get("iteration", 0)
                 followup_max = max(int(icfg.get("partial_reply_max", 2000)), 0)
                 followup = (user_msg or "").strip()[:followup_max]
-                inject_text = self._INTERRUPT_CORRECTED_TMPL.format(
-                    tool_name=tool, iteration=iteration, followup=followup
-                )
+                inject_text = self._INTERRUPT_CORRECTED_TMPL.format(tool_name=tool, iteration=iteration, followup=followup)
 
             # 4) 紧跟初始 system 消息之后插入（位置1），历史之前
             self.context.messages.insert(1, {"role": "system", "content": inject_text})
@@ -1612,9 +1578,7 @@ class OnlineToolSession(BaseChatSession):
             logger.exception("inject_interruption_knowledge failed")
             return False
 
-    def _persist_classification(
-        self, ev: dict, classification: str, similarity: float | None, user_msg: str
-    ) -> None:
+    def _persist_classification(self, ev: dict, classification: str, similarity: float | None, user_msg: str) -> None:
         """M2: 打断事件分类结果回写事件表（失败仅记日志）。"""
         event_id = ev.get("id")
         if not event_id:
@@ -1666,11 +1630,7 @@ class OnlineToolSession(BaseChatSession):
         logger.debug(
             f"chat_stream start: msg_len={len(str(msg))}, topic_id={topic_id}, model={self.context.model}, enable_thinking={self.context.enable_thinking}"
         )
-        logger.debug(
-            f"chat_stream user message: {_msg_text[:200]}..."
-            if len(_msg_text) > 200
-            else f"chat_stream user message: {_msg_text}"
-        )
+        logger.debug(f"chat_stream user message: {_msg_text[:200]}..." if len(_msg_text) > 200 else f"chat_stream user message: {_msg_text}")
 
         self.current_topic_id = topic_id
         # 同步到共享上下文：Component 只持有 ctx，不持有 session，
@@ -1685,10 +1645,7 @@ class OnlineToolSession(BaseChatSession):
             if _stale_provider is not None:
                 _stale = _stale_provider() or []
                 if _stale:
-                    logger.info(
-                        f"插话: 清理 {len(_stale)} 条遗留排队消息（上轮未消费，"
-                        f"{[(i.get('id') or '')[:8] for i in _stale]}）"
-                    )
+                    logger.info(f"插话: 清理 {len(_stale)} 条遗留排队消息（上轮未消费，{[(i.get('id') or '')[:8] for i in _stale]}）")
         except Exception:
             logger.exception("steering stale cleanup failed")
 
@@ -1736,10 +1693,7 @@ class OnlineToolSession(BaseChatSession):
         self._last_tool_names = result.get("tool_names", []) or []
 
         # 完成追踪
-        if (
-            self.reflection_manager is not None
-            and self.context._current_trace is not None
-        ):
+        if self.reflection_manager is not None and self.context._current_trace is not None:
             self.reflection_manager.finish_trace(
                 self.context._current_trace,
                 total_iterations=iterations,
@@ -1797,9 +1751,7 @@ class OnlineToolSession(BaseChatSession):
             if hasattr(self.context, "client") and self.context.client:
                 try:
                     _internal = getattr(self.context.client, "_client", None)
-                    if (
-                        _internal is None or id(_internal) not in _closed_clients
-                    ) and hasattr(self.context.client, "close"):
+                    if (_internal is None or id(_internal) not in _closed_clients) and hasattr(self.context.client, "close"):
                         self.context.client.close()
                 except Exception as e:
                     logger.debug(f"Close main OpenAI client failed: {e}")
@@ -1807,9 +1759,7 @@ class OnlineToolSession(BaseChatSession):
             if hasattr(self.context, "cheap_client") and self.context.cheap_client:
                 try:
                     _internal = getattr(self.context.cheap_client, "_client", None)
-                    if (
-                        _internal is None or id(_internal) not in _closed_clients
-                    ) and hasattr(self.context.cheap_client, "close"):
+                    if (_internal is None or id(_internal) not in _closed_clients) and hasattr(self.context.cheap_client, "close"):
                         self.context.cheap_client.close()
                 except Exception as e:
                     logger.debug(f"Close cheap OpenAI client failed: {e}")

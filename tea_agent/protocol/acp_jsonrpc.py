@@ -4,6 +4,7 @@ Provides the wire-level JSON-RPC 2.0 implementation over stdio,
 including request/response/notification dispatching, cancellation,
 and streaming support.
 """
+
 import json
 import logging
 import sys
@@ -134,9 +135,7 @@ class JsonRpcTransport:
         """Start reading messages from the input stream (blocking)."""
         self._running = True
         # Start heartbeat thread to detect client disconnect
-        self._heartbeat_thread = threading.Thread(
-            target=self._heartbeat_loop, daemon=True
-        )
+        self._heartbeat_thread = threading.Thread(target=self._heartbeat_loop, daemon=True)
         self._heartbeat_thread.start()
         logger.info("JsonRpcTransport: started reading from stdin")
         try:
@@ -187,15 +186,9 @@ class JsonRpcTransport:
                 failure_count = 0
             except Exception:
                 failure_count += 1
-                logger.warning(
-                    f"heartbeat write failed ({failure_count}/"
-                    f"{_HEARTBEAT_MAX_FAILURES})"
-                )
+                logger.warning(f"heartbeat write failed ({failure_count}/{_HEARTBEAT_MAX_FAILURES})")
                 if failure_count >= _HEARTBEAT_MAX_FAILURES:
-                    logger.error(
-                        "heartbeat: client appears disconnected, "
-                        "stopping transport"
-                    )
+                    logger.error("heartbeat: client appears disconnected, stopping transport")
                     self._running = False
                     break
 
@@ -208,9 +201,7 @@ class JsonRpcTransport:
 
     # ── client-side request helpers (agent → client) ──────────────────────
 
-    def send_request(
-        self, method: str, params: Any = None, timeout: float = 30
-    ) -> Any:
+    def send_request(self, method: str, params: Any = None, timeout: float = 30) -> Any:
         """Send a JSON-RPC request to the client and await the response.
 
         Used when the agent needs to call client-side methods like
@@ -234,7 +225,8 @@ class JsonRpcTransport:
             if "error" in response:
                 err = response["error"]
                 error_container[0] = JsonRpcError(
-                    err.get("code", -1), err.get("message", "Unknown"),
+                    err.get("code", -1),
+                    err.get("message", "Unknown"),
                     err.get("data"),
                 )
             else:
@@ -252,9 +244,7 @@ class JsonRpcTransport:
                 self._in_flight.pop(req_id, None)
             with self._response_handlers_lock:
                 self._response_handlers.pop(req_id, None)
-            raise TimeoutError(
-                f"Request {method} timed out after {timeout}s"
-            )
+            raise TimeoutError(f"Request {method} timed out after {timeout}s")
 
         if error_container[0]:
             raise error_container[0]
@@ -299,9 +289,7 @@ class JsonRpcTransport:
                 try:
                     handler(params)
                 except Exception:
-                    logger.exception(
-                        f"Notification handler error: {method}"
-                    )
+                    logger.exception(f"Notification handler error: {method}")
             else:
                 logger.debug(f"Unhandled notification: {method}")
             return
@@ -327,11 +315,7 @@ class JsonRpcTransport:
             import asyncio
 
             if asyncio.iscoroutine(result):
-                logger.warning(
-                    f"Handler '{method}' returned a coroutine but "
-                    f"transport is sync-only; the coroutine will not "
-                    f"be executed"
-                )
+                logger.warning(f"Handler '{method}' returned a coroutine but transport is sync-only; the coroutine will not be executed")
                 result = None
 
             self.write(JsonRpcMessage.response(result, msg_id))

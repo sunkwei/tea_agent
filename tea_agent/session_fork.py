@@ -26,7 +26,6 @@ logger = logging.getLogger("session_fork")
 __all__ = ["fork_session"]
 
 
-
 def fork_session(
     storage,
     source_topic_id: str,
@@ -75,7 +74,8 @@ def fork_session(
         events_copied = 0
         try:
             events_copied = storage.events.fork_events(
-                source_topic_id, target_id,
+                source_topic_id,
+                target_id,
                 boundary_conv_id=boundary_conv_id or "",
             )
         except Exception:
@@ -86,16 +86,16 @@ def fork_session(
         except Exception:
             lineage = []
 
-        result.update({
-            "target_topic_id": target_id,
-            "title": title,
-            "source_topic_id": source_topic_id,
-            "events_copied": events_copied,
-            "lineage": lineage,
-        })
-        logger.info("fork_session: %s -> %s (boundary=%s, copied=%s)",
-                    source_topic_id, target_id, boundary_conv_id or "-",
-                    result.get("copied"))
+        result.update(
+            {
+                "target_topic_id": target_id,
+                "title": title,
+                "source_topic_id": source_topic_id,
+                "events_copied": events_copied,
+                "lineage": lineage,
+            }
+        )
+        logger.info("fork_session: %s -> %s (boundary=%s, copied=%s)", source_topic_id, target_id, boundary_conv_id or "-", result.get("copied"))
         return result
     except Exception as e:
         logger.exception("fork_session failed")

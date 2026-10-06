@@ -4,12 +4,15 @@ import logging
 
 logger = logging.getLogger("toolkit")
 
+
 def toolkit_screenshot(action: str, region: str = None, monitor: int = None, output: str = None, quality: int = 90):
     """
     跨平台智能截屏 — 自动适配 Wayland/X11/macOS/Windows
     Wayland 区域截屏策略：先全屏截取，再用 PIL 裁剪（绕开各工具的交互限制）
     """
-    logger.info(f"toolkit_screenshot called: action={action!r}, region={region!r}, monitor={monitor!r}, output={repr(output)[:80]}, quality={quality!r}")
+    logger.info(
+        f"toolkit_screenshot called: action={action!r}, region={region!r}, monitor={monitor!r}, output={repr(output)[:80]}, quality={quality!r}"
+    )
 
     import os
     import shutil
@@ -38,18 +41,18 @@ def toolkit_screenshot(action: str, region: str = None, monitor: int = None, out
         x, y, w, h = map(int, geo.split(","))
         try:
             from PIL import Image
+
             img = Image.open(src)
-            img = img.crop((x, y, x+w, y+h))
+            img = img.crop((x, y, x + w, y + h))
             img.save(dst, quality=quality)
             return True
         except ImportError:
-            logger.exception('op_failed')
+            logger.exception("op_failed")
 
         # fallback: ImageMagick convert
         cv = _find_tool("convert")
         if cv:
-            r = subprocess.run([cv, src, "-crop", f"{w}x{h}+{x}+{y}", dst],
-                              capture_output=True, timeout=15)
+            r = subprocess.run([cv, src, "-crop", f"{w}x{h}+{x}+{y}", dst], capture_output=True, timeout=15)
             return r.returncode == 0 and os.path.exists(dst) and os.path.getsize(dst) > 100
         return False
 
@@ -61,8 +64,7 @@ def toolkit_screenshot(action: str, region: str = None, monitor: int = None, out
         if "kde" in de or "plasma" in de:
             spec = _find_tool("spectacle")
             if spec:
-                r = subprocess.run([spec, "-f", "-o", out_path, "-b", "-n"],
-                                   capture_output=True, timeout=10)
+                r = subprocess.run([spec, "-f", "-o", out_path, "-b", "-n"], capture_output=True, timeout=10)
                 if r.returncode == 0 and os.path.exists(out_path) and os.path.getsize(out_path) > 100:
                     return out_path
 
@@ -85,6 +87,7 @@ def toolkit_screenshot(action: str, region: str = None, monitor: int = None, out
     def _x11_screenshot(out_path, geo=None):
         try:
             import mss
+
             with mss.mss() as sct:
                 if geo:
                     x, y, w, h = map(int, geo.split(","))
@@ -100,21 +103,20 @@ def toolkit_screenshot(action: str, region: str = None, monitor: int = None, out
                 if os.path.exists(out_path) and os.path.getsize(out_path) > 100:
                     return out_path
         except ImportError:
-            logger.exception('op_failed')
-
+            logger.exception("op_failed")
 
         try:
             from PIL import ImageGrab
+
             img = ImageGrab.grab()
             if geo:
                 x, y, w, h = map(int, geo.split(","))
-                img = img.crop((x, y, x+w, y+h))
+                img = img.crop((x, y, x + w, y + h))
             img.save(out_path, quality=quality)
             if os.path.exists(out_path) and os.path.getsize(out_path) > 100:
                 return out_path
         except ImportError:
-            logger.exception('op_failed')
-
+            logger.exception("op_failed")
 
         xs = _find_tool("xfce4-screenshooter")
         if xs:
@@ -185,7 +187,8 @@ def toolkit_screenshot(action: str, region: str = None, monitor: int = None, out
             m = monitors[monitor - 1]
             if m.get("geometry"):
                 import re
-                nums = re.findall(r'\d+', m["geometry"])
+
+                nums = re.findall(r"\d+", m["geometry"])
                 if len(nums) >= 4:
                     geo = f"{nums[0]},{nums[1]},{nums[2]},{nums[3]}"
 
@@ -231,11 +234,44 @@ def toolkit_screenshot(action: str, region: str = None, monitor: int = None, out
 
     if result and os.path.exists(result):
         size = os.path.getsize(result)
-        return {"success": True, "path": result, "size": size, "size_kb": round(size/1024,1),
-                "method": method, "display_server": ds, "desktop": de}
-    return {"success": False, "error": f"所有截屏方式均失败 (ds={ds}, de={de})",
-            "tried": method, "tip": "Wayland用户请安装 spectacle、gnome-screenshot 或 grim"}
+        return {
+            "success": True,
+            "path": result,
+            "size": size,
+            "size_kb": round(size / 1024, 1),
+            "method": method,
+            "display_server": ds,
+            "desktop": de,
+        }
+    return {
+        "success": False,
+        "error": f"所有截屏方式均失败 (ds={ds}, de={de})",
+        "tried": method,
+        "tip": "Wayland用户请安装 spectacle、gnome-screenshot 或 grim",
+    }
+
 
 def meta_toolkit_screenshot() -> dict:
     """Meta toolkit screenshot."""
-    return {"type": "function", "function": {"name": "toolkit_screenshot", "description": "跨平台智能截屏工具。自动检测 Wayland/X11/macOS/Windows 并选择最佳截屏方式。Wayland 下自动使用系统自带工具（spectacle/gnome-screenshot/grim），彻底解决 Python 截屏库黑屏问题。支持全屏、区域、指定显示器。", "parameters": {"type": "object", "properties": {"action": {"type": "string", "enum": ["full", "region", "monitor", "list_monitors"], "description": "full/region/monitor/list_monitors"}, "region": {"type": "string", "description": "截取区域，格式 'x,y,w,h'（如 '100,200,800,600'）"}, "monitor": {"type": "integer", "description": "显示器索引，1=主屏, 2=第二屏..."}, "output": {"type": "string", "description": "输出文件路径，默认自动生成临时文件"}, "quality": {"type": "integer", "description": "JPEG 质量 1-100，默认 90。仅对 JPEG 有效"}}, "required": ["action"]}}}
+    return {
+        "type": "function",
+        "function": {
+            "name": "toolkit_screenshot",
+            "description": "跨平台智能截屏工具。自动检测 Wayland/X11/macOS/Windows 并选择最佳截屏方式。Wayland 下自动使用系统自带工具（spectacle/gnome-screenshot/grim），彻底解决 Python 截屏库黑屏问题。支持全屏、区域、指定显示器。",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "action": {
+                        "type": "string",
+                        "enum": ["full", "region", "monitor", "list_monitors"],
+                        "description": "full/region/monitor/list_monitors",
+                    },
+                    "region": {"type": "string", "description": "截取区域，格式 'x,y,w,h'（如 '100,200,800,600'）"},
+                    "monitor": {"type": "integer", "description": "显示器索引，1=主屏, 2=第二屏..."},
+                    "output": {"type": "string", "description": "输出文件路径，默认自动生成临时文件"},
+                    "quality": {"type": "integer", "description": "JPEG 质量 1-100，默认 90。仅对 JPEG 有效"},
+                },
+                "required": ["action"],
+            },
+        },
+    }

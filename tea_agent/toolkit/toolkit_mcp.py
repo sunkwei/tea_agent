@@ -5,9 +5,17 @@ import logging
 
 logger = logging.getLogger("toolkit")
 
-def toolkit_mcp(action: str = "connect", server_name: str = "", command: str = "",
-                args: list = None, transport: str = "stdio", url: str = "",
-                tool_name: str = "", tool_args: dict = None):
+
+def toolkit_mcp(
+    action: str = "connect",
+    server_name: str = "",
+    command: str = "",
+    args: list = None,
+    transport: str = "stdio",
+    url: str = "",
+    tool_name: str = "",
+    tool_args: dict = None,
+):
     """
     MCP (Model Context Protocol) 客户端工具，用于连接外部 MCP Server 并使用第三方工具。
 
@@ -33,7 +41,6 @@ def toolkit_mcp(action: str = "connect", server_name: str = "", command: str = "
     """
     logger.info(f"toolkit_mcp called: action={action!r}, server_name={server_name!r}")
 
-
     if action == "connect":
         return _mcp_connect(server_name, command, args or [], transport, url)
     if action == "list_tools":
@@ -46,10 +53,12 @@ def toolkit_mcp(action: str = "connect", server_name: str = "", command: str = "
         return _mcp_status()
     return {"ok": False, "error": f"未知 action: {action}", "returncode": 1}
 
+
 # MCP 客户端全局状态
 _MCP_SERVERS = {}  # server_name → {"session": ..., "stdio": ..., "transport": ..., "keepalive": ...}
 _MCP_LOOP = None  # 持久事件循环（后台线程）
 _MCP_THREAD = None  # 后台线程
+
 
 def _mcp_get_or_create_loop():
     """获取或创建持久事件循环（后台线程）"""
@@ -73,6 +82,7 @@ def _mcp_get_or_create_loop():
     _MCP_THREAD.start()
     return _MCP_LOOP
 
+
 def _mcp_run_async(coro, timeout: float = 30.0):
     import asyncio
 
@@ -86,6 +96,7 @@ def _mcp_run_async(coro, timeout: float = 30.0):
         return {"ok": False, "error": "MCP 操作超时", "returncode": 1}
     except Exception as e:
         return {"ok": False, "error": f"MCP 操作异常: {e}", "returncode": 1}
+
 
 def _mcp_connect(server_name: str, command: str, args: list, transport: str, url: str):
     """连接 MCP Server（在持久事件循环中，保持 stdio context manager 活跃）"""
@@ -161,13 +172,12 @@ def _mcp_connect(server_name: str, command: str, args: list, transport: str, url
             try:
                 await session_ctx.__aexit__(None, None, None)
             except Exception:
-                logger.exception('op_failed')
+                logger.exception("op_failed")
 
             try:
                 await ctx.__aexit__(None, None, None)
             except Exception:
-                logger.exception('op_failed')
-
+                logger.exception("op_failed")
 
             return {"ok": True, "status": "disconnected", "returncode": 0}
 
@@ -180,6 +190,7 @@ def _mcp_connect(server_name: str, command: str, args: list, transport: str, url
         try:
             # 轮询直到 server 被注册
             import time
+
             deadline = time.time() + 15
             while time.time() < deadline:
                 if server_name in _MCP_SERVERS:
@@ -194,6 +205,7 @@ def _mcp_connect(server_name: str, command: str, args: list, transport: str, url
     except Exception as e:
         return {"ok": False, "error": f"连接失败: {e}", "returncode": 1}
 
+
 def _mcp_list_tools(server_name: str):
     if not server_name:
         return {"ok": False, "error": "server_name 不能为空", "returncode": 1}
@@ -202,18 +214,23 @@ def _mcp_list_tools(server_name: str):
         return {"ok": False, "error": f"Server '{server_name}' 未连接", "returncode": 1}
 
     try:
+
         async def _list():
             server_info = _MCP_SERVERS[server_name]
             session = server_info["session"]
             result = await session.list_tools()
             tools = result.tools
-            tools_info = [{"name": t.name, "description": t.description or "", "input_schema": t.inputSchema if hasattr(t, 'inputSchema') else {}} for t in tools]
+            tools_info = [
+                {"name": t.name, "description": t.description or "", "input_schema": t.inputSchema if hasattr(t, "inputSchema") else {}}
+                for t in tools
+            ]
             return {"ok": True, "server": server_name, "tools_count": len(tools_info), "tools": tools_info, "returncode": 0}
 
         return _mcp_run_async(_list(), timeout=15.0)
 
     except Exception as e:
         return {"ok": False, "error": f"列出工具失败: {e}", "returncode": 1}
+
 
 def _mcp_call(server_name: str, tool_name: str, tool_args: dict):
     """调用 MCP 工具（在持久事件循环中）"""
@@ -228,24 +245,33 @@ def _mcp_call(server_name: str, tool_name: str, tool_args: dict):
         return {"ok": False, "error": f"Server '{server_name}' 未连接", "returncode": 1}
 
     try:
+
         async def _call():
             server_info = _MCP_SERVERS[server_name]
             session = server_info["session"]
             result = await session.call_tool(tool_name, tool_args)
             content_list = []
             for content in result.content:
-                if hasattr(content, 'text'):
+                if hasattr(content, "text"):
                     content_list.append(content.text)
-                elif hasattr(content, 'data'):
+                elif hasattr(content, "data"):
                     content_list.append(str(content.data))
                 else:
                     content_list.append(str(content))
-            return {"ok": True, "server": server_name, "tool": tool_name, "content": "\n".join(content_list), "is_error": result.isError if hasattr(result, 'isError') else False, "returncode": 0}
+            return {
+                "ok": True,
+                "server": server_name,
+                "tool": tool_name,
+                "content": "\n".join(content_list),
+                "is_error": result.isError if hasattr(result, "isError") else False,
+                "returncode": 0,
+            }
 
         return _mcp_run_async(_call(), timeout=120.0)
 
     except Exception as e:
         return {"ok": False, "error": f"调用工具失败: {e}", "returncode": 1}
+
 
 def _mcp_disconnect(server_name: str):
     if not server_name:
@@ -265,12 +291,15 @@ def _mcp_disconnect(server_name: str):
     except Exception as e:
         return {"ok": False, "error": f"断开连接失败: {e}", "returncode": 1}
 
+
 async def _set_and_del(server_name: str, keepalive):
     """设置 keepalive event 并清理 MCP_SERVERS 条目"""
     keepalive.set()
     # 给一点时间让 keepalive 协程退出 context manager
     import asyncio as _asyncio
+
     await _asyncio.sleep(0.1)
+
 
 def _mcp_status():
     if not _MCP_SERVERS:
@@ -278,6 +307,7 @@ def _mcp_status():
 
     servers_info = [{"name": n, "transport": i.get("transport", "unknown"), "url": i.get("url", "")} for n, i in _MCP_SERVERS.items()]
     return {"ok": True, "status": "connected", "servers_count": len(servers_info), "servers": servers_info, "returncode": 0}
+
 
 def meta_toolkit_mcp() -> dict:
     """Meta toolkit mcp."""

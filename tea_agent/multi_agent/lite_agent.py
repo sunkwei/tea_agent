@@ -40,6 +40,7 @@ class LiteAgent:
         # 获取 toolkit
         if toolkit is None:
             from tea_agent import tlk
+
             toolkit = tlk.toolkit
         self.toolkit = toolkit
 
@@ -122,6 +123,7 @@ class LiteAgent:
     def _get_config():
         """获取全局配置"""
         from tea_agent.config import load_config
+
         return load_config()
 
     @staticmethod

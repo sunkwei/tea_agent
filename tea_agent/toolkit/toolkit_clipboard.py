@@ -47,8 +47,8 @@ SAMPLE_SIZE = 50000  # 处理时截断长度
 
 class ClipContent:
     """剪贴板内容统一封装"""
-    def __init__(self, type="text", subtype="", text="", size=0,
-                 confidence=0.0, meta=None, detected_at=""):
+
+    def __init__(self, type="text", subtype="", text="", size=0, confidence=0.0, meta=None, detected_at=""):
         self.type = type
         self.subtype = subtype
         self.text = text
@@ -72,8 +72,7 @@ ERROR_PATTERNS = [
 ]
 
 CODE_SIGNATURES = {
-    "python": [r"^import\s+\w+", r"^from\s+\w+\s+import", r"^def\s+\w+\s*\(", r"^class\s+\w+",
-               r"^if\s+__name__\s*==", r"^#.*coding"],
+    "python": [r"^import\s+\w+", r"^from\s+\w+\s+import", r"^def\s+\w+\s*\(", r"^class\s+\w+", r"^if\s+__name__\s*==", r"^#.*coding"],
     "javascript": [r"^import\s+.*from\s+['\"]", r"^const\s+\w+\s*=", r"^function\s+\w+\s*\("],
     "typescript": [r"^interface\s+\w+", r"^type\s+\w+\s*=", r":\s*(string|number)\s*[=;)]"],
     "go": [r"^package\s+\w+", r"^func\s+\w+\s*\("],
@@ -83,17 +82,18 @@ CODE_SIGNATURES = {
     "yaml": [r"^\w+:\s+\S+"],
 }
 
-URL_RE = re.compile(r'^https?://[^\s/$.?#].[^\s]*$', re.I)
-LOG_RE = re.compile(r'^\d{4}[-/]\d{2}[-/]\d{2}[\sT]\d{2}:\d{2}')
+URL_RE = re.compile(r"^https?://[^\s/$.?#].[^\s]*$", re.I)
+LOG_RE = re.compile(r"^\d{4}[-/]\d{2}[-/]\d{2}[\sT]\d{2}:\d{2}")
 
 
 def detect_content(text: str) -> ClipContent:
     """检测剪贴板内容类型，返回结构化结果"""
-    content = ClipContent(text=text[:SAMPLE_SIZE], size=len(text.encode("utf-8")),
-                           detected_at=datetime.now().isoformat())
+    content = ClipContent(text=text[:SAMPLE_SIZE], size=len(text.encode("utf-8")), detected_at=datetime.now().isoformat())
 
     if not text or not text.strip():
-        content.subtype = "empty"; content.confidence = 1.0; return content
+        content.subtype = "empty"
+        content.confidence = 1.0
+        return content
 
     t = text.strip()
     lines = text.splitlines()
@@ -102,19 +102,27 @@ def detect_content(text: str) -> ClipContent:
     # 1. 错误信息
     for pat, sub in ERROR_PATTERNS:
         if re.search(pat, text[:2000], re.I):
-            content.subtype = sub; content.confidence = 0.95; content.meta["error_type"] = sub; return content
+            content.subtype = sub
+            content.confidence = 0.95
+            content.meta["error_type"] = sub
+            return content
 
     # 2. URL
     if len(lines) == 1 and URL_RE.match(t):
-        content.subtype = "url"; content.confidence = 0.98; content.meta["url"] = t; return content
+        content.subtype = "url"
+        content.confidence = 0.98
+        content.meta["url"] = t
+        return content
 
     # 3. JSON
     if t.startswith("{") or t.startswith("["):
         try:
             parsed = json.loads(t)
-            content.subtype = "json"; content.confidence = 0.99
+            content.subtype = "json"
+            content.confidence = 0.99
             content.meta["json_type"] = "dict" if isinstance(parsed, dict) else "array"
-            if isinstance(parsed, dict): content.meta["json_keys"] = list(parsed.keys())[:15]
+            if isinstance(parsed, dict):
+                content.meta["json_keys"] = list(parsed.keys())[:15]
             return content
         except Exception:
             pass
@@ -124,30 +132,42 @@ def detect_content(text: str) -> ClipContent:
         best_lang, best_score = "unknown", 0
         for lang, patterns in CODE_SIGNATURES.items():
             score = sum(1 for p in patterns if re.search(p, text[:3000], re.M))
-            if score > best_score: best_lang, best_score = lang, score
+            if score > best_score:
+                best_lang, best_score = lang, score
         if best_score >= 2:
-            content.subtype = "code"; content.confidence = min(0.95, 0.5 + best_score * 0.12)
-            content.meta["language"] = best_lang; content.meta["line_count"] = len(lines); return content
+            content.subtype = "code"
+            content.confidence = min(0.95, 0.5 + best_score * 0.12)
+            content.meta["language"] = best_lang
+            content.meta["line_count"] = len(lines)
+            return content
 
     # 5. 日志
-    log_lines = sum(1 for l in lines[:20] if LOG_RE.match(l))
+    log_lines = sum(1 for ln in lines[:20] if LOG_RE.match(ln))
     if len(lines) >= 3 and log_lines >= 2:
-        content.subtype = "log"; content.confidence = 0.85; return content
+        content.subtype = "log"
+        content.confidence = 0.85
+        return content
 
     # 6. 长文本
     wc = len(text.split())
     if wc > 50:
-        content.subtype = "article"; content.confidence = 0.6; content.meta["word_count"] = wc; return content
+        content.subtype = "article"
+        content.confidence = 0.6
+        content.meta["word_count"] = wc
+        return content
 
     # 7. 纯文本
-    content.subtype = "plain"; content.confidence = 0.5
-    content.meta["word_count"] = wc; content.meta["line_count"] = len(lines)
+    content.subtype = "plain"
+    content.confidence = 0.5
+    content.meta["word_count"] = wc
+    content.meta["line_count"] = len(lines)
     return content
 
 
 # ────────────────────────────────────────
 # 路由决策
 # ────────────────────────────────────────
+
 
 def route_content(content: ClipContent) -> dict:
     """根据内容类型路由到合适的处理方案"""
@@ -156,14 +176,12 @@ def route_content(content: ClipContent) -> dict:
 
     if sub in ("python_traceback", "generic_error", "exception", "python_error", "io_error", "fatal_error"):
         sug = [
-            {"tool": "toolkit_search", "prompt": f"分析这个错误并给出解决方案：{content.text[:500]}",
-             "label": "🔍 搜索错误原因"},
+            {"tool": "toolkit_search", "prompt": f"分析这个错误并给出解决方案：{content.text[:500]}", "label": "🔍 搜索错误原因"},
         ]
 
     elif sub == "url":
         sug = [
-            {"tool": "toolkit_js_fetch", "prompt": content.meta.get("url", content.text),
-             "label": "🌐 抓取页面内容"},
+            {"tool": "toolkit_js_fetch", "prompt": content.meta.get("url", content.text), "label": "🌐 抓取页面内容"},
         ]
 
     elif sub == "json":
@@ -175,8 +193,7 @@ def route_content(content: ClipContent) -> dict:
     elif sub == "code":
         lang = content.meta.get("language", "unknown")
         sug = [
-            {"tool": "toolkit_lsp", "prompt": f"审查这段{lang}代码：\n{content.text[:3000]}",
-             "label": f"🔍 {lang} 代码审查"},
+            {"tool": "toolkit_lsp", "prompt": f"审查这段{lang}代码：\n{content.text[:3000]}", "label": f"🔍 {lang} 代码审查"},
             {"tool": None, "prompt": f"解释这段{lang}代码的功能", "label": "📖 解释代码"},
         ]
 
@@ -193,9 +210,12 @@ def route_content(content: ClipContent) -> dict:
         sug = [{"label": "💬 直接回复"}] if len(content.text.strip()) < 100 else [{"label": "💬 回复"}, {"label": "📝 总结"}]
 
     return {
-        "type": content.type, "subtype": sub, "confidence": content.confidence,
-        "summary": content.text[:200].replace('\n', ' ').strip() + ("..." if len(content.text) > 200 else ""),
-        "size": content.size, "suggestions": sug,
+        "type": content.type,
+        "subtype": sub,
+        "confidence": content.confidence,
+        "summary": content.text[:200].replace("\n", " ").strip() + ("..." if len(content.text) > 200 else ""),
+        "size": content.size,
+        "suggestions": sug,
     }
 
 
@@ -203,25 +223,29 @@ def route_content(content: ClipContent) -> dict:
 # 剪贴板读取（跨平台）
 # ────────────────────────────────────────
 
+
 def _read_clipboard() -> str:
     """读取剪贴板文本（跨平台）"""
     import subprocess
+
     try:
         if os.name == "nt":  # Windows
-            r = subprocess.run(["powershell", "-NoProfile", "-Command",
-                                "Add-Type -AssemblyName System.Windows.Forms; "
-                                "[System.Windows.Forms.Clipboard]::GetText()"],
-                               capture_output=True, text=True, timeout=3)
+            r = subprocess.run(
+                ["powershell", "-NoProfile", "-Command", "Add-Type -AssemblyName System.Windows.Forms; [System.Windows.Forms.Clipboard]::GetText()"],
+                capture_output=True,
+                text=True,
+                timeout=3,
+            )
             return r.stdout.strip()
         if sys.platform == "darwin":  # macOS
             r = subprocess.run(["pbpaste"], capture_output=True, text=True, timeout=3)
             return r.stdout.strip()
         # Linux
-        for cmd in [["xclip", "-o", "-selection", "clipboard"],
-                    ["xsel", "-o", "-b"]]:
+        for cmd in [["xclip", "-o", "-selection", "clipboard"], ["xsel", "-o", "-b"]]:
             try:
                 r = subprocess.run(cmd, capture_output=True, text=True, timeout=3)
-                if r.stdout.strip(): return r.stdout.strip()
+                if r.stdout.strip():
+                    return r.stdout.strip()
             except Exception:
                 continue
         return ""
@@ -233,6 +257,7 @@ def _read_clipboard() -> str:
 # ────────────────────────────────────────
 # 监控线程
 # ────────────────────────────────────────
+
 
 def _monitor_loop():
     """后台监听循环"""
@@ -299,6 +324,7 @@ def stop_monitoring():
 # 工具入口
 # ────────────────────────────────────────
 
+
 def toolkit_clipboard(action: str = "read", format: str = "text") -> dict:
     """
     剪贴板处理工具 — 感知 + 智能路由
@@ -350,11 +376,7 @@ def meta_toolkit_clipboard() -> dict:
             "parameters": {
                 "type": "object",
                 "properties": {
-                    "action": {
-                        "type": "string",
-                        "enum": ["read", "start", "stop", "status"],
-                        "description": "read/start/stop/status"
-                    },
+                    "action": {"type": "string", "enum": ["read", "start", "stop", "status"], "description": "read/start/stop/status"},
                     "format": {"type": "string", "description": "text/html", "default": "text"},
                 },
                 "required": ["action"],

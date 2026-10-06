@@ -28,7 +28,9 @@ tea_agent_mini — Tea Agent 精简版，面向嵌入式设备。
 # ── 版本号（历史缺陷: 此前无 __version__，运行时版本检测直接 AttributeError）──
 # wheel 安装后读自身 dist-info；源码树运行（未打包）时回落主包 tea_agent 的版本。
 try:
-    from importlib.metadata import PackageNotFoundError, version as _pkg_version
+    from importlib.metadata import PackageNotFoundError
+    from importlib.metadata import version as _pkg_version
+
     try:
         __version__ = _pkg_version("tea_agent_mini")
     except PackageNotFoundError:
@@ -40,14 +42,15 @@ except Exception:
 from tea_agent.agent import Agent
 from tea_agent.litesession import LiteSession
 
-# ── 存储 ──
-from tea_agent.store import Storage, get_storage
-
 # ── 轻量子 Agent ──
 from tea_agent.multi_agent import LiteAgent
 
 # ── Server ──
-from tea_agent.server import create_app, run_server, main as run_server_main
+from tea_agent.server import create_app, run_server
+from tea_agent.server import main as run_server_main
+
+# ── 存储 ──
+from tea_agent.store import Storage, get_storage
 
 # ── Toolkit ──
 # Toolkit 由 Agent 内部管理，完成后会写入 tlk.toolkit 模块全局供外部读取

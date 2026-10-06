@@ -2,6 +2,7 @@ import logging
 
 logger = logging.getLogger("toolkit")
 
+
 def toolkit_set_topic_title(title: str) -> dict:
     """
     手动设置当前主题的标题。设置后标题显示为 "※{title}"，
@@ -27,6 +28,7 @@ def toolkit_set_topic_title(title: str) -> dict:
         # CLI 模式 fallback：取最新主题ID（list_topics 按 topic_id 降序）
         try:
             from tea_agent.store import get_storage
+
             s = get_storage()
             topics = s.list_topics()
             topic_id = topics[0]["topic_id"] if topics else ""
@@ -42,6 +44,7 @@ def toolkit_set_topic_title(title: str) -> dict:
             agent.db.update_topic_title(topic_id, new_title)
         else:
             from tea_agent.store import get_storage
+
             get_storage().update_topic_title(topic_id, new_title)
     except Exception as e:
         logger.warning(f"更新主题标题失败: {e}")
@@ -49,14 +52,14 @@ def toolkit_set_topic_title(title: str) -> dict:
 
     # 触发 GUI 刷新（如果有）
     try:
-        if hasattr(agent, '_on_summary_updated'):
+        if hasattr(agent, "_on_summary_updated"):
             agent._on_summary_updated(topic_id, new_title)
     except Exception:
-        logger.exception('op_failed')
-
+        logger.exception("op_failed")
 
     logger.info(f"主题标题已手动设置: topic={topic_id} → {new_title}")
     return {"ok": True, "title": new_title, "topic_id": topic_id}
+
 
 def meta_toolkit_set_topic_title():
     """Meta toolkit set topic title."""
@@ -67,13 +70,8 @@ def meta_toolkit_set_topic_title():
             "description": "手动设置当前主题的标题。设置后标题显示为「※自定义标题」，该主题将不再自动生成摘要。",
             "parameters": {
                 "type": "object",
-                "properties": {
-                    "title": {
-                        "type": "string",
-                        "description": "新的主题标题（不含※前缀，系统会自动添加），建议不超过20字"
-                    }
-                },
-                "required": ["title"]
-            }
-        }
+                "properties": {"title": {"type": "string", "description": "新的主题标题（不含※前缀，系统会自动添加），建议不超过20字"}},
+                "required": ["title"],
+            },
+        },
     }

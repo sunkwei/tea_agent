@@ -29,7 +29,7 @@ def toolkit_experience_solidify(
     outcome: str = "success",
     notes: str = "",
     query: str = "",
-    limit: int = 10
+    limit: int = 10,
 ) -> dict:
     """
     经验固化机制。
@@ -69,18 +69,19 @@ def _analyze_execution(task: str, result: str, success: bool, tools_used: list[s
         "duration": duration,
         "tools_used": tools_used or [],
         "timestamp": datetime.now().isoformat(),
-        "suggestion": "solidify" if success else "lesson"
+        "suggestion": "solidify" if success else "lesson",
     }
 
 
 def _solidify_pattern(task: str, result: str, tools_used: list[str], pattern_name: str) -> dict:
     try:
         from tea_agent.toolkit.toolkit_dynamic_skill import toolkit_dynamic_skill
+
         return toolkit_dynamic_skill(
             action="record",
             task=task,
             pattern_name=pattern_name or f"skill_{datetime.now().strftime('%Y%m%d_%H%M%S')}",
-            agents=[{"role": "general", "tools": tools_used or []}]
+            agents=[{"role": "general", "tools": tools_used or []}],
         )
     except Exception as e:
         logger.exception(f"solidify_failed:{task[:50]}")
@@ -89,17 +90,14 @@ def _solidify_pattern(task: str, result: str, tools_used: list[str], pattern_nam
 
 def _record_lesson(task: str, error: str, tools_used: list[str]) -> dict:
     try:
-        return _exp_record(
-            description=f"task_failed:{task[:100]}",
-            category="failure",
-            notes=f"error:{error}"
-        )
+        return _exp_record(description=f"task_failed:{task[:100]}", category="failure", notes=f"error:{error}")
     except Exception as e:
         logger.exception(f"lesson_record_failed:{task[:50]}")
         return {"ok": False, "error": f"lesson_record_failed:{e}"}
 
 
 # ── 进化经验库（原 toolkit_evolution_exp，内联） ──
+
 
 def _get_exp_path() -> str:
     return os.path.join(os.path.expanduser("~"), ".tea_agent", "evolution_exp.json")
@@ -109,7 +107,7 @@ def _load_exp_db() -> list[dict]:
     path = _get_exp_path()
     if os.path.exists(path):
         try:
-            with open(path, encoding='utf-8') as f:
+            with open(path, encoding="utf-8") as f:
                 return json.load(f)
         except Exception as e:
             logger.exception(f"load_exp_failed:{e}")
@@ -119,7 +117,7 @@ def _load_exp_db() -> list[dict]:
 def _save_exp_db(data: list[dict]):
     path = _get_exp_path()
     os.makedirs(os.path.dirname(path), exist_ok=True)
-    with open(path, 'w', encoding='utf-8') as f:
+    with open(path, "w", encoding="utf-8") as f:
         json.dump(data, f, indent=2, ensure_ascii=False)
 
 
@@ -133,7 +131,7 @@ def _exp_record(description: str, category: str = "", tags: str = "", outcome: s
         "category": category or "general",
         "tags": [t.strip() for t in tags.split(",") if t.strip()] if tags else [],
         "outcome": outcome,
-        "notes": notes
+        "notes": notes,
     }
     db.append(exp)
     _save_exp_db(db)
@@ -146,12 +144,14 @@ def _exp_list(limit: int) -> dict:
         return {"ok": True, "experiences": [], "total": 0}
     result = []
     for exp in db[-limit:]:
-        result.append({
-            "description": exp.get("description", ""),
-            "category": exp.get("category", ""),
-            "outcome": exp.get("outcome", ""),
-            "date": exp.get("timestamp", "")[:10]
-        })
+        result.append(
+            {
+                "description": exp.get("description", ""),
+                "category": exp.get("category", ""),
+                "outcome": exp.get("outcome", ""),
+                "date": exp.get("timestamp", "")[:10],
+            }
+        )
     return {"ok": True, "experiences": result, "total": len(db)}
 
 
@@ -173,7 +173,11 @@ def meta_toolkit_experience_solidify() -> dict:
             "parameters": {
                 "type": "object",
                 "properties": {
-                    "action": {"type": "string", "enum": ["analyze", "solidify", "lesson", "auto", "record", "list", "search"], "description": "操作类型"},
+                    "action": {
+                        "type": "string",
+                        "enum": ["analyze", "solidify", "lesson", "auto", "record", "list", "search"],
+                        "description": "操作类型",
+                    },
                     "task": {"type": "string", "description": "任务描述（analyze/solidify/lesson/auto 使用）"},
                     "result": {"type": "string", "description": "执行结果"},
                     "success": {"type": "boolean", "description": "是否成功"},
@@ -187,9 +191,9 @@ def meta_toolkit_experience_solidify() -> dict:
                     "outcome": {"type": "string", "description": "success/failure/partial（record）"},
                     "notes": {"type": "string", "description": "备注（record）"},
                     "query": {"type": "string", "description": "搜索关键词（search）"},
-                    "limit": {"type": "integer", "description": "返回上限（list/search）"}
+                    "limit": {"type": "integer", "description": "返回上限（list/search）"},
                 },
-                "required": ["action"]
-            }
-        }
+                "required": ["action"],
+            },
+        },
     }

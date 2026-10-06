@@ -175,23 +175,14 @@ class TelegramAdapter:
             detail = e.response.text[:200]
             logger.error(f"API 请求失败 (HTTP {status}): {detail}")
             if status == 503:
-                return (
-                    "⚠️ *tea_agent 服务未就绪*\n\n"
-                    "请确认 tea_agent server 正在运行且模型已配置。\n"
-                    "> 启动方式: `tea_agent`"
-                )
+                return "⚠️ *tea_agent 服务未就绪*\n\n请确认 tea_agent server 正在运行且模型已配置。\n> 启动方式: `tea_agent`"
             return f"❌ 服务器错误 (HTTP {status})"
         except httpx.TimeoutException:
             logger.error("API 请求超时")
             return "⏳ *请求超时*\n\ntea_agent 处理时间过长，请稍后重试。"
         except httpx.RequestError as e:
             logger.error(f"无法连接到 tea_agent API: {e}")
-            return (
-                "🔌 *无法连接到 tea_agent*\n\n"
-                f"请确认服务器已启动且 API 地址正确。\n"
-                f"> 当前 API: `{self._api_base}`\n"
-                f"> 启动方式: `tea_agent`"
-            )
+            return f"🔌 *无法连接到 tea_agent*\n\n请确认服务器已启动且 API 地址正确。\n> 当前 API: `{self._api_base}`\n> 启动方式: `tea_agent`"
         except Exception as e:
             logger.exception(f"调用 API 异常: {e}")
             return f"❌ 内部错误: {type(e).__name__}"
@@ -381,15 +372,9 @@ class TelegramAdapter:
                 return
             result = self._switch_config(target)
             if result.get("ok"):
-                await update.message.reply_text(
-                    f"✅ 已切换到配置 `{Path(target).name}`\n"
-                    f"   🔄 新会话将使用新配置",
-                    parse_mode="Markdown"
-                )
+                await update.message.reply_text(f"✅ 已切换到配置 `{Path(target).name}`\n   🔄 新会话将使用新配置", parse_mode="Markdown")
             else:
-                await update.message.reply_text(
-                    f"❌ 切换失败: {result.get('error', '未知错误')}"
-                )
+                await update.message.reply_text(f"❌ 切换失败: {result.get('error', '未知错误')}")
         else:
             # 显示当前配置 + 可用配置列表
             msg = "📌 *当前配置*\n"
@@ -442,10 +427,7 @@ class TelegramAdapter:
                     break
 
             if not target:
-                await update.message.reply_text(
-                    f"❌ 未找到话题 `{topic_prefix}`\n"
-                    "使用 `/topics` 查看可用话题。"
-                )
+                await update.message.reply_text(f"❌ 未找到话题 `{topic_prefix}`\n使用 `/topics` 查看可用话题。")
                 return
 
             # 切换当前用户的话题映射
@@ -477,7 +459,7 @@ class TelegramAdapter:
                         f"Token 使用: {tokens:,}\n\n"
                         f"💡 `/topic <id>` 切换\n"
                         f"    `/topics` 查看列表",
-                        parse_mode="Markdown"
+                        parse_mode="Markdown",
                     )
                 else:
                     await update.message.reply_text(f"📌 当前话题 ID: `{current_id[:16]}...`")
@@ -517,9 +499,7 @@ class TelegramAdapter:
         self._application.add_handler(CommandHandler("topic", self._handle_topic))
         self._application.add_handler(CommandHandler("sessions", self._handle_topics))
         # 文本消息处理器（排除命令）
-        self._application.add_handler(
-            MessageHandler(filters.TEXT & ~filters.COMMAND, self._handle_message)
-        )
+        self._application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, self._handle_message))
         self._application.add_error_handler(self._handle_error)
 
         print("  ✅ 已就绪，等待消息...")

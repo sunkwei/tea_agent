@@ -1,11 +1,12 @@
-"""
-"""
+""" """
+
 import json
 import logging
 
 from ._component import StoreComponent
 
 logger = logging.getLogger("Storage.Summaries")
+
 
 class SummaryStore(StoreComponent):
     """摘要管理：话题摘要、三级历史（Level1/2/3）、语义摘要、工具链摘要。"""
@@ -19,26 +20,31 @@ class SummaryStore(StoreComponent):
         c.close()
         return row["summary"] if row else None
 
-    def update_topic_summary(self, topic_id: str, summary: str,
-                              last_summarized_id: int | None = None):
+    def update_topic_summary(self, topic_id: str, summary: str, last_summarized_id: int | None = None):
         c = self.conn.cursor()
         if last_summarized_id is not None:
-            c.execute('''
+            c.execute(
+                """
                 INSERT INTO t_conv_summary (topic_id, summary, last_summarized_id, last_update)
                 VALUES (?, ?, ?, datetime('now', 'localtime'))
                 ON CONFLICT(topic_id) DO UPDATE SET
                     summary = excluded.summary,
                     last_summarized_id = excluded.last_summarized_id,
                     last_update = datetime('now', 'localtime')
-            ''', (topic_id, summary, last_summarized_id))
+            """,
+                (topic_id, summary, last_summarized_id),
+            )
         else:
-            c.execute('''
+            c.execute(
+                """
                 INSERT INTO t_conv_summary (topic_id, summary, last_update)
                 VALUES (?, ?, datetime('now', 'localtime'))
                 ON CONFLICT(topic_id) DO UPDATE SET
                     summary = excluded.summary,
                     last_update = datetime('now', 'localtime')
-            ''', (topic_id, summary))
+            """,
+                (topic_id, summary),
+            )
         self.conn.commit()
         c.close()
         # 审计：保留历史版本（与 semantic/tool_chain 同一套 append-only 版本表）
@@ -106,8 +112,7 @@ class SummaryStore(StoreComponent):
 
     # ── L3 历史版本（append-only，审计用）────────────────────────
 
-    def _record_version(self, topic_id: str, kind: str, content: str,
-                        conversation_id: str = "") -> int:
+    def _record_version(self, topic_id: str, kind: str, content: str, conversation_id: str = "") -> int:
         """把 L3 摘要的一次变更追加进 ``history_versions``（append-only）。
 
         审计意义：L3 此前只有"当前值"（UPDATE/UPSERT 覆盖），无法回答审计
@@ -137,24 +142,19 @@ class SummaryStore(StoreComponent):
             c = self.conn.cursor()
             try:
                 prev = c.execute(
-                    "SELECT content FROM history_versions "
-                    "WHERE topic_id = ? AND kind = ? ORDER BY version DESC LIMIT 1",
+                    "SELECT content FROM history_versions WHERE topic_id = ? AND kind = ? ORDER BY version DESC LIMIT 1",
                     (topic_id, kind),
                 ).fetchone()
                 if prev is not None and (prev["content"] or "") == content:
                     return 0  # 内容未变 → 不产生新版本
                 row = c.execute(
-                    "SELECT COALESCE(MAX(version), 0) + 1 AS nxt FROM history_versions "
-                    "WHERE topic_id = ? AND kind = ?",
+                    "SELECT COALESCE(MAX(version), 0) + 1 AS nxt FROM history_versions WHERE topic_id = ? AND kind = ?",
                     (topic_id, kind),
                 ).fetchone()
                 nxt = int(row["nxt"]) if row else 1
                 c.execute(
-                    "INSERT INTO history_versions "
-                    "(topic_id, kind, version, content, chars, conversation_id) "
-                    "VALUES (?, ?, ?, ?, ?, ?)",
-                    (topic_id, kind, nxt, content, len(content),
-                     conversation_id or None),
+                    "INSERT INTO history_versions (topic_id, kind, version, content, chars, conversation_id) VALUES (?, ?, ?, ?, ?, ?)",
+                    (topic_id, kind, nxt, content, len(content), conversation_id or None),
                 )
                 self.conn.commit()
                 return nxt
@@ -164,8 +164,7 @@ class SummaryStore(StoreComponent):
             logger.debug("_record_version failed (isolated)", exc_info=True)
             return 0
 
-    def get_l3_versions(self, topic_id: str, kind: str = "",
-                        limit: int = 50) -> list[dict]:
+    def get_l3_versions(self, topic_id: str, kind: str = "", limit: int = 50) -> list[dict]:
         """读取 L3 摘要的历史版本（最新在前）。
 
         Args:
@@ -181,8 +180,7 @@ class SummaryStore(StoreComponent):
         try:
             c = self.conn.cursor()
             try:
-                sql = ("SELECT kind, version, content, chars, conversation_id, created_at "
-                       "FROM history_versions WHERE topic_id = ?")
+                sql = "SELECT kind, version, content, chars, conversation_id, created_at FROM history_versions WHERE topic_id = ?"
                 params: tuple = (topic_id,)
                 if kind:
                     sql += " AND kind = ?"
@@ -197,11 +195,17 @@ class SummaryStore(StoreComponent):
             logger.debug("get_l3_versions failed (isolated)", exc_info=True)
             return []
 
-    def push_to_level2(self, topic_id: str, user_msg: str, ai_msg: str,
-                        files: list = None, rounds: list = None,
-                        max_level2: int = 8,
-                        thinking_max_chars: int = 6000,
-                        max_level2_chars: int = 120000) -> tuple:
+    def push_to_level2(
+        self,
+        topic_id: str,
+        user_msg: str,
+        ai_msg: str,
+        files: list = None,
+        rounds: list = None,
+        max_level2: int = 8,
+        thinking_max_chars: int = 6000,
+        max_level2_chars: int = 120000,
+    ) -> tuple:
         """
         将一轮对话推入 Level 2，超过上限时溢出并触发 L3 摘要。
 
@@ -244,10 +248,7 @@ class SummaryStore(StoreComponent):
         if thinking_parts:
             thinking = "\n\n".join(thinking_parts)
             if thinking_max_chars > 0 and len(thinking) > thinking_max_chars:
-                thinking = (
-                    thinking[:thinking_max_chars]
-                    + f"\n... [思考链已截断: 原长 {len(thinking)} 字符]"
-                )
+                thinking = thinking[:thinking_max_chars] + f"\n... [思考链已截断: 原长 {len(thinking)} 字符]"
             entry["thinking"] = thinking
         if files:
             entry["files"] = files
@@ -256,12 +257,7 @@ class SummaryStore(StoreComponent):
         overflow_items = []
         should_summarize = False
 
-        total_chars = sum(
-            len(e.get("user", "") or "")
-            + len(e.get("thinking", "") or "")
-            + len(e.get("assistant", "") or "")
-            for e in level2
-        )
+        total_chars = sum(len(e.get("user", "") or "") + len(e.get("thinking", "") or "") + len(e.get("assistant", "") or "") for e in level2)
         over_count = len(level2) >= max_level2
         over_chars = max_level2_chars > 0 and total_chars >= max_level2_chars
         if over_count or over_chars:
@@ -286,8 +282,12 @@ class SummaryStore(StoreComponent):
     # ── L2→L3 摘要生成 ──
 
     def generate_l2_to_l3_summary(
-        self, topic_id: str, overflow_items: list,
-        existing_l3: str, summarize_client, summarize_model: str,
+        self,
+        topic_id: str,
+        overflow_items: list,
+        existing_l3: str,
+        summarize_client,
+        summarize_model: str,
         extra_params: dict = None,
     ) -> tuple:
         """
@@ -318,9 +318,7 @@ class SummaryStore(StoreComponent):
             t = item.get("thinking", "")
             a = item.get("assistant", "")[:2000]
             if t:
-                conv_lines.append(
-                    f"[对话 {idx}]\nUser: {u}\nAI思考: {t[:2000]}\nAI回复: {a}"
-                )
+                conv_lines.append(f"[对话 {idx}]\nUser: {u}\nAI思考: {t[:2000]}\nAI回复: {a}")
             else:
                 conv_lines.append(f"[对话 {idx}]\nUser: {u}\nAssistant: {a}")
 
@@ -378,20 +376,16 @@ class SummaryStore(StoreComponent):
             try:
                 u = response.usage
                 usage = {
-                    "total_tokens": getattr(u, 'total_tokens', 0) or 0,
-                    "prompt_tokens": getattr(u, 'prompt_tokens', 0) or 0,
-                    "completion_tokens": getattr(u, 'completion_tokens', 0) or 0,
+                    "total_tokens": getattr(u, "total_tokens", 0) or 0,
+                    "prompt_tokens": getattr(u, "prompt_tokens", 0) or 0,
+                    "completion_tokens": getattr(u, "completion_tokens", 0) or 0,
                 }
             except Exception:
-                logger.exception('op_failed')
-
+                logger.exception("op_failed")
 
             if new_summary:
                 self.set_semantic_summary(topic_id, new_summary)
-                logger.info(
-                    f"L3 摘要更新: {len(overflow_items)}条L2→{len(new_summary)}字符 "
-                    f"(现有L3={len(existing_l3)}字符)"
-                )
+                logger.info(f"L3 摘要更新: {len(overflow_items)}条L2→{len(new_summary)}字符 (现有L3={len(existing_l3)}字符)")
             return new_summary, usage
         except Exception as e:
             logger.warning(f"L2→L3 摘要生成失败: {e}")
@@ -430,6 +424,7 @@ class SummaryStore(StoreComponent):
         c.execute("UPDATE topics SET l3_pending_json = '' WHERE topic_id = ?", (topic_id,))
         self.conn.commit()
         c.close()
+
     # ── 摘要标记 ──
 
     def mark_as_summarized(self, conversation_id: str):
@@ -445,14 +440,12 @@ class SummaryStore(StoreComponent):
         c = self.conn.cursor()
         if limit < 0:
             c.execute(
-                "SELECT * FROM conversations WHERE topic_id = ? AND is_summarized = 0 "
-                "ORDER BY stamp ASC",
+                "SELECT * FROM conversations WHERE topic_id = ? AND is_summarized = 0 ORDER BY stamp ASC",
                 (topic_id,),
             )
         else:
             c.execute(
-                "SELECT * FROM conversations WHERE topic_id = ? AND is_summarized = 0 "
-                "ORDER BY stamp ASC LIMIT ?",
+                "SELECT * FROM conversations WHERE topic_id = ? AND is_summarized = 0 ORDER BY stamp ASC LIMIT ?",
                 (topic_id, limit),
             )
         rows = c.fetchall()

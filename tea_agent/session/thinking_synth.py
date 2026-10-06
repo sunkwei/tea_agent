@@ -39,13 +39,13 @@ __all__ = [
     "synth_nonstream_thinking",
 ]
 
-THINK_BUDGET = 1600           # 流式合成思考字符上限
-THINK_DONE_AT = 1200          # 累计达此长度即闭合思考面板
-CONTENT_GUARD = 2200          # 正文累计超此长度 → 不再合成
-CONTENT_EARLY = 600           # 正文累计 < 此长度视为「开头」，可起合成
-MIN_CONTENT_LEN = 20          # 开头短包（≤ 此长度）不足以判定为思考
+THINK_BUDGET = 1600  # 流式合成思考字符上限
+THINK_DONE_AT = 1200  # 累计达此长度即闭合思考面板
+CONTENT_GUARD = 2200  # 正文累计超此长度 → 不再合成
+CONTENT_EARLY = 600  # 正文累计 < 此长度视为「开头」，可起合成
+MIN_CONTENT_LEN = 20  # 开头短包（≤ 此长度）不足以判定为思考
 NONSTREAM_SYNTH_BUDGET = 1600  # 非流式合成思考字符上限
-NONSTREAM_MIN_LEN = 200       # 非流式：短正文须命中关键词才合成
+NONSTREAM_MIN_LEN = 200  # 非流式：短正文须命中关键词才合成
 
 # 非流式判据：正文够长，或含下列任一思考痕迹词
 _MUSE_MARKERS = ("思考", "推理", "逐步", "分析", "think")
@@ -107,8 +107,8 @@ class MuseThinkingSynthesizer:
         # 收尾兜底口径：重构前只对 "muse" 生效（不含 spark），按原样保留
         self._final_done_applies = "muse" in self.model.lower()
         self._native_rc_seen = False  # 是否收到过原生 reasoning_content
-        self.active = False           # 已越过首包判定、进入合成
-        self.done = False             # 已发出 [THINK_DONE]
+        self.active = False  # 已越过首包判定、进入合成
+        self.done = False  # 已发出 [THINK_DONE]
 
     def note_native_reasoning(self) -> None:
         """告知合成器：本轮已收到原生 ``reasoning_content``。
@@ -137,11 +137,7 @@ class MuseThinkingSynthesizer:
         # 已有原生 reasoning → 正文不是思考，绝不再合成
         if self._native_rc_seen:
             return "", False
-        if not (
-            self.active
-            or _looks_like_thinking(delta_content)
-            or (content_len < CONTENT_EARLY and len(delta_content) > MIN_CONTENT_LEN)
-        ):
+        if not (self.active or _looks_like_thinking(delta_content) or (content_len < CONTENT_EARLY and len(delta_content) > MIN_CONTENT_LEN)):
             return "", False
 
         self.active = True

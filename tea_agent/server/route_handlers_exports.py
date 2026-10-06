@@ -112,8 +112,7 @@ async def handle_file_preview(request):
     media = _IMAGE_MIME.get(ext)
     if not media:
         return JSONResponse(
-            {"error": f"不是可预览的图片类型: {ext or '(无扩展名)'}",
-             "previewable": sorted(_IMAGE_MIME)},
+            {"error": f"不是可预览的图片类型: {ext or '(无扩展名)'}", "previewable": sorted(_IMAGE_MIME)},
             status_code=415,
         )
     headers = {
@@ -149,10 +148,10 @@ async def handle_export_pdf(request):
         # 避免 server 以服务方式运行时 CWD 无写权限导致导出失败。
         # FileResponse 完成响应后会自动清理临时文件。
         _tmp_out = os.path.join(tempfile.gettempdir(), f"tea_export_{topic_id[:8]}_{int(time.time())}.pdf")
-        result = await asyncio.to_thread(export_topic_pdf, topic_id,
-            _tmp_out, db_path, mode=mode, filter_mode=filter_mode)
+        result = await asyncio.to_thread(export_topic_pdf, topic_id, _tmp_out, db_path, mode=mode, filter_mode=filter_mode)
         # Get topic title for filename
         import sqlite3
+
         conn = sqlite3.connect(db_path)
         conn.row_factory = sqlite3.Row
         cur = conn.cursor()
@@ -160,14 +159,13 @@ async def handle_export_pdf(request):
         row = cur.fetchone()
         conn.close()
         title = row["title"] if row else "Untitled"
-        safe_title = "".join(c if c.isalnum() or c in ' -_()[]' else '_' for c in title)
+        safe_title = "".join(c if c.isalnum() or c in " -_()[]" else "_" for c in title)
         safe_title = safe_title.strip()[:80] or "export"
         filename = safe_title + ".pdf"
         # RFC 5987: use filename* for non-ASCII, fallback ASCII for latin-1 clients
-        ascii_name = "".join(c if ord(c) < 128 else '_' for c in filename) or "export.pdf"
-        disposition = f'attachment; filename="{ascii_name}"; filename*=UTF-8''{urllib.parse.quote(filename)}'
-        return FileResponse(result, media_type="application/pdf",
-            headers={"Content-Disposition": disposition})
+        ascii_name = "".join(c if ord(c) < 128 else "_" for c in filename) or "export.pdf"
+        disposition = f'attachment; filename="{ascii_name}"; filename*=UTF-8{{urllib.parse.quote(filename)}}'
+        return FileResponse(result, media_type="application/pdf", headers={"Content-Disposition": disposition})
     except Exception as e:
         return JSONResponse({"error": str(e)}, status_code=500)
 
@@ -193,11 +191,10 @@ async def handle_export_md(request):
         db_path = server._get_storage().db_path
         # 导出文件缓冲到系统临时目录，避免 CWD 无写权限导致失败
         _tmp_out = os.path.join(tempfile.gettempdir(), f"tea_export_{topic_id[:8]}_{int(time.time())}.md")
-        result = await asyncio.to_thread(
-            export_topic_markdown, topic_id,
-            _tmp_out, db_path, mode=mode, filter_mode=filter_mode)
+        result = await asyncio.to_thread(export_topic_markdown, topic_id, _tmp_out, db_path, mode=mode, filter_mode=filter_mode)
         # Get topic title for filename
         import sqlite3
+
         conn = sqlite3.connect(db_path)
         conn.row_factory = sqlite3.Row
         cur = conn.cursor()
@@ -205,14 +202,13 @@ async def handle_export_md(request):
         row = cur.fetchone()
         conn.close()
         title = row["title"] if row else "Untitled"
-        safe_title = "".join(c if c.isalnum() or c in ' -_()[]' else '_' for c in title)
+        safe_title = "".join(c if c.isalnum() or c in " -_()[]" else "_" for c in title)
         safe_title = safe_title.strip()[:80] or "export"
         filename = safe_title + ".md"
         # RFC 5987: use filename* for non-ASCII, fallback ASCII for latin-1 clients
-        ascii_name = "".join(c if ord(c) < 128 else '_' for c in filename) or "export.md"
-        disposition = f'attachment; filename="{ascii_name}"; filename*=UTF-8''{urllib.parse.quote(filename)}'
-        return FileResponse(result, media_type="text/markdown; charset=utf-8",
-            headers={"Content-Disposition": disposition})
+        ascii_name = "".join(c if ord(c) < 128 else "_" for c in filename) or "export.md"
+        disposition = f'attachment; filename="{ascii_name}"; filename*=UTF-8{{urllib.parse.quote(filename)}}'
+        return FileResponse(result, media_type="text/markdown; charset=utf-8", headers={"Content-Disposition": disposition})
     except Exception as e:
         return JSONResponse({"error": str(e)}, status_code=500)
 
@@ -234,6 +230,7 @@ async def handle_upload(request):
 # ================================================================
 #  Screenshots
 # ================================================================
+
 
 async def handle_screenshot_region(request):
     """POST /api/screenshot/region — capture a screen region and return base64."""
@@ -285,7 +282,9 @@ async def handle_screenshot_interactive(request):
         )
 
         proc = await asyncio.create_subprocess_exec(
-            _sys.executable, "-c", script_code,
+            _sys.executable,
+            "-c",
+            script_code,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
         )
@@ -293,13 +292,11 @@ async def handle_screenshot_interactive(request):
 
         if proc.returncode != 0:
             err_msg = stderr.decode()[:300] if stderr else "未知错误"
-            return JSONResponse({"ok": False, "error": f"选区工具异常: {err_msg}"},
-                                status_code=500)
+            return JSONResponse({"ok": False, "error": f"选区工具异常: {err_msg}"}, status_code=500)
 
         result = json.loads(stdout.decode().strip())
         if not result.get("success"):
-            return JSONResponse({"ok": False, "error": result.get("error", "用户取消")},
-                                status_code=400)
+            return JSONResponse({"ok": False, "error": result.get("error", "用户取消")}, status_code=400)
 
         img_path = result["path"]
         if not os.path.isfile(img_path):
@@ -311,16 +308,18 @@ async def handle_screenshot_interactive(request):
         with contextlib.suppress(OSError):
             os.remove(img_path)
 
-        return JSONResponse({
-            "ok": True,
-            "image_base64": b64_str,
-            "width": result["width"],
-            "height": result["height"],
-            "x": result["x"],
-            "y": result["y"],
-            "w": result["w"],
-            "h": result["h"],
-        })
+        return JSONResponse(
+            {
+                "ok": True,
+                "image_base64": b64_str,
+                "width": result["width"],
+                "height": result["height"],
+                "x": result["x"],
+                "y": result["y"],
+                "w": result["w"],
+                "h": result["h"],
+            }
+        )
 
     except asyncio.TimeoutError:
         return JSONResponse({"ok": False, "error": "选区超时（120秒）"}, status_code=504)

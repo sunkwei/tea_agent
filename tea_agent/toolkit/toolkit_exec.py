@@ -32,6 +32,7 @@ def _get_process_tree() -> set:
         pids.add(os.getppid())
     try:
         import psutil as _psutil
+
         current = _psutil.Process()
         parent = current.parent()
         while parent is not None and parent.pid > 1:
@@ -121,9 +122,7 @@ def _elevation_message(app: str = "", args: list | None = None, command_text: st
     """生成拒绝提权的提示（含完整命令，便于用户手动复制执行）。"""
     cmd = command_text.strip() or " ".join([str(app)] + [str(a) for a in (args or [])]).strip()
     return (
-        f"⛔ 已拒绝提权执行：Agent 不允许获取管理员/root 权限。\n"
-        f"需要管理员权限的操作请由**用户手动执行**（复制以下命令到终端自行运行）：\n"
-        f"    {cmd}"
+        f"⛔ 已拒绝提权执行：Agent 不允许获取管理员/root 权限。\n需要管理员权限的操作请由**用户手动执行**（复制以下命令到终端自行运行）：\n    {cmd}"
     )
 
 
@@ -376,9 +375,7 @@ class _ProcessMonitor:
 
 
 # ── 环境变量清洗（DeepSeek Harness 防御模式） ──
-_ENV_SECRET_PATTERNS = re.compile(
-    r"(KEY|SECRET|TOKEN|PASSWORD|PASSWD|CREDENTIAL|AUTH)", re.IGNORECASE
-)
+_ENV_SECRET_PATTERNS = re.compile(r"(KEY|SECRET|TOKEN|PASSWORD|PASSWD|CREDENTIAL|AUTH)", re.IGNORECASE)
 
 
 def _build_scrubbed_env() -> dict:
@@ -435,9 +432,9 @@ def _wait_with_monitor(process, monitor, timeout: int, kill_wait: float = 5.0) -
                     process.kill()
                     process.wait(timeout=kill_wait)
                 except Exception:
-                    logger.exception('op_failed')
+                    logger.exception("op_failed")
             except Exception:
-                logger.exception('op_failed')
+                logger.exception("op_failed")
     finally:
         monitor.stop()
     return kill_reason
@@ -449,12 +446,12 @@ def _pipe_reader(stream, lines):
         for line in iter(stream.readline, ""):
             lines.append(line)
     except ValueError:
-        logger.exception('op_failed')
+        logger.exception("op_failed")
     finally:
         try:
             stream.close()
         except OSError:
-            logger.exception('op_failed')
+            logger.exception("op_failed")
 
 
 def _run_single_with_monitor(app: str, args: list, timeout: int) -> dict:
@@ -476,7 +473,9 @@ def _run_single_with_monitor(app: str, args: list, timeout: int) -> dict:
             stdin=subprocess.DEVNULL,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
-            text=True, encoding="utf-8", errors="replace",
+            text=True,
+            encoding="utf-8",
+            errors="replace",
             start_new_session=True,
             env=_build_scrubbed_env(),
         )
@@ -526,26 +525,28 @@ def _run_single_with_monitor(app: str, args: list, timeout: int) -> dict:
     if killed_by_monitor:
         cmd_preview = f"{app} {' '.join(args[:5])}"
         if len(args) > 5:
-            cmd_preview += f" ... (+{len(args)-5} args)"
-        hint = (f"⏰ 进程空闲超时被终止 (>{timeout}s 无资源消耗): {cmd_preview}")
+            cmd_preview += f" ... (+{len(args) - 5} args)"
+        hint = f"⏰ 进程空闲超时被终止 (>{timeout}s 无资源消耗): {cmd_preview}"
         stderr = (stderr + "\n" + hint) if stderr else hint
     elif killed_by_hardlimit:
         cmd_preview = f"{app} {' '.join(args[:5])}"
         if len(args) > 5:
-            cmd_preview += f" ... (+{len(args)-5} args)"
-        hint = f"⏰ 命令超过硬上限被强制终止 (>{timeout*4}s): {cmd_preview}"
+            cmd_preview += f" ... (+{len(args) - 5} args)"
+        hint = f"⏰ 命令超过硬上限被强制终止 (>{timeout * 4}s): {cmd_preview}"
         stderr = (stderr + "\n" + hint) if stderr else hint
 
     # ok 语义：超时被终止 = 失败（即使进程自身 exit 0）
-    return _spill_result({
-        "ok": (retcode == 0) and not timed_out,
-        "returncode": retcode,
-        "timed_out": timed_out,
-        "timeout_kind": timeout_kind,
-        "signal": exit_signal,
-        "stdout": stdout,
-        "stderr": stderr,
-    })
+    return _spill_result(
+        {
+            "ok": (retcode == 0) and not timed_out,
+            "returncode": retcode,
+            "timed_out": timed_out,
+            "timeout_kind": timeout_kind,
+            "signal": exit_signal,
+            "stdout": stdout,
+            "stderr": stderr,
+        }
+    )
 
 
 def _spill_result(result: dict) -> dict:
@@ -591,8 +592,11 @@ def _run_batch_with_monitor(idx, cmd, timeout):
             [a] + list(ar),
             # 同 _run_single_with_monitor：禁止继承 stdin，避免交互提示假死
             stdin=subprocess.DEVNULL,
-            stdout=subprocess.PIPE, stderr=subprocess.PIPE,
-            text=True, encoding="utf-8", errors="replace",
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
             start_new_session=True,
             env=_build_scrubbed_env(),
         )
@@ -623,20 +627,21 @@ def _run_batch_with_monitor(idx, cmd, timeout):
         if kill_reason:
             cmd_preview = f"{a} {' '.join(ar[:3])}"
             if len(ar) > 3:
-                cmd_preview += f" ... (+{len(ar)-3} args)"
-            hint = (f"⏰ 空闲超时({timeout}s): {cmd_preview}" if kill_reason == "monitor"
-                    else f"⏰ 硬上限超时(>{timeout*4}s): {cmd_preview}")
+                cmd_preview += f" ... (+{len(ar) - 3} args)"
+            hint = f"⏰ 空闲超时({timeout}s): {cmd_preview}" if kill_reason == "monitor" else f"⏰ 硬上限超时(>{timeout * 4}s): {cmd_preview}"
             stderr = (stderr + "\n" if stderr else "") + hint
 
-        result.update({
-            "returncode": retcode,
-            "timed_out": timed_out,
-            "timeout_kind": timeout_kind,
-            "signal": exit_signal,
-            "stdout": stdout,
-            "stderr": stderr,
-            "error": (retcode != 0) or timed_out,
-        })
+        result.update(
+            {
+                "returncode": retcode,
+                "timed_out": timed_out,
+                "timeout_kind": timeout_kind,
+                "signal": exit_signal,
+                "stdout": stdout,
+                "stderr": stderr,
+                "error": (retcode != 0) or timed_out,
+            }
+        )
         # 大输出落盘引用化（旁路，fail-open：失败原样返回）
         _spill_result(result)
     except Exception as e:
@@ -658,8 +663,18 @@ def _run_batch_with_monitor(idx, cmd, timeout):
 # 不能安全解释的一律返回「原因 + 正确用法 + 实际收到的参数形态」，绝不在退化参数上
 # 继续执行（宁可报错，不可执行错命令）。
 _APP_ALIASES = (
-    "command", "cmd", "executable", "program", "program_path", "binary",
-    "exe", "process", "script", "shell_command", "shell", "run",
+    "command",
+    "cmd",
+    "executable",
+    "program",
+    "program_path",
+    "binary",
+    "exe",
+    "process",
+    "script",
+    "shell_command",
+    "shell",
+    "run",
 )
 _ARGS_ALIASES = ("argv", "arguments_list", "options", "flags", "params_list")
 _COMMANDS_ALIASES = ("cmds", "command_list", "cmd_list", "batch", "tasks", "jobs")
@@ -673,14 +688,9 @@ _ACTIONS = ("single", "batch")
 _MAX_UNWRAP_DEPTH = 8
 
 # 这些字符串不是可执行程序名（模型把布尔/空值写成了字符串）
-_FAKE_APP_TOKENS = frozenset(
-    {"true", "false", "null", "none", "nil", "undefined", "nan", "bool", "string"}
-)
+_FAKE_APP_TOKENS = frozenset({"true", "false", "null", "none", "nil", "undefined", "nan", "bool", "string"})
 
-_EXEC_USAGE = (
-    "toolkit_exec(app='ls', args=['-la']) 或 "
-    "toolkit_exec(action='batch', commands=[{'app': 'ls', 'args': ['-la']}])"
-)
+_EXEC_USAGE = "toolkit_exec(app='ls', args=['-la']) 或 toolkit_exec(action='batch', commands=[{'app': 'ls', 'args': ['-la']}])"
 
 
 def _describe(value, limit: int = 160) -> str:
@@ -913,9 +923,7 @@ def _coerce_timeout(value) -> int:
     return min(value, 86400)
 
 
-_ENTRY_KNOWN_KEYS = frozenset(
-    ("app", "args", "_unknown_keys") + _APP_ALIASES + _ARGS_ALIASES + ("arguments",)
-)
+_ENTRY_KNOWN_KEYS = frozenset(("app", "args", "_unknown_keys") + _APP_ALIASES + _ARGS_ALIASES + ("arguments",))
 
 
 def _normalize_commands(commands):
@@ -955,10 +963,7 @@ def _normalize_commands(commands):
         prog, extra = _coerce_app(e_app)
         coerced = _coerce_args(e_args)
         if coerced is None:
-            coerced = (
-                [json.dumps(e_args, ensure_ascii=False, default=str)]
-                if isinstance(e_args, dict) else [str(e_args)]
-            )
+            coerced = [json.dumps(e_args, ensure_ascii=False, default=str)] if isinstance(e_args, dict) else [str(e_args)]
         entry = {"app": prog, "args": extra + coerced}
         # 透传：主入口与 _run_batch_with_monitor 会各规范化一次，丢失该字段会让
         # 错误信息退回「显示规范化后的键名」而误导模型。
@@ -997,9 +1002,14 @@ def _normalize_exec_inputs(app, args, action, commands, timeout, extra, _depth: 
         直接返回，不得继续执行（避免在退化参数上跑出错误命令）。
     """
     if _depth > _MAX_UNWRAP_DEPTH:
-        return "", [], action, None, timeout, _exec_arg_error(
-            "参数包装层嵌套过深，已停止解析（避免递归爆栈）",
-            received={"args": args}, example=_EXEC_USAGE)
+        return (
+            "",
+            [],
+            action,
+            None,
+            timeout,
+            _exec_arg_error("参数包装层嵌套过深，已停止解析（避免递归爆栈）", received={"args": args}, example=_EXEC_USAGE),
+        )
     extra = dict(extra or {})
     app_received, args_received = app, args
 
@@ -1017,23 +1027,25 @@ def _normalize_exec_inputs(app, args, action, commands, timeout, extra, _depth: 
             args = list(blob)
         else:
             # 无法解释的包装层不得静默丢弃（静默丢弃会让模型以为参数已生效）
-            return "", [], action, None, timeout, _exec_arg_error(
-                f"{key} 无法解析为参数对象（需要 dict 或 JSON 对象字符串）",
-                received={key: blob}, example=_EXEC_USAGE)
+            return (
+                "",
+                [],
+                action,
+                None,
+                timeout,
+                _exec_arg_error(f"{key} 无法解析为参数对象（需要 dict 或 JSON 对象字符串）", received={key: blob}, example=_EXEC_USAGE),
+            )
 
     # ── 1. 等价参数名收敛（规范名优先；同义名重复且不等价 → 报冲突）──
     app, conflict = _take_alias(extra, ("app",) + _APP_ALIASES, app, "app")
     if conflict:
-        return "", [], action, None, timeout, _exec_arg_error(
-            conflict, received={"app": app_received, "args": args_received}, example=_EXEC_USAGE)
+        return "", [], action, None, timeout, _exec_arg_error(conflict, received={"app": app_received, "args": args_received}, example=_EXEC_USAGE)
     args, conflict = _take_alias(extra, ("args",) + _ARGS_ALIASES, args, "args")
     if conflict:
-        return "", [], action, None, timeout, _exec_arg_error(
-            conflict, received={"args": args_received, "app": app_received}, example=_EXEC_USAGE)
+        return "", [], action, None, timeout, _exec_arg_error(conflict, received={"args": args_received, "app": app_received}, example=_EXEC_USAGE)
     commands, conflict = _take_alias(extra, ("commands",) + _COMMANDS_ALIASES, commands, "commands")
     if conflict:
-        return "", [], action, None, timeout, _exec_arg_error(
-            conflict, received={"commands": commands, "app": app_received}, example=_EXEC_USAGE)
+        return "", [], action, None, timeout, _exec_arg_error(conflict, received={"commands": commands, "app": app_received}, example=_EXEC_USAGE)
     for key in ("action",) + _ACTION_ALIASES:
         if key in extra:
             _v = extra.pop(key)
@@ -1051,28 +1063,50 @@ def _normalize_exec_inputs(app, args, action, commands, timeout, extra, _depth: 
 
     # 剩余未知键：明确指出（静默忽略会让模型误以为参数已生效）
     if extra:
-        return "", [], action, None, timeout, _exec_arg_error(
-            f"不支持参数 {sorted(map(str, extra))}；该工具只接受 app / args / action / commands / timeout",
-            received=dict(extra), example=_EXEC_USAGE)
+        return (
+            "",
+            [],
+            action,
+            None,
+            timeout,
+            _exec_arg_error(
+                f"不支持参数 {sorted(map(str, extra))}；该工具只接受 app / args / action / commands / timeout",
+                received=dict(extra),
+                example=_EXEC_USAGE,
+            ),
+        )
 
     # ── 2. args 里塞着完整参数对象 → 展开为真实参数后重新收敛 ──
     if isinstance(args, dict):
         if any(k in args for k in ("app", "action", "commands", "args", "command")):
             for k, v in args.items():
                 extra.setdefault(k, v)
-            return _normalize_exec_inputs(app, None, action, commands, timeout, extra,
-                                          _depth + 1)
-        return "", [], action, None, timeout, _exec_arg_error(
-            f"args 需要字符串数组，收到 dict(keys={sorted(map(str, args))[:8]})",
-            received={"args": args, "app": app_received}, example=_EXEC_USAGE)
+            return _normalize_exec_inputs(app, None, action, commands, timeout, extra, _depth + 1)
+        return (
+            "",
+            [],
+            action,
+            None,
+            timeout,
+            _exec_arg_error(
+                f"args 需要字符串数组，收到 dict(keys={sorted(map(str, args))[:8]})",
+                received={"args": args, "app": app_received},
+                example=_EXEC_USAGE,
+            ),
+        )
 
     # ── 3. app / args 形态归一 ──
     app, app_inline_args = _coerce_app(app)
     coerced_args = _coerce_args(args)
     if coerced_args is None:
-        return "", [], action, None, timeout, _exec_arg_error(
-            f"args 需要字符串数组，收到 {type(args).__name__}",
-            received={"args": args, "app": app_received}, example=_EXEC_USAGE)
+        return (
+            "",
+            [],
+            action,
+            None,
+            timeout,
+            _exec_arg_error(f"args 需要字符串数组，收到 {type(args).__name__}", received={"args": args, "app": app_received}, example=_EXEC_USAGE),
+        )
     args = app_inline_args + coerced_args if app_inline_args else coerced_args
 
     # ── 4. action / timeout / commands 归一 ──
@@ -1092,19 +1126,35 @@ def _normalize_exec_inputs(app, args, action, commands, timeout, extra, _depth: 
             logger.info("toolkit_exec: action=batch 但无 commands 清单 → 按 single 执行")
             action = "single"
         else:
-            return "", [], action, None, timeout, _exec_arg_error(
-                "action=batch 需要 commands 清单（形如 [{'app': 'ls', 'args': ['-la']}]）",
-                received={"action": action, "app": app_received, "commands": commands},
-                example=_EXEC_USAGE)
+            return (
+                "",
+                [],
+                action,
+                None,
+                timeout,
+                _exec_arg_error(
+                    "action=batch 需要 commands 清单（形如 [{'app': 'ls', 'args': ['-la']}]）",
+                    received={"action": action, "app": app_received, "commands": commands},
+                    example=_EXEC_USAGE,
+                ),
+            )
     if action == "single" and not app:
-        return "", [], action, commands, timeout, _exec_arg_error(
-            "app 缺失或类型不可用（需要可执行程序路径字符串；布尔值/空值均不可用）",
-            received={"app": app_received, "args": args_received}, example=_EXEC_USAGE)
+        return (
+            "",
+            [],
+            action,
+            commands,
+            timeout,
+            _exec_arg_error(
+                "app 缺失或类型不可用（需要可执行程序路径字符串；布尔值/空值均不可用）",
+                received={"app": app_received, "args": args_received},
+                example=_EXEC_USAGE,
+            ),
+        )
     return app, args, action, commands, timeout, None
 
 
-def toolkit_exec(app: str = "", args: list = None, action: str = "single",
-                 commands: list = None, timeout: int = 30, **extra):
+def toolkit_exec(app: str = "", args: list = None, action: str = "single", commands: list = None, timeout: int = 30, **extra):
     """
     执行系统命令（单条或批量并行）。
 
@@ -1135,12 +1185,13 @@ def toolkit_exec(app: str = "", args: list = None, action: str = "single",
         single: {"ok": bool, "returncode": int, "stdout": str, "stderr": str}
         batch: {"ok": bool, "results": list, "success_rate": str, "total": int}
     """
-    logger.info(f"toolkit_exec called: app={app!r}, args={repr(args)[:80]}, action={action!r}, commands={repr(commands)[:80]}, timeout={timeout!r}, extra={sorted(map(str, extra))}")
+    logger.info(
+        f"toolkit_exec called: app={app!r}, args={repr(args)[:80]}, action={action!r}, commands={repr(commands)[:80]}, timeout={timeout!r}, extra={sorted(map(str, extra))}"
+    )
 
     # ── 入参归一化（等价参数名/整行命令/包装层/形态收敛，详见 _normalize_exec_inputs）──
     # 归一化失败必须直接返回：绝不带着退化的 app/args 继续执行，否则会跑出错误命令。
-    app, args, action, commands, timeout, _norm_err = _normalize_exec_inputs(
-        app, args, action, commands, timeout, extra)
+    app, args, action, commands, timeout, _norm_err = _normalize_exec_inputs(app, args, action, commands, timeout, extra)
     if _norm_err is not None:
         return _norm_err
     if args is None:
@@ -1199,17 +1250,16 @@ def toolkit_exec(app: str = "", args: list = None, action: str = "single",
                         with os.fdopen(tmpfd, "w", encoding="utf-8") as f:
                             f.write(script)
                         # 重建 args：用临时文件路径替换 -c + script
-                        new_args = list(args[:i]) + [tmppath] + list(args[i+2:])
+                        new_args = list(args[:i]) + [tmppath] + list(args[i + 2 :])
                         logger.info(f"toolkit_exec: -c脚本{len(script)}字符→临时文件 {tmppath}")
                         # 递归调用但跳过重检测（临时文件路径不含-c，不会再触发）
-                        result = toolkit_exec(app=app, args=new_args, action="single",
-                                             commands=None, timeout=timeout)
+                        result = toolkit_exec(app=app, args=new_args, action="single", commands=None, timeout=timeout)
                     finally:
                         # 清理临时文件
                         try:
                             os.unlink(tmppath)
                         except OSError:
-                            logger.exception('op_failed')
+                            logger.exception("op_failed")
 
                     return result
                 break  # 只处理第一个 -c
@@ -1228,17 +1278,16 @@ def toolkit_exec(app: str = "", args: list = None, action: str = "single",
                         with os.fdopen(tmpfd, "w", encoding="utf-8") as f:
                             f.write(script)
                         # 重建 args：用临时文件路径替换 -c + script
-                        new_args = list(args[:i]) + [tmppath] + list(args[i+2:])
+                        new_args = list(args[:i]) + [tmppath] + list(args[i + 2 :])
                         logger.info(f"toolkit_exec: -c脚本{len(script)}字符→临时文件 {tmppath}")
                         # 递归调用但跳过重检测（临时文件路径不含-c，不会再触发）
-                        result = toolkit_exec(app=app, args=new_args, action="single",
-                                             commands=None, timeout=timeout)
+                        result = toolkit_exec(app=app, args=new_args, action="single", commands=None, timeout=timeout)
                     finally:
                         # 清理临时文件
                         try:
                             os.unlink(tmppath)
                         except OSError:
-                            logger.exception('op_failed')
+                            logger.exception("op_failed")
 
                     return result
                 break  # 只处理第一个 -c
@@ -1278,6 +1327,7 @@ def toolkit_exec(app: str = "", args: list = None, action: str = "single",
     effective_timeout = timeout if timeout else 120
     result = _run_single_with_monitor(app, args, effective_timeout)
     return result
+
 
 def meta_toolkit_exec() -> dict:
     """Meta toolkit exec."""
@@ -1321,5 +1371,6 @@ def meta_toolkit_exec() -> dict:
                     },
                 },
                 "required": [],
-            },        },
+            },
+        },
     }

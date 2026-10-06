@@ -151,10 +151,7 @@ def inject_messages_into_context(agent_id: str, context: dict | None = None) -> 
         return context or {}
 
     # 构建消息摘要
-    msg_text = "\n\n".join([
-        f"[From: {m.get('from', 'unknown')} @ {m.get('timestamp', '?')}]\n{m.get('text', '')}"
-        for m in unread
-    ])
+    msg_text = "\n\n".join([f"[From: {m.get('from', 'unknown')} @ {m.get('timestamp', '?')}]\n{m.get('text', '')}" for m in unread])
 
     inbox_context = {"## Incoming Messages": msg_text}
 
@@ -185,10 +182,7 @@ def send_message_as(from_agent: str, to: str, text: str) -> bool:
 def get_message_stats() -> dict:
     """获取消息统计（用于持久化）。"""
     with _registry_lock:
-        return {
-            aid: len(msgs)
-            for aid, msgs in _message_registry.items()
-        }
+        return {aid: len(msgs) for aid, msgs in _message_registry.items()}
 
 
 # ── Meta ──────────────────────────────────────
@@ -206,27 +200,14 @@ def meta_toolkit_subagent_msg() -> dict:
                     "action": {
                         "type": "string",
                         "enum": ["send", "check_inbox", "poll", "clear"],
-                        "description": "send(发送)/check_inbox(收件箱)/poll(父代收集)/clear(清空)"
+                        "description": "send(发送)/check_inbox(收件箱)/poll(父代收集)/clear(清空)",
                     },
-                    "to": {
-                        "type": "string",
-                        "description": "Target agent ID"
-                    },
-                    "message": {
-                        "type": "string",
-                        "description": "Message text content"
-                    },
-                    "agent_id": {
-                        "type": "string",
-                        "description": "Your agent ID"
-                    },
-                    "limit": {
-                        "type": "integer",
-                        "description": "Max messages to return",
-                        "default": 50
-                    }
+                    "to": {"type": "string", "description": "Target agent ID"},
+                    "message": {"type": "string", "description": "Message text content"},
+                    "agent_id": {"type": "string", "description": "Your agent ID"},
+                    "limit": {"type": "integer", "description": "Max messages to return", "default": 50},
                 },
-                "required": ["action"]
-            }
-        }
+                "required": ["action"],
+            },
+        },
     }

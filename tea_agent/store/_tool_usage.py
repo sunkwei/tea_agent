@@ -123,9 +123,7 @@ class ToolUsageStore(StoreComponent):
         try:
             c = self.conn.cursor()
             try:
-                rows = c.execute(
-                    f"SELECT tool, uses, first_used, last_used, pin FROM {self._TABLE}"
-                ).fetchall()
+                rows = c.execute(f"SELECT tool, uses, first_used, last_used, pin FROM {self._TABLE}").fetchall()
             finally:
                 c.close()
         except Exception:
@@ -207,7 +205,4 @@ class ToolUsageStore(StoreComponent):
     def report(self) -> list[dict]:
         """按使用次数降序（供展示）。"""
         usage = self.all_usage()
-        return [
-            {"tool": t, **v}
-            for t, v in sorted(usage.items(), key=lambda kv: (-kv[1]["uses"], kv[0]))
-        ]
+        return [{"tool": t, **v} for t, v in sorted(usage.items(), key=lambda kv: (-kv[1]["uses"], kv[0]))]

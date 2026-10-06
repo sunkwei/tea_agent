@@ -694,10 +694,20 @@ html = html.replace(/\n/g, '<br>');
 
 **permission.py** → 全部放行（自由奔放）
 ```python
-def check_read(self, path): return True
-def check_write(self, path): return True
-def check_exec(self, command): return True
-def check_net(self, host, port=0): return True
+def check_read(self, path):
+    return True
+
+
+def check_write(self, path):
+    return True
+
+
+def check_exec(self, command):
+    return True
+
+
+def check_net(self, host, port=0):
+    return True
 ```
 
 **app.js** → 换行压缩
@@ -1825,8 +1835,8 @@ debug mode - show visualization
 ```python
 # 先计算面积（在模型输入空间 544x960 坐标系下），再缩放到原图
 for j in range(len(det)):
-    x1, y1, x2, y2 = det[j].round()[0:4].tolist()   # ← 此时还是模型空间坐标
-    area = (x2 - x1) * (y2 - y1)                     # ← 面积基于 544×960
+    x1, y1, x2, y2 = det[j].round()[0:4].tolist()  # ← 此时还是模型空间坐标
+    area = (x2 - x1) * (y2 - y1)  # ← 面积基于 544×960
     model_areas.append(area)
     ...
 
@@ -2761,16 +2771,12 @@ R = Reactor(model_dir="./model")
 result = R.analyze_files(["img1.jpg", "img2.jpg", "img3.jpg"])
 
 # 指定只跑行为和检测模型
-result = R.analyze_files(
-    ["photo1.png", "photo2.png"],
-    todo=DO_ACT | DO_FACEDET,
-    userdata={"facedet_conf_thresh": 0.5, "act_conf_thresh": 0.3}
-)
+result = R.analyze_files(["photo1.png", "photo2.png"], todo=DO_ACT | DO_FACEDET, userdata={"facedet_conf_thresh": 0.5, "act_conf_thresh": 0.3})
 
 # 结果使用
-for i, fp in enumerate(result['_file_paths']):
-    faces = result['facedet_result_faces'][i]    # (N, 5)
-    acts  = result['act_results'][i]              # (N, 6)
+for i, fp in enumerate(result["_file_paths"]):
+    faces = result["facedet_result_faces"][i]  # (N, 5)
+    acts = result["act_results"][i]  # (N, 6)
     print(f"{fp}: {len(faces)}张脸, {len(acts)}个行为")
 
 print(f"加载失败: {result['_failed_paths']}")
@@ -4146,22 +4152,22 @@ Server 运行在 **http://127.0.0.1:8282**
 def bubble_sort(arr):
     """
     冒泡排序算法（Bubble Sort）
-    
+
     原理：重复遍历待排序序列，依次比较相邻两个元素，
     如果顺序错误就交换，直到没有需要交换的元素为止。
     每一轮遍历会将当前未排序部分的最大值"冒泡"到末尾。
-    
+
     参数:
         arr: list — 待排序的列表（元素需支持比较操作）
-    
+
     返回:
         list — 已排序的列表（升序）
-    
+
     时间复杂度:
         - 最坏情况（逆序）：O(n²)
         - 最好情况（已有序）：O(n) — 优化版，一轮无交换即提前结束
         - 平均情况：O(n²)
-    
+
     空间复杂度: O(1) — 原地排序
     稳定性: 稳定（相等元素不交换，保持原相对顺序）
     """
@@ -4177,9 +4183,9 @@ def bubble_sort(arr):
         # 内层循环：在未排序区间 [0, n-1-i] 内比较相邻元素
         # 因为末尾 i 个元素已经排好，无需再比较
         for j in range(n - 1 - i):
-            if arr[j] > arr[j + 1]:      # 如果前一个 > 后一个（升序条件）
+            if arr[j] > arr[j + 1]:  # 如果前一个 > 后一个（升序条件）
                 arr[j], arr[j + 1] = arr[j + 1], arr[j]  # 交换
-                swapped = True           # 标记本轮有交换
+                swapped = True  # 标记本轮有交换
 
         # ★ 优化：如果本轮没有任何交换，说明序列已经有序，提前结束
         if not swapped:
@@ -4192,13 +4198,13 @@ def bubble_sort(arr):
 if __name__ == "__main__":
     # 测试用例
     test_cases = [
-        [64, 34, 25, 12, 22, 11, 90],       # 普通乱序
-        [5, 1, 4, 2, 8],                     # 较短乱序
-        [1, 2, 3, 4, 5],                     # 已有序（检验优化）
-        [5, 4, 3, 2, 1],                     # 完全逆序
-        [42],                                 # 单元素
-        [],                                    # 空列表
-        [3, 3, 1, 2, 3],                      # 含重复元素
+        [64, 34, 25, 12, 22, 11, 90],  # 普通乱序
+        [5, 1, 4, 2, 8],  # 较短乱序
+        [1, 2, 3, 4, 5],  # 已有序（检验优化）
+        [5, 4, 3, 2, 1],  # 完全逆序
+        [42],  # 单元素
+        [],  # 空列表
+        [3, 3, 1, 2, 3],  # 含重复元素
     ]
 
     for arr in test_cases:
@@ -5713,11 +5719,11 @@ def fibonacci_generator_yield(n):
         for num in fibonacci_generator_yield(10):
             print(num)
     """
-    a, b = 0, 1          # a = F(0), b = F(1)
+    a, b = 0, 1  # a = F(0), b = F(1)
     count = 0
 
     while count < n:
-        yield a          # 返回当前项
+        yield a  # 返回当前项
         a, b = b, a + b  # 并行赋值：a→b, b→a+b
         count += 1
 
@@ -5823,7 +5829,7 @@ def partition(arr, low, high):
     for j in range(low, high):
         # 若当前元素 <= 基准值，则将其交换到左侧区域
         if arr[j] <= pivot:
-            i += 1                      # 扩大左侧区域
+            i += 1  # 扩大左侧区域
             arr[i], arr[j] = arr[j], arr[i]  # 交换
 
     # 将基准值放到正确位置（左侧区域的后一个位置）
@@ -6029,8 +6035,8 @@ def binary_search_leftmost(arr, target):
         mid = left + (right - left) // 2
 
         if arr[mid] == target:
-            result = mid       # 记录当前找到的位置
-            right = mid - 1    # 继续在左侧查找看有没有更早的匹配
+            result = mid  # 记录当前找到的位置
+            right = mid - 1  # 继续在左侧查找看有没有更早的匹配
         elif arr[mid] < target:
             left = mid + 1
         else:
@@ -6057,8 +6063,8 @@ def binary_search_rightmost(arr, target):
         mid = left + (right - left) // 2
 
         if arr[mid] == target:
-            result = mid       # 记录当前找到的位置
-            left = mid + 1     # 继续在右侧查找看有没有更晚的匹配
+            result = mid  # 记录当前找到的位置
+            left = mid + 1  # 继续在右侧查找看有没有更晚的匹配
         elif arr[mid] < target:
             left = mid + 1
         else:
@@ -6097,9 +6103,9 @@ def binary_search_insert_position(arr, target):
         mid = left + (right - left) // 2
 
         if arr[mid] < target:
-            left = mid + 1      # 目标值更大，插入位置在右侧
+            left = mid + 1  # 目标值更大，插入位置在右侧
         else:
-            right = mid         # 目标值 <= 当前元素，插入位置在左侧或当前位置
+            right = mid  # 目标值 <= 当前元素，插入位置在左侧或当前位置
 
     return left
 
@@ -6135,12 +6141,9 @@ if __name__ == "__main__":
     dup_arr = [1, 2, 2, 2, 3, 4, 4, 5, 5, 5, 5, 6]
 
     print(f"  数组: {dup_arr}")
-    print(f"  查找 2 → 左边界: {binary_search_leftmost(dup_arr, 2)}, "
-          f"右边界: {binary_search_rightmost(dup_arr, 2)}")
-    print(f"  查找 5 → 左边界: {binary_search_leftmost(dup_arr, 5)}, "
-          f"右边界: {binary_search_rightmost(dup_arr, 5)}")
-    print(f"  查找 4 → 左边界: {binary_search_leftmost(dup_arr, 4)}, "
-          f"右边界: {binary_search_rightmost(dup_arr, 4)}")
+    print(f"  查找 2 → 左边界: {binary_search_leftmost(dup_arr, 2)}, 右边界: {binary_search_rightmost(dup_arr, 2)}")
+    print(f"  查找 5 → 左边界: {binary_search_leftmost(dup_arr, 5)}, 右边界: {binary_search_rightmost(dup_arr, 5)}")
+    print(f"  查找 4 → 左边界: {binary_search_leftmost(dup_arr, 4)}, 右边界: {binary_search_rightmost(dup_arr, 4)}")
 
     # 测试插入位置
     print("\n" + "=" * 55)
@@ -6189,6 +6192,7 @@ Python 装饰器（Decorator）详解
   ✅ 缓存/记忆化    ✅ 重试机制      ✅ 输入验证
   ✅ 事务管理       ✅ 注册/订阅机制 ✅ 限流/熔断
 """
+
 import functools
 import time
 import random
@@ -6197,6 +6201,7 @@ import random
 # ============================================
 # 第一部分：入门级 — 最简单的装饰器
 # ============================================
+
 
 def simple_decorator(func):
     """
@@ -6212,12 +6217,14 @@ def simple_decorator(func):
                 return result
             return wrapper
     """
+
     @functools.wraps(func)  # 关键！保留原函数的 __name__ 和 __doc__
     def wrapper(*args, **kwargs):
         print(f"[{func.__name__}] 被调用了")
         result = func(*args, **kwargs)
         print(f"[{func.__name__}] 执行完成")
         return result
+
     return wrapper
 
 
@@ -6232,6 +6239,7 @@ def greet(name):
 # 第二部分：实用型 — 带参数的装饰器
 # ============================================
 
+
 def log(level="INFO"):
     """
     带参数的装饰器
@@ -6244,6 +6252,7 @@ def log(level="INFO"):
         def my_func():
             pass
     """
+
     def decorator(func):
         @functools.wraps(func)
         def wrapper(*args, **kwargs):
@@ -6253,15 +6262,15 @@ def log(level="INFO"):
             try:
                 result = func(*args, **kwargs)
                 elapsed = (time.perf_counter() - start) * 1000
-                print(f"[{timestamp}] [{level}] {func.__name__}() 完成 "
-                      f"({elapsed:.1f}ms) → {result!r}")
+                print(f"[{timestamp}] [{level}] {func.__name__}() 完成 ({elapsed:.1f}ms) → {result!r}")
                 return result
             except Exception as e:
                 elapsed = (time.perf_counter() - start) * 1000
-                print(f"[{timestamp}] [{level}] {func.__name__}() 失败 "
-                      f"({elapsed:.1f}ms) → {type(e).__name__}: {e}")
+                print(f"[{timestamp}] [{level}] {func.__name__}() 失败 ({elapsed:.1f}ms) → {type(e).__name__}: {e}")
                 raise
+
         return wrapper
+
     return decorator
 
 
@@ -6275,12 +6284,14 @@ def divide(a, b):
 # 第三部分：经典场景 — 性能计时器
 # ============================================
 
+
 def timer(func):
     """
     性能计时装饰器：统计函数执行耗时
 
     用途：性能分析、找出瓶颈
     """
+
     @functools.wraps(func)
     def wrapper(*args, **kwargs):
         start = time.perf_counter()
@@ -6288,6 +6299,7 @@ def timer(func):
         elapsed = (time.perf_counter() - start) * 1000  # 毫秒
         print(f"⚡ {func.__name__}() 耗时: {elapsed:.4f} ms")
         return result
+
     return wrapper
 
 
@@ -6306,6 +6318,7 @@ def slow_sum(n):
 # 第四部分：经典场景 — 重试机制
 # ============================================
 
+
 def retry(max_retries=3, delay=0.5, exceptions=(Exception,)):
     """
     失败自动重试装饰器
@@ -6317,6 +6330,7 @@ def retry(max_retries=3, delay=0.5, exceptions=(Exception,)):
         delay: 每次重试前的等待秒数
         exceptions: 捕获的异常类型元组
     """
+
     def decorator(func):
         @functools.wraps(func)
         def wrapper(*args, **kwargs):
@@ -6327,13 +6341,14 @@ def retry(max_retries=3, delay=0.5, exceptions=(Exception,)):
                 except exceptions as e:
                     last_exception = e
                     if attempt < max_retries:
-                        print(f"⚠️ 第 {attempt} 次失败 ({type(e).__name__}: {e})"
-                              f"，{delay}秒后重试...")
+                        print(f"⚠️ 第 {attempt} 次失败 ({type(e).__name__}: {e})，{delay}秒后重试...")
                         time.sleep(delay)
                     else:
                         print(f"❌ 重试 {max_retries} 次均失败，放弃")
             raise last_exception  # 全部失败，抛出最后一个异常
+
         return wrapper
+
     return decorator
 
 
@@ -6348,6 +6363,7 @@ def unstable_api():
 # ============================================
 # 第五部分：经典场景 — 记忆化缓存（Memoization）
 # ============================================
+
 
 def memoize(func):
     """
@@ -6389,22 +6405,24 @@ def fibonacci(n):
 # 第六部分：经典场景 — 权限校验
 # ============================================
 
+
 def require_role(role):
     """
     权限校验装饰器
 
     用途：Web 框架中的角色鉴权
     """
+
     def decorator(func):
         @functools.wraps(func)
         def wrapper(user, *args, **kwargs):
             # 模拟权限检查
             if user.get("role") != role:
-                raise PermissionError(
-                    f"用户 {user.get('name')} 没有 {role} 权限"
-                )
+                raise PermissionError(f"用户 {user.get('name')} 没有 {role} 权限")
             return func(user, *args, **kwargs)
+
         return wrapper
+
     return decorator
 
 
@@ -6417,6 +6435,7 @@ def delete_user(user, target_user_id):
 # ============================================
 # 第七部分：高级 — 类装饰器
 # ============================================
+
 
 def singleton(cls):
     """
@@ -6438,6 +6457,7 @@ def singleton(cls):
 @singleton
 class DatabaseConnection:
     """数据库连接（单例）"""
+
     def __init__(self):
         self.connected = False
         print("🔌 创建数据库连接...")
@@ -6477,7 +6497,7 @@ if __name__ == "__main__":
     print("4️⃣  重试机制")
     print("=" * 60)
     for i in range(3):
-        print(f"  第 {i+1} 次调用: ", end="")
+        print(f"  第 {i + 1} 次调用: ", end="")
         try:
             result = unstable_api()
             print(result)
@@ -7028,8 +7048,8 @@ TypeError: isinstance() arg 2 must be a type, a tuple of types, or a union
 `_count_specific_classes()` 通过 `importlib.import_module` + `getattr` 动态加载类：
 
 ```python
-cls = getattr(mod, cls_name, None)   # ← 可能返回非 type 对象
-if cls:                               # ← 只检查 Truthy，没检查是否是 type
+cls = getattr(mod, cls_name, None)  # ← 可能返回非 type 对象
+if cls:  # ← 只检查 Truthy，没检查是否是 type
     count = sum(1 for o in objs if isinstance(o, cls))  # ← 炸！
 ```
 
@@ -7044,7 +7064,7 @@ if cls:                               # ← 只检查 Truthy，没检查是否�
 ```python
 if cls:
     if not isinstance(cls, type):
-        result[name] = -2   # 标记为非 type 对象
+        result[name] = -2  # 标记为非 type 对象
         continue
     count = sum(1 for o in objs if isinstance(o, cls))
     result[name] = count
@@ -7977,7 +7997,7 @@ ModuleNotFoundError: No module named 'tea_agent.agent_evolution'
 `ok()` 函数的过滤逻辑是：
 
 ```python
-if len(parts)==1 and parts[0].endswith(".py"):
+if len(parts) == 1 and parts[0].endswith(".py"):
     return parts[0] in CORE_TOP  # ← 不在列表里的顶层 .py 被直接丢弃
 ```
 
@@ -8036,11 +8056,7 @@ $env:EMAIL_PASSWORD="生成的16位应用专用密码"
 之后调用工具就不用每次都传密码了：
 
 ```python
-toolkit_send_email(
-    to="someone@example.com",
-    subject="测试邮件",
-    body="Hello from tea_agent!"
-)
+toolkit_send_email(to="someone@example.com", subject="测试邮件", body="Hello from tea_agent!")
 ```
 
 ---
@@ -8073,12 +8089,10 @@ tea_agent: uuqs gnhq fvqx oiij
 toolkit_send_email(to="xxx@gmail.com", subject="标题", body="内容")
 
 # 方式2：传参（覆盖环境变量）
-toolkit_send_email(to="xxx@gmail.com", subject="标题", body="内容",
-                   email="sunkwei@gmail.com", password="uuqs gnhq fvqx oiij")
+toolkit_send_email(to="xxx@gmail.com", subject="标题", body="内容", email="sunkwei@gmail.com", password="uuqs gnhq fvqx oiij")
 
 # 方式3：带附件
-toolkit_send_email(to="xxx@gmail.com", subject="报告", body="见附件",
-                   attachments=["report.pdf"])
+toolkit_send_email(to="xxx@gmail.com", subject="报告", body="见附件", attachments=["report.pdf"])
 ```
 
 > ⚠️ 建议：`EMAIL_PASSWORD` 存的是**应用专用密码**，不是你的 Gmail 登录密码。这个密码只有发信权限，不能直接登录邮箱，相对安全。

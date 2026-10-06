@@ -7,6 +7,7 @@ tea_agent_mini — 启动 Web Server。
 """
 
 import sys
+
 from tea_agent.server import main
 
 if __name__ == "__main__":

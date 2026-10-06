@@ -4,6 +4,7 @@ import logging
 
 logger = logging.getLogger("toolkit")
 
+
 def toolkit_pkg(action: str, packages: str = None, module: str = None):
     """
     智能 Python 包管理工具。
@@ -42,12 +43,13 @@ def toolkit_pkg(action: str, packages: str = None, module: str = None):
             # 尝试 pkg_resources
             try:
                 import pkg_resources
+
                 return pkg_resources.get_distribution(name).version
             except Exception:
-                logger.exception('op_failed')
+                logger.exception("op_failed")
 
         except Exception:
-            logger.exception('op_failed')
+            logger.exception("op_failed")
 
         return None
 
@@ -146,6 +148,22 @@ def toolkit_pkg(action: str, packages: str = None, module: str = None):
         ],
     }
 
+
 def meta_toolkit_pkg() -> dict:
     """Meta toolkit pkg."""
-    return {"type": "function", "function": {"name": "toolkit_pkg", "description": "智能 Python 包管理工具。list=列出关键依赖状态, check=检查单个模块, install=安装包(支持别名如pil→Pillow), ensure=自动安装所有缺失依赖。支持批量逗号分隔。", "parameters": {"type": "object", "properties": {"action": {"type": "string", "enum": ["list", "check", "install", "ensure"], "description": "操作类型"}, "packages": {"type": "string", "description": "包名，逗号分隔。支持别名：pil/pillow→Pillow, yaml→PyYAML, cv2→opencv-python"}, "module": {"type": "string", "description": "模块名，如 jieba, PIL, requests"}}, "required": ["action"]}}}
+    return {
+        "type": "function",
+        "function": {
+            "name": "toolkit_pkg",
+            "description": "智能 Python 包管理工具。list=列出关键依赖状态, check=检查单个模块, install=安装包(支持别名如pil→Pillow), ensure=自动安装所有缺失依赖。支持批量逗号分隔。",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "action": {"type": "string", "enum": ["list", "check", "install", "ensure"], "description": "操作类型"},
+                    "packages": {"type": "string", "description": "包名，逗号分隔。支持别名：pil/pillow→Pillow, yaml→PyYAML, cv2→opencv-python"},
+                    "module": {"type": "string", "description": "模块名，如 jieba, PIL, requests"},
+                },
+                "required": ["action"],
+            },
+        },
+    }

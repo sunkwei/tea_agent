@@ -17,7 +17,7 @@ from __future__ import annotations
 
 import logging
 
-import tea_agent.provider_store as PS
+import tea_agent.provider_store as ps
 
 logger = logging.getLogger("tea_agent.model_config")
 
@@ -34,7 +34,8 @@ class ModelConfigError(Exception):
 
 
 # 配置目录常量（历史名保留：测试用 monkeypatch 重定向它以隔离 tmp 目录）
-CONFIG_DIR = PS.CONFIG_DIR
+CONFIG_DIR = ps.CONFIG_DIR
+
 
 # 单例转发：调用方拿到的即 ProviderStore 实例（无第二个存储）
 def get_model_config_store(path=None, agent_dir=None):

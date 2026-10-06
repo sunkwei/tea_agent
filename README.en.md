@@ -273,16 +273,13 @@ rolled back from `.bak` automatically (`off` = zero overhead, `advisory` = defau
 
 ```python
 # ① Register device
-toolkit_remote_agent(action="register", device_id="bm1688-1",
-    host="172.16.1.49", port=8282, working_path="/app/zkfs/")
+toolkit_remote_agent(action="register", device_id="bm1688-1", host="172.16.1.49", port=8282, working_path="/app/zkfs/")
 
 # ② Dispatch task (no session_id → auto-creates remote topic)
-r = toolkit_remote_agent(action="exec", device_id="terminal-49",
-    goal="Analyze today's logs in /record/dbs/log/")
+r = toolkit_remote_agent(action="exec", device_id="terminal-49", goal="Analyze today's logs in /record/dbs/log/")
 
 # ③ Same session_id → continue the same remote context
-r2 = toolkit_remote_agent(action="exec", device_id="terminal-49",
-    goal="Continue troubleshooting network issue", session_id=r["session_id"])
+r2 = toolkit_remote_agent(action="exec", device_id="terminal-49", goal="Continue troubleshooting network issue", session_id=r["session_id"])
 
 # ④ Done → disconnect
 toolkit_remote_agent(action="unregister", device_id="terminal-49")

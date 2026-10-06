@@ -44,12 +44,14 @@ logger = logging.getLogger(__name__)
 # DagVizRegistry — 全局可视化实例注册表
 # ═══════════════════════════════════════════════
 
+
 class DagVizRegistry:
     """全局 DAG 可视化实例注册表。
 
     使 tea_agent server 能够通过 viz_id 查找活跃的 WorkflowVisualizer
     实例，从而提供 /dag/{viz_id} 路由和 SSE 事件流。
     """
+
     _instances: dict[str, WorkflowVisualizer] = {}
 
     @classmethod
@@ -117,23 +119,27 @@ class DagVizRegistry:
             if state in ("completed", "failed", "skipped"):
                 completed += 1
 
-            nodes.append({
-                "id": nid,
-                "label": node.label or nid,
-                "type": node.type.value if hasattr(node.type, 'value') else str(node.type),
-                "state": state,
-                "duration": round(nr.duration, 3) if nr and nr.duration else 0,
-                "error": nr.error if nr else None,
-                "level": levels.get(nid, 0),
-            })
+            nodes.append(
+                {
+                    "id": nid,
+                    "label": node.label or nid,
+                    "type": node.type.value if hasattr(node.type, "value") else str(node.type),
+                    "state": state,
+                    "duration": round(nr.duration, 3) if nr and nr.duration else 0,
+                    "error": nr.error if nr else None,
+                    "level": levels.get(nid, 0),
+                }
+            )
 
         edges = []
         for e in viz.dag.edges:
-            edges.append({
-                "from": e["from"],
-                "to": e["to"],
-                "condition_key": e.get("condition_key"),
-            })
+            edges.append(
+                {
+                    "from": e["from"],
+                    "to": e["to"],
+                    "condition_key": e.get("condition_key"),
+                }
+            )
 
         from tea_agent.multi_agent.dag_dot_renderer import check_dot_available
 
@@ -163,15 +169,20 @@ def get_viz_html(dag_structure: dict, title: str = "Workflow DAG", viz_id: str =
     Returns:
         完整的 HTML 字符串
     """
-    return _VIZ_HTML_TEMPLATE.replace(
-        "{{DAG_STRUCTURE}}",
-        json.dumps(dag_structure, ensure_ascii=False),
-    ).replace("{{TITLE}}", title).replace("{{VIZ_ID}}", viz_id)
+    return (
+        _VIZ_HTML_TEMPLATE.replace(
+            "{{DAG_STRUCTURE}}",
+            json.dumps(dag_structure, ensure_ascii=False),
+        )
+        .replace("{{TITLE}}", title)
+        .replace("{{VIZ_ID}}", viz_id)
+    )
 
 
 # ═══════════════════════════════════════════════
 # Event Emitter — 轻量事件发布
 # ═══════════════════════════════════════════════
+
 
 class EventEmitter:
     """线程安全的事件发射器。"""
@@ -205,6 +216,7 @@ class EventEmitter:
 # ═══════════════════════════════════════════════
 # WorkflowVisualizer — 核心可视化引擎
 # ═══════════════════════════════════════════════
+
 
 class WorkflowVisualizer:
     """
@@ -270,15 +282,15 @@ class WorkflowVisualizer:
 
         # 预推送 DAG 结构
         dag_structure = self._build_dag_structure()
-        self.emitter.emit({
-            "type": "dag_structure",
-            "data": dag_structure,
-            "timestamp": time.time(),
-        })
+        self.emitter.emit(
+            {
+                "type": "dag_structure",
+                "data": dag_structure,
+                "timestamp": time.time(),
+            }
+        )
 
-        logger.info(f"DAG viz 已注册: {self.viz_id} | "
-                    f"{len(dag_structure['nodes'])} 节点, "
-                    f"{len(dag_structure['edges'])} 边")
+        logger.info(f"DAG viz 已注册: {self.viz_id} | {len(dag_structure['nodes'])} 节点, {len(dag_structure['edges'])} 边")
 
         # 在后台线程执行工作流
         self._exec = WorkflowExec(self.dag, pool=self.pool)
@@ -302,16 +314,18 @@ class WorkflowVisualizer:
             self._finished_at = time.time()
             if self._exec:
                 self._push_full_state()
-                self.emitter.emit({
-                    "type": "workflow_end",
-                    "data": {
-                        "state": self._exec.state.value,
-                        "duration": self._exec.duration,
-                        "started_at": self._started_at,
-                        "finished_at": self._finished_at,
-                    },
-                    "timestamp": time.time(),
-                })
+                self.emitter.emit(
+                    {
+                        "type": "workflow_end",
+                        "data": {
+                            "state": self._exec.state.value,
+                            "duration": self._exec.duration,
+                            "started_at": self._started_at,
+                            "finished_at": self._finished_at,
+                        },
+                        "timestamp": time.time(),
+                    }
+                )
             # 延迟清理，给 SSE 客户端时间接收最终事件
             time.sleep(5)
             if self._auto_register:
@@ -354,16 +368,15 @@ class WorkflowVisualizer:
 
         # 预推送 DAG 结构
         dag_structure = self._build_dag_structure()
-        logger.info(f"DAG 结构: {len(dag_structure['nodes'])} 节点, "
-                    f"{len(dag_structure['edges'])} 边, "
-                    f"levels={dag_structure.get('levels',{})}")
-        print(f"  [Viz] DAG 结构: {len(dag_structure['nodes'])} 节点, "
-              f"{len(dag_structure['edges'])} 边")
-        self.emitter.emit({
-            "type": "dag_structure",
-            "data": dag_structure,
-            "timestamp": time.time(),
-        })
+        logger.info(f"DAG 结构: {len(dag_structure['nodes'])} 节点, {len(dag_structure['edges'])} 边, levels={dag_structure.get('levels', {})}")
+        print(f"  [Viz] DAG 结构: {len(dag_structure['nodes'])} 节点, {len(dag_structure['edges'])} 边")
+        self.emitter.emit(
+            {
+                "type": "dag_structure",
+                "data": dag_structure,
+                "timestamp": time.time(),
+            }
+        )
 
         # 在后台线程执行工作流
         self._exec = WorkflowExec(self.dag, pool=self.pool)
@@ -391,16 +404,18 @@ class WorkflowVisualizer:
         # 推送最终状态
         if self._exec:
             self._push_full_state()
-            self.emitter.emit({
-                "type": "workflow_end",
-                "data": {
-                    "state": self._exec.state.value,
-                    "duration": self._exec.duration,
-                    "started_at": self._started_at,
-                    "finished_at": self._finished_at,
-                },
-                "timestamp": time.time(),
-            })
+            self.emitter.emit(
+                {
+                    "type": "workflow_end",
+                    "data": {
+                        "state": self._exec.state.value,
+                        "duration": self._exec.duration,
+                        "started_at": self._started_at,
+                        "finished_at": self._finished_at,
+                    },
+                    "timestamp": time.time(),
+                }
+            )
 
         return self._exec.status() if self._exec else {}
 
@@ -420,43 +435,49 @@ class WorkflowVisualizer:
                     old_state = prev_states.get(nid)
                     if new_state != old_state:
                         prev_states[nid] = new_state
-                        self.emitter.emit({
-                            "type": "node_state",
-                            "data": {
-                                "node_id": nid,
-                                "state": new_state,
-                                "label": self.dag.get_node(nid).label if self.dag.get_node(nid) else nid,
-                                "duration": nr.duration,
-                                "error": nr.error,
-                                "retries": nr.retries,
-                                "started_at": nr.started_at,
-                                "finished_at": nr.finished_at,
-                            },
-                            "timestamp": time.time(),
-                        })
+                        self.emitter.emit(
+                            {
+                                "type": "node_state",
+                                "data": {
+                                    "node_id": nid,
+                                    "state": new_state,
+                                    "label": self.dag.get_node(nid).label if self.dag.get_node(nid) else nid,
+                                    "duration": nr.duration,
+                                    "error": nr.error,
+                                    "retries": nr.retries,
+                                    "started_at": nr.started_at,
+                                    "finished_at": nr.finished_at,
+                                },
+                                "timestamp": time.time(),
+                            }
+                        )
 
                     # 输出变化
                     new_output = nr.output
                     if new_output != prev_outputs.get(nid):
                         prev_outputs[nid] = new_output
                         if new_output:
-                            self.emitter.emit({
-                                "type": "node_output",
-                                "data": {
-                                    "node_id": nid,
-                                    "output": json.dumps(new_output, default=str, ensure_ascii=False),
-                                },
-                                "timestamp": time.time(),
-                            })
+                            self.emitter.emit(
+                                {
+                                    "type": "node_output",
+                                    "data": {
+                                        "node_id": nid,
+                                        "output": json.dumps(new_output, default=str, ensure_ascii=False),
+                                    },
+                                    "timestamp": time.time(),
+                                }
+                            )
 
                 # 工作流级别事件
-                if self._exec.state == WorkflowState.RUNNING and not getattr(self, '_sent_running', False):
+                if self._exec.state == WorkflowState.RUNNING and not getattr(self, "_sent_running", False):
                     self._sent_running = True
-                    self.emitter.emit({
-                        "type": "workflow_start",
-                        "data": {"state": "running"},
-                        "timestamp": time.time(),
-                    })
+                    self.emitter.emit(
+                        {
+                            "type": "workflow_start",
+                            "data": {"state": "running"},
+                            "timestamp": time.time(),
+                        }
+                    )
 
                 time.sleep(0.25)  # 250ms 轮询间隔
 
@@ -470,43 +491,49 @@ class WorkflowVisualizer:
             return
         for nid, nr in self._exec.results.items():
             node = self.dag.get_node(nid)
-            self.emitter.emit({
-                "type": "node_state",
-                "data": {
-                    "node_id": nid,
-                    "state": nr.state.value,
-                    "label": node.label if node else nid,
-                    "duration": nr.duration,
-                    "error": nr.error,
-                    "retries": nr.retries,
-                    "started_at": nr.started_at,
-                    "finished_at": nr.finished_at,
-                },
-                "timestamp": time.time(),
-            })
+            self.emitter.emit(
+                {
+                    "type": "node_state",
+                    "data": {
+                        "node_id": nid,
+                        "state": nr.state.value,
+                        "label": node.label if node else nid,
+                        "duration": nr.duration,
+                        "error": nr.error,
+                        "retries": nr.retries,
+                        "started_at": nr.started_at,
+                        "finished_at": nr.finished_at,
+                    },
+                    "timestamp": time.time(),
+                }
+            )
 
     def _build_dag_structure(self) -> dict:
         """构建 DAG 结构数据供前端渲染。"""
         nodes = []
         for nid, node in self.dag.nodes.items():
-            nodes.append({
-                "id": nid,
-                "type": node.type.value,
-                "label": node.label or nid,
-                "state": "pending",
-                "config": node.config,
-            })
+            nodes.append(
+                {
+                    "id": nid,
+                    "type": node.type.value,
+                    "label": node.label or nid,
+                    "state": "pending",
+                    "config": node.config,
+                }
+            )
 
         # 简单分层布局：按拓扑排序层
         levels = self._compute_levels()
 
         edges = []
         for e in self.dag.edges:
-            edges.append({
-                "from": e["from"],
-                "to": e["to"],
-                "condition": e.get("condition_key"),
-            })
+            edges.append(
+                {
+                    "from": e["from"],
+                    "to": e["to"],
+                    "condition": e.get("condition_key"),
+                }
+            )
 
         return {
             "workflow_id": self.dag.workflow_id,
@@ -528,11 +555,7 @@ class WorkflowVisualizer:
         levels: dict[str, int] = {}
         for nid in order:
             incoming = self.dag.get_edges_to(nid)
-            pred_levels = [
-                levels.get(e["from"], 0)
-                for e in incoming
-                if e.get("from") in levels
-            ]
+            pred_levels = [levels.get(e["from"], 0) for e in incoming if e.get("from") in levels]
             levels[nid] = (max(pred_levels) + 1) if pred_levels else 0
 
         return levels
@@ -560,10 +583,14 @@ class WorkflowVisualizer:
 
         async def handle_root(request):
             """GET / — 可视化页面"""
-            html = _VIZ_HTML_TEMPLATE.replace(
-                "{{DAG_STRUCTURE}}",
-                json.dumps(dag_structure, ensure_ascii=False),
-            ).replace("{{TITLE}}", self.title).replace("{{VIZ_ID}}", self.viz_id)
+            html = (
+                _VIZ_HTML_TEMPLATE.replace(
+                    "{{DAG_STRUCTURE}}",
+                    json.dumps(dag_structure, ensure_ascii=False),
+                )
+                .replace("{{TITLE}}", self.title)
+                .replace("{{VIZ_ID}}", self.viz_id)
+            )
             return HTMLResponse(html)
 
         async def handle_dag_structure(request):
@@ -588,18 +615,21 @@ class WorkflowVisualizer:
                             node = self.dag.get_node(nid)
                             yield (
                                 "data: "
-                                + json.dumps({
-                                    "type": "node_state",
-                                    "data": {
-                                        "node_id": nid,
-                                        "state": nr.state.value,
-                                        "label": node.label if node else nid,
-                                        "duration": nr.duration,
-                                        "error": nr.error,
-                                        "started_at": nr.started_at,
+                                + json.dumps(
+                                    {
+                                        "type": "node_state",
+                                        "data": {
+                                            "node_id": nid,
+                                            "state": nr.state.value,
+                                            "label": node.label if node else nid,
+                                            "duration": nr.duration,
+                                            "error": nr.error,
+                                            "started_at": nr.started_at,
+                                        },
+                                        "timestamp": time.time(),
                                     },
-                                    "timestamp": time.time(),
-                                }, ensure_ascii=False)
+                                    ensure_ascii=False,
+                                )
                                 + "\n\n"
                             )
 
@@ -635,6 +665,7 @@ class WorkflowVisualizer:
                 render_dot_to_png,
                 render_dot_to_svg,
             )
+
             node_states = self._exec.results if self._exec else {}
             dot_source = dag_to_dot(self.dag, node_states=node_states, title=self.title)
 
@@ -642,8 +673,7 @@ class WorkflowVisualizer:
                 return Response(dot_source, media_type="text/plain")
 
             if not check_dot_available():
-                return Response(dot_source, media_type="text/plain",
-                                headers={"X-Fallback": "dot-not-available"})
+                return Response(dot_source, media_type="text/plain", headers={"X-Fallback": "dot-not-available"})
 
             try:
                 if fmt == "png":
@@ -653,8 +683,7 @@ class WorkflowVisualizer:
                     img_data = render_dot_to_svg(dot_source)
                     mime = "image/svg+xml"
                 if img_data is None:
-                    return Response(dot_source, media_type="text/plain",
-                                    headers={"X-Fallback": "dot-render-failed"})
+                    return Response(dot_source, media_type="text/plain", headers={"X-Fallback": "dot-render-failed"})
                 return Response(img_data, media_type=mime)
             except Exception as e:
                 return JSONResponse({"error": str(e), "dot_source": dot_source}, status_code=500)
@@ -669,15 +698,16 @@ class WorkflowVisualizer:
 
         app = Starlette(debug=False, routes=routes)
 
-        print(f"\n{'='*60}")
+        print(f"\n{'=' * 60}")
         print("  🎬 DAG 可视化已启动")
         print(f"  📍 http://{host}:{port}")
         print(f"  📊 {self.title}")
         print(f"  📦 {len(dag_structure['nodes'])} 节点 · {len(dag_structure['edges'])} 边")
-        print(f"{'='*60}\n")
+        print(f"{'=' * 60}\n")
 
         if self.auto_open:
             import webbrowser
+
             threading.Thread(
                 target=lambda: webbrowser.open(f"http://{host}:{port}"),
                 daemon=True,
@@ -690,4 +720,3 @@ class WorkflowVisualizer:
 # ═══════════════════════════════════════════════
 # HTML 模板（内嵌，无需外部文件）
 # ═══════════════════════════════════════════════
-

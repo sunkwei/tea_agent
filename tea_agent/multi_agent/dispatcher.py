@@ -37,8 +37,10 @@ logger = logging.getLogger(__name__)
 # 任务模式定义
 # ───────────────────────────────────────────────
 
+
 class TaskPattern(Enum):
     """任务模式枚举。"""
+
     REFACTOR = "refactor"
     TYPE_ANNOTATION = "type_annotation"
     TEST = "test"
@@ -64,6 +66,7 @@ PATTERN_KEYWORDS: dict[TaskPattern, list[str]] = {
 # Flow 实现：各种模式的执行流
 # ───────────────────────────────────────────────
 
+
 class RefactorFlow(FlowEngine):
     """重构模式 Flow — 分析→规划→执行→验证。"""
 
@@ -82,13 +85,11 @@ class RefactorFlow(FlowEngine):
         if self._verbose:
             logger.info(f"🔍 [分析] 分析代码结构: {self._files}")
 
-        agent = self._get_agent("analyst", "资深代码分析专家",
-            "分析代码结构、识别问题、评估工作量",
-            "你擅长快速理解代码架构，发现设计问题和代码坏味道。")
+        agent = self._get_agent(
+            "analyst", "资深代码分析专家", "分析代码结构、识别问题、评估工作量", "你擅长快速理解代码架构，发现设计问题和代码坏味道。"
+        )
         result = agent.execute(
-            f"请分析以下文件的结构和问题：{self._files}。\n"
-            f"任务目标：{self._goal}\n"
-            f"请输出：1) 文件结构摘要 2) 需要修改的部分 3) 潜在风险",
+            f"请分析以下文件的结构和问题：{self._files}。\n任务目标：{self._goal}\n请输出：1) 文件结构摘要 2) 需要修改的部分 3) 潜在风险",
             output_model=AnalysisReport,
         )
         self._results["analyze"] = result
@@ -103,9 +104,7 @@ class RefactorFlow(FlowEngine):
         analysis = self.state.get("analysis", {})
         issues = analysis.get("issues", []) if isinstance(analysis, dict) else []
 
-        agent = self._get_agent("architect", "软件架构师",
-            "设计修改方案，确保架构一致性",
-            "你有丰富的重构经验，善于制定最小改动量的优化方案。")
+        agent = self._get_agent("architect", "软件架构师", "设计修改方案，确保架构一致性", "你有丰富的重构经验，善于制定最小改动量的优化方案。")
         result = agent.execute(
             f"基于分析结果制定修改计划。\n"
             f"任务目标：{self._goal}\n"
@@ -124,17 +123,12 @@ class RefactorFlow(FlowEngine):
         """步骤3: 执行修改（高级工程师）。"""
         plan_data = self.state.get("plan", {})
 
-        agent = self._get_agent("coder", "高级软件工程师",
-            "实现代码修改，保持代码质量",
-            "你擅长编写高质量 Python 代码，注重类型安全和可读性。")
+        agent = self._get_agent("coder", "高级软件工程师", "实现代码修改，保持代码质量", "你擅长编写高质量 Python 代码，注重类型安全和可读性。")
         changes = plan_data.get("files_to_change", []) if isinstance(plan_data, dict) else []
         changes_str = json.dumps(changes, ensure_ascii=False, indent=2) if changes else "(按分析结果执行)"
 
         result = agent.execute(
-            f"执行修改计划。\n"
-            f"任务目标：{self._goal}\n"
-            f"修改方案：{changes_str}\n"
-            f"请逐步完成所有修改，确保代码编译通过。",
+            f"执行修改计划。\n任务目标：{self._goal}\n修改方案：{changes_str}\n请逐步完成所有修改，确保代码编译通过。",
         )
         self._results["execute"] = result
         self.state["execute_output"] = result.output
@@ -143,14 +137,9 @@ class RefactorFlow(FlowEngine):
     @flow_listen(execute)
     def verify(self):
         """步骤4: 验证（测试工程师）。"""
-        agent = self._get_agent("tester", "测试工程师",
-            "验证修改正确性，运行测试",
-            "你精通 pytest，善于编写和运行测试用例。")
+        agent = self._get_agent("tester", "测试工程师", "验证修改正确性，运行测试", "你精通 pytest，善于编写和运行测试用例。")
         result = agent.execute(
-            f"验证修改结果。\n"
-            f"任务目标：{self._goal}\n"
-            f"请运行相关测试，确保没有回归问题。\n"
-            f"如发现失败，分析根因并给出修复建议。",
+            f"验证修改结果。\n任务目标：{self._goal}\n请运行相关测试，确保没有回归问题。\n如发现失败，分析根因并给出修复建议。",
         )
         self._results["verify"] = result
         self.state["verify_output"] = result.output
@@ -181,12 +170,9 @@ class ReviewFlow(FlowEngine):
 
     @flow_start()
     def scan(self):
-        agent = self._get_agent("reviewer", "严格的代码审查员",
-            "全面审查代码质量",
-            "你以严苛著称，对代码质量零容忍。")
+        agent = self._get_agent("reviewer", "严格的代码审查员", "全面审查代码质量", "你以严苛著称，对代码质量零容忍。")
         result = agent.execute(
-            f"审查以下文件：{self._files}\n"
-            f"审查维度：类型安全、错误处理、性能、可维护性、设计模式",
+            f"审查以下文件：{self._files}\n审查维度：类型安全、错误处理、性能、可维护性、设计模式",
             output_model=AnalysisReport,
         )
         self._results["scan"] = result
@@ -235,9 +221,7 @@ class TestFlow(FlowEngine):
         agent = self._get_agent("coder", "测试开发工程师", "编写测试用例", "擅长编写高质量测试")
         plan = self.state.get("test_plan", {})
         result = agent.execute(
-            f"编写测试用例。\n"
-            f"文件：{self._files}\n"
-            f"测试计划：{json.dumps(plan, ensure_ascii=False, indent=2)[:2000]}",
+            f"编写测试用例。\n文件：{self._files}\n测试计划：{json.dumps(plan, ensure_ascii=False, indent=2)[:2000]}",
         )
         self._results["write_tests"] = result
         return result.output
@@ -245,10 +229,7 @@ class TestFlow(FlowEngine):
     @flow_listen(write_tests)
     def run_tests(self):
         agent = self._get_agent("tester", "测试工程师", "运行测试并分析结果", "精通 pytest")
-        result = agent.execute(
-            f"运行测试并分析结果：{self._files}\n"
-            f"如有失败，分析根因并给出修复建议。"
-        )
+        result = agent.execute(f"运行测试并分析结果：{self._files}\n如有失败，分析根因并给出修复建议。")
         self._results["run_tests"] = result
         return result.output
 
@@ -272,11 +253,7 @@ class FixFlow(FlowEngine):
     @flow_start()
     def diagnose(self):
         agent = self._get_agent("debugger", "调试专家", "定位问题根因", "擅长调试和根因分析")
-        result = agent.execute(
-            f"分析并定位以下问题：{self._goal}\n"
-            f"相关文件：{self._files}\n"
-            f"请定位根因并给出修复建议。"
-        )
+        result = agent.execute(f"分析并定位以下问题：{self._goal}\n相关文件：{self._files}\n请定位根因并给出修复建议。")
         self._results["diagnose"] = result
         return result.output
 
@@ -284,11 +261,7 @@ class FixFlow(FlowEngine):
     def fix(self):
         agent = self._get_agent("coder", "修复工程师", "修复问题", "擅长精确修复")
         diagnosis = self.get_step_output("diagnose") or ""
-        result = agent.execute(
-            f"根据分析结果修复问题。\n"
-            f"诊断结果：{diagnosis[:2000]}\n"
-            f"相关文件：{self._files}"
-        )
+        result = agent.execute(f"根据分析结果修复问题。\n诊断结果：{diagnosis[:2000]}\n相关文件：{self._files}")
         self._results["fix"] = result
         return result.output
 
@@ -319,10 +292,7 @@ class FeatureFlow(FlowEngine):
     @flow_start()
     def analyze(self):
         agent = self._get_agent("analyst", "需求分析师", "理解需求并制定实现方案", "擅长需求分析")
-        result = agent.execute(
-            f"分析需求并制定实现方案：{self._goal}\n"
-            f"相关文件：{self._files}"
-        )
+        result = agent.execute(f"分析需求并制定实现方案：{self._goal}\n相关文件：{self._files}")
         self._results["analyze"] = result
         return result.output
 
@@ -330,18 +300,14 @@ class FeatureFlow(FlowEngine):
     def implement(self):
         agent = self._get_agent("coder", "高级工程师", "实现功能", "精通 Python 开发")
         analysis = self.get_step_output("analyze") or ""
-        result = agent.execute(
-            f"实现功能。\n需求：{self._goal}\n分析：{analysis[:2000]}\n文件：{self._files}"
-        )
+        result = agent.execute(f"实现功能。\n需求：{self._goal}\n分析：{analysis[:2000]}\n文件：{self._files}")
         self._results["implement"] = result
         return result.output
 
     @flow_listen(implement)
     def test(self):
         agent = self._get_agent("tester", "测试工程师", "编写并运行测试", "精通 pytest")
-        result = agent.execute(
-            f"为新增功能编写测试并运行：{self._files}\n功能：{self._goal}"
-        )
+        result = agent.execute(f"为新增功能编写测试并运行：{self._files}\n功能：{self._goal}")
         self._results["test"] = result
         return result.output
 
@@ -416,6 +382,7 @@ def create_flow(pattern: TaskPattern, goal: str, files: list[str], context: dict
 # ───────────────────────────────────────────────
 # RoleDispatcher — 主要公开 API
 # ───────────────────────────────────────────────
+
 
 class RoleDispatcher:
     """
@@ -538,12 +505,14 @@ class RoleDispatcher:
         execution_log = flow_result.get("execution_log", [])
         task_summaries = []
         for entry in execution_log:
-            task_summaries.append({
-                "step": entry["step"],
-                "status": entry["status"],
-                "time_seconds": entry.get("time_seconds", 0),
-                "error": entry.get("error"),
-            })
+            task_summaries.append(
+                {
+                    "step": entry["step"],
+                    "status": entry["status"],
+                    "time_seconds": entry.get("time_seconds", 0),
+                    "error": entry.get("error"),
+                }
+            )
 
         return {
             "goal": goal,

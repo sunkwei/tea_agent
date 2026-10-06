@@ -23,10 +23,12 @@ from typing import Any
 logger = logging.getLogger("search_refs")
 
 # 产出「网络参考来源」的工具 → 该工具结果里 URL 的语义
-SEARCH_REF_TOOLS: frozenset[str] = frozenset({
-    "toolkit_search",
-    "toolkit_js_fetch",
-})
+SEARCH_REF_TOOLS: frozenset[str] = frozenset(
+    {
+        "toolkit_search",
+        "toolkit_js_fetch",
+    }
+)
 
 # 单次回合最多列出的链接数（超出折叠为「…等 N 条」）
 MAX_DISPLAY_REFS: int = 20
@@ -106,11 +108,13 @@ def extract_refs(tool_name: str, args: dict | None, result: Any) -> list[dict]:
             url = _clean_url(item.get("url"))
             if not url:
                 continue
-            refs.append({
-                "url": url,
-                "title": _clean_title(item.get("title"), url),
-                "source": tool_name,
-            })
+            refs.append(
+                {
+                    "url": url,
+                    "title": _clean_title(item.get("title"), url),
+                    "source": tool_name,
+                }
+            )
         return refs
     except Exception:  # noqa: BLE001 — 旁路采集不得影响工具执行
         logger.debug("extract_refs failed (isolated)", exc_info=True)
@@ -129,11 +133,13 @@ def merge_refs(existing: list[dict] | None, new: list[dict] | None) -> list[dict
             if not url or url in seen:
                 continue
             seen.add(url)
-            out.append({
-                "url": url,
-                "title": str(ref.get("title") or url),
-                "source": str(ref.get("source") or ""),
-            })
+            out.append(
+                {
+                    "url": url,
+                    "title": str(ref.get("title") or url),
+                    "source": str(ref.get("source") or ""),
+                }
+            )
     return out
 
 

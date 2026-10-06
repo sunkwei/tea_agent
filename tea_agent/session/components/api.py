@@ -8,6 +8,7 @@ from tea_agent.session.context import SessionComponent
 
 logger = logging.getLogger("session")
 
+
 class APIComponent(SessionComponent):
     """LLM API 通信组件。"""
 
@@ -261,12 +262,7 @@ class APIComponent(SessionComponent):
 
         except Exception as e:
             err_str = str(e).lower()
-            if (
-                "thinking" in err_str
-                or "extra_body" in err_str
-                or "unsupported" in err_str
-                or "invalid" in err_str
-            ):
+            if "thinking" in err_str or "extra_body" in err_str or "unsupported" in err_str or "invalid" in err_str:
                 result["supports_thinking"] = False
                 result["recommended_strength"] = 0.0
                 if _tl:
@@ -372,11 +368,7 @@ class APIComponent(SessionComponent):
             kwargs["stream_options"] = {"include_usage": True}
 
         # 根据对应的 thinking 状态决定是否启用
-        thinking_supported = (
-            self.ctx._cheap_thinking_supported
-            if is_cheap
-            else self.ctx._thinking_supported
-        )
+        thinking_supported = self.ctx._cheap_thinking_supported if is_cheap else self.ctx._thinking_supported
 
         # ── 构建 extra_body：思维配置 + 模型 options ──
         extra_body = {}
@@ -385,11 +377,7 @@ class APIComponent(SessionComponent):
         # 仅当取值合法且非 "auto"（"auto"=自动推导，不显式下发）时才发送；
         # 否则回退到 thinking_strength 自动映射。
         reasoning_effort = self.ctx.reasoning_effort
-        if (
-            reasoning_effort
-            and reasoning_effort in REASONING_EFFORT_VALUES
-            and reasoning_effort != "auto"
-        ):
+        if reasoning_effort and reasoning_effort in REASONING_EFFORT_VALUES and reasoning_effort != "auto":
             # 用户明确指定 effort 级别
             extra_body["reasoning_effort"] = reasoning_effort
             # 如果 thinking 也支持，同时启用 thinking（兼容模式）
@@ -428,9 +416,7 @@ class APIComponent(SessionComponent):
             from tea_agent.config import get_config
 
             _cfg = get_config()
-            model_opts = (
-                _cfg.main_model.options if not is_cheap else _cfg.cheap_model.options
-            )
+            model_opts = _cfg.main_model.options if not is_cheap else _cfg.cheap_model.options
             if model_opts:
                 extra_body.update(model_opts)
         except Exception:
@@ -477,16 +463,11 @@ class APIComponent(SessionComponent):
         # 的 RC 值已无法由客户端还原/校验，继续开启 thinking 会反复 400；强制关闭
         # thinking 后 DeepSeek 不再要求 RC 回传，对话可继续。下一用户回合
         # reset_session_state() 清除该标志，thinking 自动恢复。
-        if (
-            (disable_thinking or getattr(self.ctx, "_rc400_recovery", False))
-            and target_model not in ("mimo-v2.5-pro", "mimo-v2.5", "mimo-v2.0")
-        ):
+        if (disable_thinking or getattr(self.ctx, "_rc400_recovery", False)) and target_model not in ("mimo-v2.5-pro", "mimo-v2.5", "mimo-v2.0"):
             extra_body = {"thinking": {"type": "disabled"}}
             kwargs["extra_body"] = extra_body
             kwargs.pop("stream_options", None)
-            logger.warning(
-                f"⚠️ RC 400 自愈：本回合剩余请求强制关闭 thinking (model={target_model})"
-            )
+            logger.warning(f"⚠️ RC 400 自愈：本回合剩余请求强制关闭 thinking (model={target_model})")
 
         # ── 防御性 RC 字段补全（DeepSeek thinking 模式硬性要求）──
         # 凡 thinking **启用**（extra_body.thinking.type=enabled 或携带
@@ -496,10 +477,7 @@ class APIComponent(SessionComponent):
         # the API"。此处兜底任何绕过 build_api_messages 的旁路（如
         # supports_reasoning=False 但 thinking 探测开启的不一致配置），
         # 保证发送前结构完整。api_messages 是副本，原地补全不影响会话历史。
-        _thinking_enabled = (
-            extra_body.get("thinking", {}).get("type") == "enabled"
-            or "reasoning_effort" in extra_body
-        )
+        _thinking_enabled = extra_body.get("thinking", {}).get("type") == "enabled" or "reasoning_effort" in extra_body
         if tools and _thinking_enabled:
             _filled = 0
             for _m in api_messages:
@@ -532,9 +510,7 @@ class APIComponent(SessionComponent):
             max_retries=_mr,
             backoff=_bf,
             sleep_recovery_wait=_sw,
-            on_retry=lambda a, e, w: logger.warning(
-                f"⚠️ 接口中断，第 {a} 次重试中（{type(e).__name__}），等待 {w:.0f}s…"
-            ),
+            on_retry=lambda a, e, w: logger.warning(f"⚠️ 接口中断，第 {a} 次重试中（{type(e).__name__}），等待 {w:.0f}s…"),
             **kwargs,
         )
         return stream
@@ -557,9 +533,7 @@ class APIComponent(SessionComponent):
             _mr, _bf, _sw = 3, 2.0, 5.0
 
         try:
-            logger.debug(
-                f"summarize API request: model={mdl}, msgs={len(messages)}, temperature={temperature}, max_tokens={max_tokens}"
-            )
+            logger.debug(f"summarize API request: model={mdl}, msgs={len(messages)}, temperature={temperature}, max_tokens={max_tokens}")
             return call_with_retry(
                 cli.chat.completions.create,
                 max_retries=_mr,
@@ -575,9 +549,7 @@ class APIComponent(SessionComponent):
             err_str = str(e).lower()
             if "thinking" in err_str or "extra_body" in err_str:
                 # 模型不支持 thinking 参数，回退到不带 extra_body 的调用
-                logger.debug(
-                    "summarize API: thinking disabled not supported, retrying without extra_body"
-                )
+                logger.debug("summarize API: thinking disabled not supported, retrying without extra_body")
                 return call_with_retry(
                     cli.chat.completions.create,
                     max_retries=_mr,

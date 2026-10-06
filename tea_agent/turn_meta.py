@@ -33,8 +33,7 @@ def _msg_key(msg: dict, *, ignore_reasoning: bool = False) -> str:
     合法的缓存治理动作，不是「对话历史被旁路改写」，不构成 prefix_stable 违例。
     """
     try:
-        if (ignore_reasoning and isinstance(msg, dict)
-                and "reasoning_content" in msg):
+        if ignore_reasoning and isinstance(msg, dict) and "reasoning_content" in msg:
             msg = {k: v for k, v in msg.items() if k != "reasoning_content"}
         raw = json.dumps(msg, sort_keys=True, ensure_ascii=False, default=str)
     except (TypeError, ValueError):
@@ -42,17 +41,16 @@ def _msg_key(msg: dict, *, ignore_reasoning: bool = False) -> str:
     return hashlib.sha1(raw.encode("utf-8", "replace")).hexdigest()
 
 
-def _same_series(prev: list[dict] | None, current: list[dict] | None, *,
-                 ignore_reasoning: bool = False) -> bool:
+def _same_series(prev: list[dict] | None, current: list[dict] | None, *, ignore_reasoning: bool = False) -> bool:
     """prev 是否为 current 的逐条前缀（内部实现，可切换 reasoning 口径）。"""
     if not prev:
         return False
     cur = current or []
     if len(prev) > len(cur):
         return False
-    return all(_msg_key(a, ignore_reasoning=ignore_reasoning)
-               == _msg_key(b, ignore_reasoning=ignore_reasoning)
-               for a, b in zip(prev, cur, strict=False))  # cur 可更长（尾部追加）
+    return all(
+        _msg_key(a, ignore_reasoning=ignore_reasoning) == _msg_key(b, ignore_reasoning=ignore_reasoning) for a, b in zip(prev, cur, strict=False)
+    )  # cur 可更长（尾部追加）
 
 
 def same_series(prev: list[dict] | None, current: list[dict] | None) -> bool:
@@ -69,6 +67,7 @@ def same_series(prev: list[dict] | None, current: list[dict] | None) -> bool:
 @dataclass
 class StepRecord:
     """一次 step 的元信息（观测用，不进对话历史）。"""
+
     index: int
     starts_request_series: bool
     message_count: int
@@ -80,6 +79,7 @@ class TurnMetaTracker:
 
     `last_violations` 保存不变式违例（旁路观测，永不抛出），调用方决定如何记录。
     """
+
     turns: int = 0
     steps: list[StepRecord] = field(default_factory=list)
     last_violations: list[InvariantViolation] = field(default_factory=list)
@@ -90,8 +90,7 @@ class TurnMetaTracker:
         self.turns += 1
         self.steps.clear()
 
-    def note_request(self, messages: list[dict], *, declared: bool | None = None,
-                     **extra) -> bool:
+    def note_request(self, messages: list[dict], *, declared: bool | None = None, **extra) -> bool:
         """记录一次模型请求，返回是否 startsRequestSeries。
 
         Args:
@@ -102,17 +101,16 @@ class TurnMetaTracker:
         Returns:
             True = 新请求序列（前缀缓存重置）
         """
-        starts = (bool(declared) if declared is not None
-                  else not same_series(self._prev, messages))
-        self.steps.append(StepRecord(
-            index=len(self.steps),
-            starts_request_series=starts,
-            message_count=len(messages or ()),
-        ))
+        starts = bool(declared) if declared is not None else not same_series(self._prev, messages)
+        self.steps.append(
+            StepRecord(
+                index=len(self.steps),
+                starts_request_series=starts,
+                message_count=len(messages or ()),
+            )
+        )
         try:
-            self.last_violations = _invariants.run(
-                "session.request",
-                prev=self._prev, current=messages, declared=declared, **extra)
+            self.last_violations = _invariants.run("session.request", prev=self._prev, current=messages, declared=declared, **extra)
         except Exception as e:  # noqa: BLE001 — 不变式检查永不影响请求
             logger.debug("turn_meta invariant 跳过: %s", e)
             self.last_violations = []
@@ -140,10 +138,7 @@ def _check_prefix_stable(*, prev, current, declared, **_) -> str | None:
         return None
     if _same_series(prev, current, ignore_reasoning=True):
         return None
-    return (f"消息前缀被改写但未声明 startsRequestSeries "
-            f"(prev={len(prev)} 条, current={len(current or ())} 条)")
+    return f"消息前缀被改写但未声明 startsRequestSeries (prev={len(prev)} 条, current={len(current or ())} 条)"
 
 
-_invariants.install("session.prefix_stable", "session.request",
-                    _check_prefix_stable,
-                    "历史只允许尾部追加；改写前缀必须声明新请求序列")
+_invariants.install("session.prefix_stable", "session.request", _check_prefix_stable, "历史只允许尾部追加；改写前缀必须声明新请求序列")

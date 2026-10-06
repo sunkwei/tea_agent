@@ -15,6 +15,7 @@ from tea_agent.image_ref import build_data_url, parse_image_ref
 
 logger = logging.getLogger("export_pdf")
 
+
 # 默认导出目录：系统临时目录（Windows=%TEMP%，Linux/macOS=/tmp 或 /dev/shm）。
 # 避免 server 以服务方式运行时 CWD 无写权限导致导出失败。
 def _default_export_dir() -> str:
@@ -23,9 +24,11 @@ def _default_export_dir() -> str:
     except Exception:
         return str(Path.home())
 
+
 def _find_db_path():
     try:
         from tea_agent.config import load_config
+
         cfg = load_config()
         db = cfg.paths.db_path_abs
         if db and os.path.exists(db):
@@ -163,12 +166,8 @@ def _build_full_interactions_md(rounds_data):
                 if ctype == "binary":
                     # Show binary content info instead of raw bytes
                     preview = content[:80]
-                    printable_preview = "".join(
-                        c if 32 <= ord(c) < 127 else "." for c in preview
-                    )
-                    parts.append(
-                        f"📦 **返回结果** *(二进制数据, {len(content)} 字节)*\n\n"
-                    )
+                    printable_preview = "".join(c if 32 <= ord(c) < 127 else "." for c in preview)
+                    parts.append(f"📦 **返回结果** *(二进制数据, {len(content)} 字节)*\n\n")
                     parts.append(f"```\n{printable_preview}\n```\n\n")
                 elif ctype == "json":
                     try:
@@ -201,6 +200,7 @@ def _build_full_interactions_md(rounds_data):
 #  Font setup — cross-platform CJK support
 # ═══════════════════════════════════════════════════════════════
 
+
 def _setup_fonts(pdf):
     """Register fonts for CJK + code. Returns (body_font, code_font)."""
     body_font = code_font = None
@@ -222,7 +222,12 @@ def _setup_fonts(pdf):
                 pdf.add_font("Body", "", fp)
                 body_font = "Body"
                 # Try bold variant
-                bold_fp = fp.replace("msyh.ttc", "msyhbd.ttc").replace("Regular", "Bold").replace("NotoSansCJK-Regular.ttc", "NotoSansCJK-Bold.ttc").replace("simfang.ttf", "simfang.ttf")
+                bold_fp = (
+                    fp.replace("msyh.ttc", "msyhbd.ttc")
+                    .replace("Regular", "Bold")
+                    .replace("NotoSansCJK-Regular.ttc", "NotoSansCJK-Bold.ttc")
+                    .replace("simfang.ttf", "simfang.ttf")
+                )
                 if "msyh" in fp and os.path.exists("C:/Windows/Fonts/msyhbd.ttc"):
                     pdf.add_font("Body", "B", "C:/Windows/Fonts/msyhbd.ttc")
                 elif os.path.exists(bold_fp):
@@ -261,6 +266,7 @@ def _setup_fonts(pdf):
 # ═══════════════════════════════════════════════════════════════
 #  Markdown → fpdf2 rendering
 # ═══════════════════════════════════════════════════════════════
+
 
 def _render_markdown(pdf, text, body_font, code_font, indent=0, text_color=(50, 50, 50)):
     """Render markdown text using fpdf2.
@@ -575,7 +581,7 @@ def _flush_table(pdf, lines, start_idx, body_font, code_font):
             # Data rows
             for row_data in data_rows:
                 row_h_obj = tbl.row()
-                for ci, cell_text in enumerate(row_data):
+                for cell_text in row_data:
                     # Handle inline formatting in table cells
                     row_h_obj.cell(cell_text)
     except Exception:
@@ -663,31 +669,32 @@ def _pygments_to_rgb(ttype):
     """Convert pygments token type to RGB color tuple (printer-friendly)."""
     ttype_str = str(ttype)
     if "Keyword" in ttype_str:
-        return (180, 40, 80)    # dark pink/red
+        return (180, 40, 80)  # dark pink/red
     if "String" in ttype_str:
-        return (140, 110, 30)   # dark yellow
+        return (140, 110, 30)  # dark yellow
     if "Comment" in ttype_str:
         return (120, 120, 120)  # gray
     if "Name.Function" in ttype_str:
-        return (60, 130, 60)    # green
+        return (60, 130, 60)  # green
     if "Name.Class" in ttype_str:
-        return (60, 130, 60)    # green
+        return (60, 130, 60)  # green
     if "Name.Decorator" in ttype_str:
-        return (110, 70, 180)   # purple
+        return (110, 70, 180)  # purple
     if "Name.Builtin" in ttype_str:
-        return (180, 40, 80)    # dark pink
+        return (180, 40, 80)  # dark pink
     if "Number" in ttype_str:
-        return (110, 70, 180)   # purple
+        return (110, 70, 180)  # purple
     if "Operator" in ttype_str:
-        return (80, 80, 80)     # dark gray
+        return (80, 80, 80)  # dark gray
     if "Punctuation" in ttype_str:
         return (100, 100, 100)  # gray
-    return (60, 60, 60)         # dark gray
+    return (60, 60, 60)  # dark gray
 
 
 # ═══════════════════════════════════════════════════════════════
 #  PDF generation via fpdf2
 # ═══════════════════════════════════════════════════════════════
+
 
 def _parse_user_payload(raw):
     """拆解 ``conversations.user_msg`` 为 ``(text, [image_id, ...])``。
@@ -738,11 +745,9 @@ def _fetch_image_blobs(conn, ids):
 
     cur = conn.cursor()
     for i in range(0, len(wanted), 500):
-        chunk = wanted[i:i + 500]
+        chunk = wanted[i : i + 500]
         ph = safe_placeholders(len(chunk))
-        cur.execute(
-            f"SELECT id, image_blob, mime_type FROM images WHERE id IN ({ph})", chunk
-        )
+        cur.execute(f"SELECT id, image_blob, mime_type FROM images WHERE id IN ({ph})", chunk)
         for row in cur.fetchall():
             out[row["id"]] = (row["mime_type"] or "image/png", bytes(row["image_blob"] or b""))
     return out
@@ -783,7 +788,7 @@ def _load_rounds_map(conn, convs):
 
     cur = conn.cursor()
     for i in range(0, len(need), 500):
-        chunk = need[i:i + 500]
+        chunk = need[i : i + 500]
         ph = safe_placeholders(len(chunk))
         cur.execute(
             "SELECT conversation_id, round_num, role, content, tool_calls, "
@@ -946,9 +951,15 @@ def _render_image_markdown(images, indent: str = "") -> str:
 
 # 生成物图片：以链接形式出现在 AI 回复中（区别于 images 表里用户上传的图）
 _IMAGE_MIME_BY_EXT = {
-    ".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg",
-    ".gif": "image/gif", ".webp": "image/webp", ".bmp": "image/bmp",
-    ".svg": "image/svg+xml", ".avif": "image/avif", ".ico": "image/x-icon",
+    ".png": "image/png",
+    ".jpg": "image/jpeg",
+    ".jpeg": "image/jpeg",
+    ".gif": "image/gif",
+    ".webp": "image/webp",
+    ".bmp": "image/bmp",
+    ".svg": "image/svg+xml",
+    ".avif": "image/avif",
+    ".ico": "image/x-icon",
 }
 _GEN_IMG_LINK_RE = re.compile(
     r"/v1/(?:download|preview)/([^\s)\"'|<>]+?\.(?:png|jpe?g|gif|webp|bmp|svg|avif|ico))",
@@ -995,15 +1006,13 @@ def _extract_generated_images(*texts) -> list:
                     continue
                 if not target.is_file():
                     continue
-                out.append((_IMAGE_MIME_BY_EXT.get(target.suffix.lower(), "image/png"),
-                            target.read_bytes()))
+                out.append((_IMAGE_MIME_BY_EXT.get(target.suffix.lower(), "image/png"), target.read_bytes()))
             except OSError:
                 continue
     return out
 
 
-def _make_pdf(topic_title, stamp, user_msg, ai_msg, reasoning_text, output_path,
-              images=None):
+def _make_pdf(topic_title, stamp, user_msg, ai_msg, reasoning_text, output_path, images=None):
     """Generate a clean, printer-friendly PDF from conversation data.
 
     Features:
@@ -1155,6 +1164,7 @@ def _draw_section_header(pdf, title, body_font, symbol="◆", color=(60, 80, 200
 #  Full-topic multi-conversation renderer
 # ═══════════════════════════════════════════════════════════════
 
+
 def _make_full_topic_pdf(topic_title, conversations, output_path):
     """Render multiple conversations (user + ai only) as a single PDF.
 
@@ -1176,7 +1186,7 @@ def _make_full_topic_pdf(topic_title, conversations, output_path):
         def header(self):
             if self.page_no() <= 1:
                 return
-            if hasattr(self, '_body_font'):
+            if hasattr(self, "_body_font"):
                 self.set_font(self._body_font, "", 8)
             self.set_text_color(140, 140, 160)
             self.cell(0, 6, self._title, align="L", new_x="LMARGIN", new_y="NEXT")
@@ -1188,7 +1198,7 @@ def _make_full_topic_pdf(topic_title, conversations, output_path):
             if self.page_no() <= 1:
                 return
             self.set_y(-15)
-            if hasattr(self, '_body_font'):
+            if hasattr(self, "_body_font"):
                 self.set_font(self._body_font, "", 8)
             self.set_text_color(150, 150, 170)
             self.cell(0, 10, f"— {self.page_no()} —", align="C")
@@ -1209,8 +1219,7 @@ def _make_full_topic_pdf(topic_title, conversations, output_path):
     for idx, conv in enumerate(conversations, 1):
         pdf.add_page()
         stamp = conv.get("stamp", "")
-        _draw_section_header(pdf, f"Conversation {idx} — {stamp}", body_font,
-                             symbol="◆", color=(60, 80, 200))
+        _draw_section_header(pdf, f"Conversation {idx} — {stamp}", body_font, symbol="◆", color=(60, 80, 200))
 
         # User message
         pdf.set_font(body_font, "B", 10)
@@ -1226,8 +1235,7 @@ def _make_full_topic_pdf(topic_title, conversations, output_path):
         reasoning_text = conv.get("reasoning_text", "")
         if reasoning_text.strip():
             pdf.add_page()
-            _draw_section_header(pdf, f"Thinking Process — Conversation {idx}", body_font,
-                                 symbol="◇", color=(200, 150, 20))
+            _draw_section_header(pdf, f"Thinking Process — Conversation {idx}", body_font, symbol="◇", color=(200, 150, 20))
             _render_markdown(pdf, reasoning_text, body_font, code_font, text_color=(80, 70, 30))
 
         # AI response
@@ -1256,9 +1264,8 @@ def _make_full_topic_pdf(topic_title, conversations, output_path):
 #  Public API
 # ═══════════════════════════════════════════════════════════════
 
-def export_topic_pdf(topic_id: str, output_path: str = None,
-                     db_path: str = None, mode: str = "latest",
-                     filter_mode: str = "final") -> str:
+
+def export_topic_pdf(topic_id: str, output_path: str = None, db_path: str = None, mode: str = "latest", filter_mode: str = "final") -> str:
     """Export a topic's conversations as PDF.
 
     Args:
@@ -1306,7 +1313,7 @@ def export_topic_pdf(topic_id: str, output_path: str = None,
         conn.close()
 
         conversations = []
-        for conv, (user_msg, image_ids) in zip(all_conv, parsed):
+        for conv, (user_msg, image_ids) in zip(all_conv, parsed, strict=False):
             reasoning_text = ""
             if filter_mode == "full":
                 rounds_data = rounds_map.get(conv["id"])
@@ -1314,13 +1321,15 @@ def export_topic_pdf(topic_id: str, output_path: str = None,
                     with contextlib.suppress(Exception):
                         reasoning_text = _build_full_interactions_md(rounds_data)
 
-            conversations.append({
-                "user_msg": _sanitize(user_msg),
-                "ai_msg": _sanitize(conv["ai_msg"]),
-                "stamp": conv["stamp"],
-                "reasoning_text": reasoning_text,
-                "images": [blob_map[i] for i in image_ids if i in blob_map],
-            })
+            conversations.append(
+                {
+                    "user_msg": _sanitize(user_msg),
+                    "ai_msg": _sanitize(conv["ai_msg"]),
+                    "stamp": conv["stamp"],
+                    "reasoning_text": reasoning_text,
+                    "images": [blob_map[i] for i in image_ids if i in blob_map],
+                }
+            )
 
         output_path = output_path or os.path.join(_default_export_dir(), f"export_{topic_id[:8]}_full.pdf")
         return _make_full_topic_pdf(topic_title, conversations, output_path)
@@ -1351,17 +1360,15 @@ def export_topic_pdf(topic_id: str, output_path: str = None,
 
     conn.close()
     output_path = output_path or os.path.join(_default_export_dir(), f"export_{topic_id[:8]}.pdf")
-    return _make_pdf(topic_title, stamp, user_msg, ai_msg, reasoning_text, output_path,
-                     images=images)
+    return _make_pdf(topic_title, stamp, user_msg, ai_msg, reasoning_text, output_path, images=images)
 
 
 # ═══════════════════════════════════════════════════════════════
 #  Markdown export
 # ═══════════════════════════════════════════════════════════════
 
-def _build_markdown_doc(topic_title: str, stamp: str, user_msg: str,
-                        ai_msg: str, reasoning_text: str = "",
-                        images: list | None = None) -> str:
+
+def _build_markdown_doc(topic_title: str, stamp: str, user_msg: str, ai_msg: str, reasoning_text: str = "", images: list | None = None) -> str:
     """Build a Markdown document from a single conversation.
 
     Args:
@@ -1409,9 +1416,7 @@ def _build_full_topic_markdown(topic_title: str, conversations: list[dict]) -> s
     return "\n".join(parts)
 
 
-def export_topic_markdown(topic_id: str, output_path: str = None,
-                          db_path: str = None, mode: str = "latest",
-                          filter_mode: str = "final") -> str:
+def export_topic_markdown(topic_id: str, output_path: str = None, db_path: str = None, mode: str = "latest", filter_mode: str = "final") -> str:
     """Export a topic's conversations as Markdown (.md).
 
     Args:
@@ -1465,14 +1470,16 @@ def export_topic_markdown(topic_id: str, output_path: str = None,
         conn.close()
 
         conversations = []
-        for conv, (user_text, image_ids) in zip(all_conv, parsed):
-            conversations.append({
-                "user_msg": _sanitize(user_text),
-                "ai_msg": _sanitize(conv["ai_msg"]),
-                "stamp": conv["stamp"],
-                "reasoning_text": _extract_reasoning(rounds_map.get(conv["id"])),
-                "images": [blob_map[i] for i in image_ids if i in blob_map],
-            })
+        for conv, (user_text, image_ids) in zip(all_conv, parsed, strict=False):
+            conversations.append(
+                {
+                    "user_msg": _sanitize(user_text),
+                    "ai_msg": _sanitize(conv["ai_msg"]),
+                    "stamp": conv["stamp"],
+                    "reasoning_text": _extract_reasoning(rounds_map.get(conv["id"])),
+                    "images": [blob_map[i] for i in image_ids if i in blob_map],
+                }
+            )
 
         md_text = _build_full_topic_markdown(topic_title, conversations)
         output_path = output_path or os.path.join(_default_export_dir(), f"export_{topic_id[:8]}_full.md")
@@ -1496,8 +1503,7 @@ def export_topic_markdown(topic_id: str, output_path: str = None,
         ai_msg = _sanitize(conv["ai_msg"])
         reasoning_text = _extract_reasoning(rounds_map.get(conv["id"]))
 
-        md_text = _build_markdown_doc(topic_title, conv["stamp"], user_msg,
-                                      ai_msg, reasoning_text, images=images)
+        md_text = _build_markdown_doc(topic_title, conv["stamp"], user_msg, ai_msg, reasoning_text, images=images)
         output_path = output_path or os.path.join(_default_export_dir(), f"export_{topic_id[:8]}.md")
 
     with open(output_path, "w", encoding="utf-8") as f:
@@ -1505,8 +1511,7 @@ def export_topic_markdown(topic_id: str, output_path: str = None,
     return output_path
 
 
-def toolkit_export_last_pdf(output_path=None, mode="latest", filter="final",
-                            topic_id=None):
+def toolkit_export_last_pdf(output_path=None, mode="latest", filter="final", topic_id=None):
     """Toolkit: export topic conversation(s) as PDF.
 
     Args:
@@ -1536,10 +1541,7 @@ def toolkit_export_last_pdf(output_path=None, mode="latest", filter="final",
     row = c.fetchone()
     conn.close()
     if not row:
-        return {
-            "error": "No topics found" if not topic_id
-                    else f"Topic '{topic_id}' not found"
-        }
+        return {"error": "No topics found" if not topic_id else f"Topic '{topic_id}' not found"}
     try:
         path = export_topic_pdf(row["topic_id"], output_path, mode=mode, filter_mode=filter)
         return {
@@ -1562,30 +1564,26 @@ def meta_toolkit_export_last_pdf() -> dict:
             "parameters": {
                 "type": "object",
                 "properties": {
-                    "output_path": {
-                        "type": "string",
-                        "description": "PDF 输出路径，默认 last.pdf",
-                        "default": "last.pdf"
-                    },
+                    "output_path": {"type": "string", "description": "PDF 输出路径，默认 last.pdf", "default": "last.pdf"},
                     "mode": {
                         "type": "string",
                         "enum": ["latest", "full_topic"],
                         "description": "'latest'=仅最新对话, 'full_topic'=完整主题全部对话",
-                        "default": "latest"
+                        "default": "latest",
                     },
                     "filter": {
                         "type": "string",
                         "enum": ["final", "full"],
                         "description": "'final'=仅 user+AI 最终消息(默认), 'full'=含推理过程",
-                        "default": "final"
+                        "default": "final",
                     },
                     "topic_id": {
                         "type": "string",
                         "description": "指定导出的主题 UUID。不填则自动导出最新主题。用 toolkit_query_chat_history action='topic' 可查看所有 topic_id。",
-                        "default": ""
-                    }
+                        "default": "",
+                    },
                 },
-                "required": []
-            }
-        }
+                "required": [],
+            },
+        },
     }

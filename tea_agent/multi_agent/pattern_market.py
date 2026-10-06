@@ -160,9 +160,7 @@ class PatternMarket:
         try:
             now = datetime.now().isoformat()
             for p in BUILTIN_PATTERNS:
-                existing = conn.execute(
-                    "SELECT id FROM patterns WHERE name = ?", (p["name"],)
-                ).fetchone()
+                existing = conn.execute("SELECT id FROM patterns WHERE name = ?", (p["name"],)).fetchone()
                 if not existing:
                     pid = f"builtin-{p['name']}"
                     conn.execute(
@@ -205,9 +203,7 @@ class PatternMarket:
         with self._lock:
             conn = self._get_conn()
             try:
-                existing = conn.execute(
-                    "SELECT id FROM patterns WHERE id = ?", (pid,)
-                ).fetchone()
+                existing = conn.execute("SELECT id FROM patterns WHERE id = ?", (pid,)).fetchone()
 
                 if existing:
                     # 更新
@@ -258,9 +254,7 @@ class PatternMarket:
         """获取模式详情。"""
         conn = self._get_conn()
         try:
-            row = conn.execute(
-                "SELECT * FROM patterns WHERE id = ?", (pattern_id,)
-            ).fetchone()
+            row = conn.execute("SELECT * FROM patterns WHERE id = ?", (pattern_id,)).fetchone()
             if not row:
                 return None
             return self._row_to_dict(row)
@@ -271,9 +265,7 @@ class PatternMarket:
         """按名称查找模式。"""
         conn = self._get_conn()
         try:
-            row = conn.execute(
-                "SELECT * FROM patterns WHERE name = ?", (name,)
-            ).fetchone()
+            row = conn.execute("SELECT * FROM patterns WHERE name = ?", (name,)).fetchone()
             if not row:
                 return None
             return self._row_to_dict(row)
@@ -334,8 +326,7 @@ class PatternMarket:
             return self.search(limit=limit)
 
         # 提取关键词
-        keywords = [w.strip() for w in task.replace(",", " ").replace("，", " ").split()
-                    if len(w.strip()) > 1]
+        keywords = [w.strip() for w in task.replace(",", " ").replace("，", " ").split() if len(w.strip()) > 1]
 
         conn = self._get_conn()
         try:
@@ -441,12 +432,8 @@ class PatternMarket:
         conn = self._get_conn()
         try:
             total = conn.execute("SELECT COUNT(*) as cnt FROM patterns").fetchone()["cnt"]
-            builtin = conn.execute(
-                "SELECT COUNT(*) as cnt FROM patterns WHERE id LIKE 'builtin-%'"
-            ).fetchone()["cnt"]
-            total_usage = conn.execute(
-                "SELECT COALESCE(SUM(usage_count), 0) as u FROM patterns"
-            ).fetchone()["u"]
+            builtin = conn.execute("SELECT COUNT(*) as cnt FROM patterns WHERE id LIKE 'builtin-%'").fetchone()["cnt"]
+            total_usage = conn.execute("SELECT COALESCE(SUM(usage_count), 0) as u FROM patterns").fetchone()["u"]
             return {
                 "total": total,
                 "builtin": builtin,

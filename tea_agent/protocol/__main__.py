@@ -6,6 +6,7 @@ Usage:
     python -m tea_agent.protocol --port 8082     # HTTP on custom port
     python -m tea_agent.protocol --verbose       # stdio with verbose logging
 """
+
 import argparse
 import logging
 import sys
@@ -68,9 +69,7 @@ def main():
         # Legacy HTTP mode
         from tea_agent.protocol.acp_server import run_server
 
-        logging.getLogger("acp_server").info(
-            f"Starting HTTP server on {args.host}:{args.port}"
-        )
+        logging.getLogger("acp_server").info(f"Starting HTTP server on {args.host}:{args.port}")
         run_server(
             host=args.host,
             port=args.port,

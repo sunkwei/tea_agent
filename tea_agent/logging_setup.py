@@ -17,6 +17,7 @@ _logging_initialized = False
 _logging_debug = False
 _file_warning_logged = False  # 文件日志降级告警只提示一次
 
+
 def _ensure_file_handler(root_logger: logging.Logger) -> None:
     """(重)尝试挂载文件 handler；HOME 不可写时降级为"仅终端"，绝不抛异常。
 
@@ -29,9 +30,7 @@ def _ensure_file_handler(root_logger: logging.Logger) -> None:
     handler。
     """
     global _file_warning_logged
-    existing = [
-        h for h in root_logger.handlers if isinstance(h, logging.handlers.TimedRotatingFileHandler)
-    ]
+    existing = [h for h in root_logger.handlers if isinstance(h, logging.handlers.TimedRotatingFileHandler)]
     if existing:
         for h in existing:
             h.setLevel(logging.WARNING)
@@ -43,16 +42,18 @@ def _ensure_file_handler(root_logger: logging.Logger) -> None:
         log_dir.mkdir(parents=True, exist_ok=True)
         file_handler = logging.handlers.TimedRotatingFileHandler(
             filename=log_file,
-            when='D',
+            when="D",
             interval=1,
             backupCount=7,
-            encoding='utf-8',
+            encoding="utf-8",
         )
         file_handler.setLevel(logging.WARNING)
-        file_handler.setFormatter(logging.Formatter(
-            '%(asctime)s, %(levelname)s, %(filename)s:%(lineno)d, %(message)s',
-            datefmt='%Y-%m-%d %H:%M:%S',
-        ))
+        file_handler.setFormatter(
+            logging.Formatter(
+                "%(asctime)s, %(levelname)s, %(filename)s:%(lineno)d, %(message)s",
+                datefmt="%Y-%m-%d %H:%M:%S",
+            )
+        )
         root_logger.addHandler(file_handler)
         _file_warning_logged = False  # 恢复成功后允许再次告警
     except Exception as e:
@@ -60,7 +61,9 @@ def _ensure_file_handler(root_logger: logging.Logger) -> None:
         if not _file_warning_logged:
             logging.getLogger("logging_setup").warning(
                 "文件日志不可用，已降级为仅终端输出 | path=%s | error=%s: %s",
-                log_file, type(e).__name__, e,
+                log_file,
+                type(e).__name__,
+                e,
             )
             _file_warning_logged = True
 
@@ -94,25 +97,25 @@ def setup_logging(debug: bool = False, force: bool = False) -> None:
 
     # ── 控制台 handler（INFO+ 或 DEBUG+，输出到终端） ──
     _console_handler_exists = any(
-        isinstance(h, logging.StreamHandler)
-        and not isinstance(h, logging.handlers.TimedRotatingFileHandler)
-        for h in root_logger.handlers
+        isinstance(h, logging.StreamHandler) and not isinstance(h, logging.handlers.TimedRotatingFileHandler) for h in root_logger.handlers
     )
     if not _console_handler_exists:
         console_handler = logging.StreamHandler()
         console_handler.setLevel(logging.DEBUG if debug else logging.INFO)
-        console_handler.setFormatter(logging.Formatter(
-            '%(asctime)s [%(levelname)-7s] %(name)s: %(message)s',
-            datefmt='%H:%M:%S',
-        ))
+        console_handler.setFormatter(
+            logging.Formatter(
+                "%(asctime)s [%(levelname)-7s] %(name)s: %(message)s",
+                datefmt="%H:%M:%S",
+            )
+        )
         root_logger.addHandler(console_handler)
     else:
         for h in root_logger.handlers:
-            if isinstance(h, logging.StreamHandler) \
-               and not isinstance(h, logging.handlers.TimedRotatingFileHandler):
+            if isinstance(h, logging.StreamHandler) and not isinstance(h, logging.handlers.TimedRotatingFileHandler):
                 h.setLevel(logging.DEBUG if debug else logging.INFO)
 
     _logging_initialized = True
+
 
 def _set_root_level(debug: bool) -> None:
     """运行时切换控制台日志级别，不重启进程。
@@ -124,9 +127,9 @@ def _set_root_level(debug: bool) -> None:
     target = logging.DEBUG if debug else logging.INFO
     root_logger = logging.getLogger()
     for h in root_logger.handlers:
-        if isinstance(h, logging.StreamHandler) \
-           and not isinstance(h, logging.handlers.TimedRotatingFileHandler):
+        if isinstance(h, logging.StreamHandler) and not isinstance(h, logging.handlers.TimedRotatingFileHandler):
             h.setLevel(target)
+
 
 def set_debug(enabled: bool = True) -> None:
     """运行时开关终端 DEBUG 日志（已初始化后调用）。

@@ -83,11 +83,13 @@ class ToolkitModule(HotReloadModule):
         tools = []
         for name, meta in toolkit.meta_map.items():
             fn = meta.get("function", {})
-            tools.append({
-                "name": fn.get("name", name),
-                "description": fn.get("description", ""),
-                "parameters": fn.get("parameters", {}),
-            })
+            tools.append(
+                {
+                    "name": fn.get("name", name),
+                    "description": fn.get("description", ""),
+                    "parameters": fn.get("parameters", {}),
+                }
+            )
         return tools
 
     @classmethod
@@ -132,6 +134,7 @@ class ToolkitModule(HotReloadModule):
     def reload_tools(cls) -> dict:
         """重新加载所有工具。"""
         from tea_agent import tlk
+
         if cls._instance:
             tlk.reload_funcs()
             return {"ok": True, "count": len(cls._instance.func_map)}

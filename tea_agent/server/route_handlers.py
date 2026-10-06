@@ -202,7 +202,7 @@ def _persist_turn_images(storage, images: list, label: str = "Image") -> list:
             refs.append(make_image_ref(storage.add_pending_image(blob, mime)))
         except Exception as e:
             logger.warning(f"{label} persist failed: {e}")
-            refs.append(item)      # 入库失败：退回原值，绝不静默丢图
+            refs.append(item)  # 入库失败：退回原值，绝不静默丢图
     return refs
 
 
@@ -239,6 +239,8 @@ def _images_to_data_urls(images_b64: list, label: str = "Image") -> list:
             continue
         out.append(f"data:image/png;base64,{img}")
     return out
+
+
 async def handle_web_chat(request):
     """POST /api/chat - SSE streaming chat for Web UI.
 
@@ -257,8 +259,7 @@ async def handle_web_chat(request):
     if _is_draining() and not topic_id:
         # 重启排空期且无 topic_id（无法排队）：提示客户端稍后重试，
         # 避免刚启动的回合随即被 should_exit 切断
-        return JSONResponse({"error": "server restarting, please retry",
-                             "retry_after": 2}, status_code=503)
+        return JSONResponse({"error": "server restarting, please retry", "retry_after": 2}, status_code=503)
     if not topic_id:
         # 新主题直接进入 SSE 流
         pass
@@ -276,8 +277,10 @@ async def handle_web_chat(request):
         item_id = _queue_add(topic_id, message, _steer_images)
         position = len(_queue_list(topic_id))
         logger.info(f"Topic busy, queued message: topic={topic_id} item={item_id} position={position}")
+
         async def _queued_sse():
             yield f"data: {json.dumps({'type': 'queued', 'item_id': item_id, 'topic_id': topic_id, 'position': position})}\n\n"
+
         return StreamingResponse(_queued_sse(), media_type="text/event-stream")
 
     # 图片归一化为 data URL（不落盘）；随后在回合开始时入库为 img:<id> 引用
@@ -300,8 +303,7 @@ async def handle_web_chat(request):
         #   1) data URL 数万字符会被快照 _shrink 截断成损坏值（切回后图片打不开）；
         #   2) 图片只活在内存时，回合进行中切走再切回无从恢复（输入丢失）。
         _img_refs = _persist_turn_images(storage, image_paths, label="Image")
-        _turn_payload = ({"text": message, "images": _img_refs}
-                         if _img_refs else message)
+        _turn_payload = {"text": message, "images": _img_refs} if _img_refs else message
         # 回合**开始**即建 conversation 行（status=pending）：
         #   1) 回合中的工具/增量事件据此归属 —— 此前 conversation_id 恒为 NULL
         #      （实测 404 条 tool/call 全部无归属），轮次级审计无法进行；
@@ -321,7 +323,8 @@ async def handle_web_chat(request):
         _snapshot.record_event(
             topic_id,
             {"type": "user_message", "text": message, "images": _img_refs},
-            0, force=True,
+            0,
+            force=True,
         )
 
         try:
@@ -349,10 +352,7 @@ async def handle_web_chat(request):
                 except asyncio.TimeoutError:
                     # 线程已死但没发 done/error → 强制终结（防止按钮卡红）
                     if not thread.is_alive():
-                        yield "data: " + json.dumps({
-                            "type": "error",
-                            "error": "服务器处理意外终止"
-                        }) + "\n\n"
+                        yield "data: " + json.dumps({"type": "error", "error": "服务器处理意外终止"}) + "\n\n"
                         break
                     # 线程还活着 → 发送 SSE 心跳保活，防止中间代理/浏览器断开连接
                     yield ":keepalive\n\n"
@@ -385,6 +385,7 @@ async def handle_web_chat(request):
             # 尝试应用挂起的模型切换 —— 会话续用：不中断本轮，结束后自动以新模型继续
             try:
                 from .modules.agent_module import AgentModule
+
                 AgentModule.try_apply_pending_switch()
             except Exception as e:
                 logger.debug("apply queued model switch skipped: %s", e)
@@ -428,16 +429,15 @@ async def handle_web_chat_steering(request):
 
     item_id = _queue_add(topic_id, message, image_paths)
     position = len(_queue_list(topic_id))
-    logger.info(
-        f"Steering queued: topic={topic_id} item={item_id} "
-        f"position={position} images={len(image_paths)}"
+    logger.info(f"Steering queued: topic={topic_id} item={item_id} position={position} images={len(image_paths)}")
+    return JSONResponse(
+        {
+            "ok": True,
+            "item_id": item_id,
+            "topic_id": topic_id,
+            "position": position,
+        }
     )
-    return JSONResponse({
-        "ok": True,
-        "item_id": item_id,
-        "topic_id": topic_id,
-        "position": position,
-    })
 
 
 async def handle_chat_continue(request):
@@ -524,6 +524,7 @@ async def handle_chat_abort(request):
     # 清理后台缓冲区（如果有）
     try:
         from .modules.state import cleanup_buffer, mark_buffer_done
+
         cleanup_buffer(topic_id)
         mark_buffer_done(topic_id)
     except Exception:
@@ -535,6 +536,7 @@ async def handle_chat_abort(request):
 # ================================================================
 #  Queue API — 排队消息管理
 # ================================================================
+
 
 async def handle_web_queue_add(request):
     """POST /api/queue/{topic_id} — 添加消息到排队队列（手动入队）"""
@@ -570,6 +572,8 @@ async def handle_web_queue_remove(request):
     if ok:
         return JSONResponse({"ok": True, "item_id": item_id, "topic_id": topic_id})
     return JSONResponse({"ok": False, "error": "未找到该排队消息"}, status_code=404)
+
+
 async def handle_web_image(request):
     """GET /api/image/{image_id} — 回读会话图片（二进制存于 images 表）。
 

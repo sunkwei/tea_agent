@@ -18,15 +18,18 @@ import json
 import logging
 import os
 import subprocess
+
 from tea_agent.path_filters import iter_files
 
 logger = logging.getLogger("toolkit.batch_process")
 
 # ── 内置处理器 ──────────────────────────────────────────
 
+
 def _handler_compile(abspath: str, **kwargs) -> dict:
     """编译检查"""
     import py_compile
+
     try:
         py_compile.compile(abspath, doraise=True)
         return {"file": abspath, "ok": True, "result": "编译通过"}
@@ -37,8 +40,7 @@ def _handler_compile(abspath: str, **kwargs) -> dict:
 def _handler_lint(abspath: str, **kwargs) -> dict:
     """Ruff Lint 检查"""
     try:
-        r = subprocess.run(["ruff", "check", "--output-format", "json", abspath],
-                           capture_output=True, text=True, timeout=30)
+        r = subprocess.run(["ruff", "check", "--output-format", "json", abspath], capture_output=True, text=True, timeout=30)
         issues = json.loads(r.stdout) if r.stdout.strip() else []
         return {"file": abspath, "ok": len(issues) == 0, "result": f"{len(issues)} 个问题", "issues": issues}
     except Exception as e:
@@ -48,8 +50,7 @@ def _handler_lint(abspath: str, **kwargs) -> dict:
 def _handler_format(abspath: str, **kwargs) -> dict:
     """Black 格式化"""
     try:
-        r = subprocess.run(["python", "-m", "black", "--quiet", abspath],
-                           capture_output=True, text=True, timeout=30)
+        r = subprocess.run(["python", "-m", "black", "--quiet", abspath], capture_output=True, text=True, timeout=30)
         ok = r.returncode == 0
         output = r.stdout or r.stderr or ""
         return {"file": abspath, "ok": ok, "result": "已格式化" if ok else output[:200]}
@@ -62,16 +63,20 @@ def _handler_stats(abspath: str, **kwargs) -> dict:
     try:
         with open(abspath, encoding="utf-8", errors="replace") as f:
             content = f.read()
-        lines = content.split('\n')
-        code_lines = sum(1 for l in lines if l.strip() and not l.strip().startswith('#'))
-        comment_lines = sum(1 for l in lines if l.strip().startswith('#'))
-        blank_lines = sum(1 for l in lines if not l.strip())
+        lines = content.split("\n")
+        code_lines = sum(1 for ln in lines if ln.strip() and not ln.strip().startswith("#"))
+        comment_lines = sum(1 for ln in lines if ln.strip().startswith("#"))
+        blank_lines = sum(1 for ln in lines if not ln.strip())
         return {
-            "file": abspath, "ok": True, "result": {
-                "total": len(lines), "code": code_lines,
-                "comment": comment_lines, "blank": blank_lines,
+            "file": abspath,
+            "ok": True,
+            "result": {
+                "total": len(lines),
+                "code": code_lines,
+                "comment": comment_lines,
+                "blank": blank_lines,
                 "size_bytes": os.path.getsize(abspath),
-            }
+            },
         }
     except Exception as e:
         return {"file": abspath, "ok": False, "result": f"统计错误: {e}"}
@@ -133,6 +138,7 @@ def _resolve_files(glob_pattern: str, directory: str = "", max_files: int = 100)
 
 
 # ── 主入口 ──────────────────────────────────────────────
+
 
 def toolkit_batch_process(
     action: str = "compile",
@@ -205,8 +211,7 @@ def toolkit_batch_process(
             "parallel": parallel,
         }
 
-        result = {"ok": fail == 0, "total": len(results), "success": success, "fail": fail,
-                  "summary": summary, "results": results}
+        result = {"ok": fail == 0, "total": len(results), "success": success, "fail": fail, "summary": summary, "results": results}
 
         if output:
             with open(output, "w", encoding="utf-8") as f:
@@ -222,6 +227,7 @@ def toolkit_batch_process(
 
 # ── Meta ────────────────────────────────────────────────
 
+
 def meta_toolkit_batch_process():
     return {
         "type": "function",
@@ -232,9 +238,10 @@ def meta_toolkit_batch_process():
                 "type": "object",
                 "properties": {
                     "action": {
-                        "type": "string", "enum": ["compile", "lint", "format", "stats", "replace", "count_lines"],
+                        "type": "string",
+                        "enum": ["compile", "lint", "format", "stats", "replace", "count_lines"],
                         "description": "compile/lint/format/stats/replace/count_lines",
-                        "default": "compile"
+                        "default": "compile",
                     },
                     "glob_pattern": {"type": "string", "description": "文件匹配模式，如 *.py, test_*.py", "default": "*.py"},
                     "directory": {"type": "string", "description": "搜索目录，默认当前目录"},

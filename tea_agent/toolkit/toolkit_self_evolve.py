@@ -38,7 +38,19 @@ def _cleanup_old_backups(full_path, keep: int = 3):
     except Exception as e:
         logger.debug(f"self_evolve: 清理旧备份跳过: {e}")
 
-def toolkit_self_evolve(file_path: str, description: str, old_code: str, new_code: str, verify: bool = True, backup: bool = True, git_snapshot: bool = True, run_tests: bool = True, symbol: str = None, lsp_checks: bool = True) -> dict:
+
+def toolkit_self_evolve(
+    file_path: str,
+    description: str,
+    old_code: str,
+    new_code: str,
+    verify: bool = True,
+    backup: bool = True,
+    git_snapshot: bool = True,
+    run_tests: bool = True,
+    symbol: str = None,
+    lsp_checks: bool = True,
+) -> dict:
     """@2026-05-19 gen by claude, 集成LSP检查层(Layer2.5: 影响分析+lint+签名对比)    五层安全自进化 + LSP 智能增强。
 
     安全层次:
@@ -81,11 +93,10 @@ def toolkit_self_evolve(file_path: str, description: str, old_code: str, new_cod
     def _git_clean():
         """检查 git 工作区是否干净（忽略 untracked 文件）"""
         try:
-            r = subprocess.run(["git", "status", "--porcelain"],
-                               capture_output=True, text=True, timeout=10, cwd=cwd)
+            r = subprocess.run(["git", "status", "--porcelain"], capture_output=True, text=True, timeout=10, cwd=cwd)
             if r.returncode != 0:
                 return False
-            lines = [l for l in r.stdout.splitlines() if l.strip() and not l.startswith("?")]
+            lines = [ln for ln in r.stdout.splitlines() if ln.strip() and not ln.startswith("?")]
             return len(lines) == 0
         except Exception:
             return False
@@ -116,8 +127,7 @@ def toolkit_self_evolve(file_path: str, description: str, old_code: str, new_cod
             rev = _snap_rev.get("rev")
             if not rev:
                 return False
-            subprocess.run(["git", "checkout", rev, "--", file_path],
-                           capture_output=True, timeout=10, cwd=cwd, check=True)
+            subprocess.run(["git", "checkout", rev, "--", file_path], capture_output=True, timeout=10, cwd=cwd, check=True)
             return True
         except Exception:
             return False
@@ -127,27 +137,26 @@ def toolkit_self_evolve(file_path: str, description: str, old_code: str, new_cod
         try:
             # glob 显式展开测试文件（subprocess 无 shell，`test_*.py` 不展开）
             import glob as _glob
-            test_files = sorted(set(
-                _glob.glob("test_*.py") + _glob.glob("tea_agent/tests/test_*.py")
-            ))
+
+            test_files = sorted(set(_glob.glob("test_*.py") + _glob.glob("tea_agent/tests/test_*.py")))
             test_files = [t for t in test_files if os.path.exists(t)]
             if not test_files:
                 return -1, 0, "no tests found"
             r = subprocess.run(
-                [os.sys.executable, "-m", "pytest", *test_files, "--tb=short", "-q"],
-                capture_output=True, text=True, timeout=120, cwd=cwd
+                [os.sys.executable, "-m", "pytest", *test_files, "--tb=short", "-q"], capture_output=True, text=True, timeout=120, cwd=cwd
             )
             output = r.stdout + r.stderr
             if "no tests ran" in output.lower():
                 return -1, 0, "no tests found"
             import re
-            m = re.search(r'(\d+)\s+passed', output)
+
+            m = re.search(r"(\d+)\s+passed", output)
             passed = int(m.group(1)) if m else 0
-            m = re.search(r'(\d+)\s+failed', output)
+            m = re.search(r"(\d+)\s+failed", output)
             failed = int(m.group(1)) if m else 0
             # pytest 的 errors（集内/夹具设置错误）也要计入 total，避免 0/0 误判通过。
             # 同时匹配复数 "errors" 与单数 "1 error"。
-            m = re.search(r'(\d+)\s+error', output)
+            m = re.search(r"(\d+)\s+error", output)
             errors = int(m.group(1)) if m else 0
             total = passed + failed + errors
             return passed, total, output[-500:] if (failed > 0 or errors > 0) else None
@@ -161,59 +170,73 @@ def toolkit_self_evolve(file_path: str, description: str, old_code: str, new_cod
     # ── LSP 辅助函数 ── @2026-05-19 gen by claude
     def _run_lsp_checks(full_path, symbol, old_code, new_code, content):
         """Layer 2.5: 影响分析 + ruff lint + 签名对比 + 语义诊断。非阻塞。"""
-        result = {"impact": None, "lint_before": 0, "lint_after": 0, "lint_new": 0,
-                  "sig_changed": False, "old_sig": None, "new_sig": None,
-                  "semantic": None}
+        result = {
+            "impact": None,
+            "lint_before": 0,
+            "lint_after": 0,
+            "lint_new": 0,
+            "sig_changed": False,
+            "old_sig": None,
+            "new_sig": None,
+            "semantic": None,
+        }
         try:
             # 1. 影响分析
             if symbol:
                 try:
                     from tea_agent.lsp.ts_analyzer import impact_analysis
+
                     imp = impact_analysis(cwd, full_path, symbol)
                     if imp and imp.get("ok"):
-                        result["impact"] = {"callers": len(imp.get("direct_callers", [])),
-                                            "deps": imp.get("dependencies", []),
-                                            "risk": imp.get("risk", "unknown"),
-                                            "hint": imp.get("hint", "")}
+                        result["impact"] = {
+                            "callers": len(imp.get("direct_callers", [])),
+                            "deps": imp.get("dependencies", []),
+                            "risk": imp.get("risk", "unknown"),
+                            "hint": imp.get("hint", ""),
+                        }
                 except Exception:
                     logger.exception("LSP 检查失败")
 
-
             # 2. Ruff lint: before
             import tempfile
+
             try:
-                with tempfile.NamedTemporaryFile(mode='w', suffix='.py', delete=False) as tf:
+                with tempfile.NamedTemporaryFile(mode="w", suffix=".py", delete=False) as tf:
                     tf.write(content)
                     tmp_b = tf.name
-                r = subprocess.run(["ruff", "check", "--output-format", "json", tmp_b],
-                                   capture_output=True, text=True, timeout=15, cwd=cwd)
+                r = subprocess.run(["ruff", "check", "--output-format", "json", tmp_b], capture_output=True, text=True, timeout=15, cwd=cwd)
                 if r.stdout.strip():
                     import json
+
                     result["lint_before"] = len(json.loads(r.stdout))
             except Exception:
                 logger.exception("LSP 检查失败")
 
             finally:
-                try: os.unlink(tmp_b)
+                try:
+                    os.unlink(tmp_b)
                 except Exception:
                     logger.exception("LSP 检查失败")
 
             # 3. Ruff lint: after
             try:
-                with tempfile.NamedTemporaryFile(mode='w', suffix='.py', delete=False) as tf:
-                    tf.write(open(full_path, encoding='utf-8').read())
+                with open(full_path, encoding="utf-8") as _src:
+                    _src_text = _src.read()
+                with tempfile.NamedTemporaryFile(mode="w", suffix=".py", delete=False) as tf:
+                    tf.write(_src_text)
                     tmp_a = tf.name
-                r = subprocess.run(["ruff", "check", "--output-format", "json", tmp_a],
-                                   capture_output=True, text=True, timeout=15, cwd=cwd)
+                r = subprocess.run(["ruff", "check", "--output-format", "json", tmp_a], capture_output=True, text=True, timeout=15, cwd=cwd)
                 if r.stdout.strip():
                     import json
+
                     result["lint_after"] = len(json.loads(r.stdout))
                 result["lint_new"] = max(0, result["lint_after"] - result["lint_before"])
             except Exception:
                 logger.exception("LSP 检查失败")
 
             finally:
-                try: os.unlink(tmp_a)
+                try:
+                    os.unlink(tmp_a)
                 except Exception:
                     logger.exception("LSP 检查失败")
 
@@ -221,7 +244,8 @@ def toolkit_self_evolve(file_path: str, description: str, old_code: str, new_cod
             if symbol:
                 try:
                     import re
-                    pat = rf'def\s+{re.escape(symbol)}\s*\([^)]*\)'
+
+                    pat = rf"def\s+{re.escape(symbol)}\s*\([^)]*\)"
                     m = re.search(pat, old_code)
                     result["old_sig"] = m.group(0).strip() if m else None
                     m = re.search(pat, new_code)
@@ -231,13 +255,17 @@ def toolkit_self_evolve(file_path: str, description: str, old_code: str, new_cod
                 except Exception:
                     logger.exception("LSP 检查失败")
 
-
             # 5. 语义诊断（jedi）
             try:
                 from tea_agent.lsp.lsp_engine import semantic_diagnose
+
                 sd = semantic_diagnose(cwd, full_path)
-                result["semantic"] = {"ok": sd.get("ok", True), "issues": sd.get("issues", [])[:5],
-                                      "total": sd.get("total", 0), "hint": sd.get("hint", "")}
+                result["semantic"] = {
+                    "ok": sd.get("ok", True),
+                    "issues": sd.get("issues", [])[:5],
+                    "total": sd.get("total", 0),
+                    "hint": sd.get("hint", ""),
+                }
                 if not sd.get("ok", True):
                     logger.warning(f"LSP semantic: {sd.get('hint', '')}")
             except Exception:
@@ -289,8 +317,11 @@ def toolkit_self_evolve(file_path: str, description: str, old_code: str, new_cod
         new_has_crlf = "\r\n" in new_code
         new_has_lf = "\n" in new_code.replace("\r\n", "")
         if new_has_crlf and new_has_lf:
-            return {"ok": False, "error": "新代码中混用了 CRLF 和 LF 换行符",
-                    "details": {"issue": "mixed_newlines", "suggestion": "统一使用 LF (\\n)"}}
+            return {
+                "ok": False,
+                "error": "新代码中混用了 CRLF 和 LF 换行符",
+                "details": {"issue": "mixed_newlines", "suggestion": "统一使用 LF (\\n)"},
+            }
         details["checks"].append("newline_consistency: ok")
 
         return {"ok": True, "error": None, "details": details}
@@ -349,8 +380,7 @@ def toolkit_self_evolve(file_path: str, description: str, old_code: str, new_cod
                 "error": f"Python 语法检查失败: {syntax_check['error']}",
                 "file": file_path,
                 "syntax_details": syntax_check,
-                "layers": {"git_snapshot": git_snapped, "bak": bak_path,
-                           "syntax_check": False, "compile_verify": "skipped", "tests": "skipped"}
+                "layers": {"git_snapshot": git_snapped, "bak": bak_path, "syntax_check": False, "compile_verify": "skipped", "tests": "skipped"},
             }
 
     with open(full_path, "w", encoding="utf-8") as f:
@@ -374,8 +404,7 @@ def toolkit_self_evolve(file_path: str, description: str, old_code: str, new_cod
                 "ok": False,
                 "error": f"编译失败，已回滚: {verify_error}",
                 "file": file_path,
-                "layers": {"git_snapshot": git_snapped, "bak": bak_path,
-                           "compile_verify": False, "tests": "skipped"}
+                "layers": {"git_snapshot": git_snapped, "bak": bak_path, "compile_verify": False, "tests": "skipped"},
             }
 
     # ── Layer 2.5: LSP 智能检查 ──
@@ -408,8 +437,7 @@ def toolkit_self_evolve(file_path: str, description: str, old_code: str, new_cod
                 "error": f"测试失败 ({test_passed}/{test_total} passed)，已回滚",
                 "test_output": str(test_error)[:500],
                 "file": file_path,
-                "layers": {"git_snapshot": git_snapped, "bak": bak_path,
-                           "compile_verify": True, "tests": f"{test_passed}/{test_total}"}
+                "layers": {"git_snapshot": git_snapped, "bak": bak_path, "compile_verify": True, "tests": f"{test_passed}/{test_total}"},
             }
 
     if os.path.exists(tmp_bak):
@@ -425,8 +453,8 @@ def toolkit_self_evolve(file_path: str, description: str, old_code: str, new_cod
             "bak": bak_path,
             "compile_verify": verify_ok,
             "lsp": lsp_result,
-            "tests": f"{test_passed}/{test_total}" if test_total is not None else "skipped"
-        }
+            "tests": f"{test_passed}/{test_total}" if test_total is not None else "skipped",
+        },
     }
 
 

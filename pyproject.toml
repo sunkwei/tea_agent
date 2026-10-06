@@ -100,10 +100,52 @@ markers = [
 [tool.ruff]
 line-length = 150
 target-version = "py310"
+# 门禁只覆盖「随包发布 + 其测试」的代码。开发脚手架 / 演示 / 一次性分析脚本不随包
+# 分发，历史欠账大，纳入只会淹没真正的问题；需要收紧时删掉对应条目即可。
+extend-exclude = [
+    "demo",
+    "docs",
+    "scripts",
+    "benchmark",
+    "benchmarks",
+    "deploy",
+    "nginx",
+    "output",
+    "uploads",
+    "tmp",
+    "tests",
+    "tea_agent/demo",
+    # 根目录一次性分析 / 构建 / 演示脚本
+    "analyze_llm_friendly.py",
+    "asr_vad.py",
+    "build_mini.py",
+    "build_nuitka.py",
+    "crosscut_scan.py",
+    "gen_pdf.py",
+    "launch_dag_demo.py",
+    "optimize_agent.py",
+    "optimize_config.py",
+    "start_server_wrapper.py",
+    "test_dag_demo.py",
+    "test_dag_server.py",
+    "test_multi_agent_demo.py",
+    "test_server_dag_e2e.py",
+]
 
 [tool.ruff.lint]
 select = ["E", "F", "W", "I", "N", "UP", "B", "C4", "SIM"]
 ignore = ["E501"]
+
+[tool.ruff.lint.per-file-ignores]
+# 测试：sys.path 注入后再 import（E402）；需跨断言存活、不能 with 收口的句柄（SIM115）
+"tea_agent/tests/**" = ["E402", "SIM115"]
+# 惰性导出（PEP 562）与「必须晚于 try/except(starlette) 的 import」——导入位置刻意为之，
+# 用于换取「未装可选依赖时给出友好报错」的行为。
+"tea_agent/__init__.py" = ["E402"]
+"tea_agent/server/_compat.py" = ["E402"]
+"tea_agent/server/server.py" = ["E402"]
+# 审计锁文件：句柄需跨越 yield 存续（非泄漏），不能 with 收口。
+"tea_agent/audit_log.py" = ["SIM115"]
 
 [tool.setuptools]
 include-package-data = true

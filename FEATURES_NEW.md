@@ -11,37 +11,27 @@ MCP (Model Context Protocol) 客户端工具，让 Tea Agent 能够连接外部 
 
 **连接文件系统 MCP Server：**
 ```python
-toolkit_mcp(
-    action='connect',
-    server_name='filesystem',
-    command='npx',
-    args=['-y', '@modelcontextprotocol/server-filesystem', '/path/to/allow']
-)
+toolkit_mcp(action="connect", server_name="filesystem", command="npx", args=["-y", "@modelcontextprotocol/server-filesystem", "/path/to/allow"])
 ```
 
 **列出可用工具：**
 ```python
-toolkit_mcp(action='list_tools', server_name='filesystem')
+toolkit_mcp(action="list_tools", server_name="filesystem")
 ```
 
 **调用工具：**
 ```python
-toolkit_mcp(
-    action='call_tool',
-    server_name='filesystem',
-    tool_name='read_file',
-    tool_args={'path': '/tmp/test.txt'}
-)
+toolkit_mcp(action="call_tool", server_name="filesystem", tool_name="read_file", tool_args={"path": "/tmp/test.txt"})
 ```
 
 **查看连接状态：**
 ```python
-toolkit_mcp(action='status')
+toolkit_mcp(action="status")
 ```
 
 **断开连接：**
 ```python
-toolkit_mcp(action='disconnect', server_name='filesystem')
+toolkit_mcp(action="disconnect", server_name="filesystem")
 ```
 
 #### 支持的传输方式
@@ -81,30 +71,25 @@ npx -y @modelcontextprotocol/server-git
 **全文搜索（类似 grep/ripgrep）：**
 ```python
 toolkit_search(
-    query='def login',
-    search_type='code',
-    root_path='/path/to/project',
-    glob_pattern='*.py',  # 可选，过滤文件类型
-    max_results=20
+    query="def login",
+    search_type="code",
+    root_path="/path/to/project",
+    glob_pattern="*.py",  # 可选，过滤文件类型
+    max_results=20,
 )
 ```
 
 **符号搜索（查找函数/类定义）：**
 ```python
-toolkit_search(
-    query='MyClass',
-    search_type='symbol',
-    root_path='/path/to/project',
-    max_results=10
-)
+toolkit_search(query="MyClass", search_type="symbol", root_path="/path/to/project", max_results=10)
 ```
 
 **互联网搜索（原有功能）：**
 ```python
 toolkit_search(
-    query='Python async tutorial',
-    search_type='web',  # 默认值，可省略
-    engine='duckduckgo'  # 或 'baidu'
+    query="Python async tutorial",
+    search_type="web",  # 默认值，可省略
+    engine="duckduckgo",  # 或 'baidu'
 )
 ```
 
@@ -143,51 +128,27 @@ toolkit_search(
 
 **应用 diff/patch：**
 ```python
-toolkit_edit(
-    file_path='src/main.py',
-    action='apply_patch',
-    content='@@ -10,3 +10,4 @@\n def foo():\n+    pass\n     return 1'
-)
+toolkit_edit(file_path="src/main.py", action="apply_patch", content="@@ -10,3 +10,4 @@\n def foo():\n+    pass\n     return 1")
 ```
 
 **插入行：**
 ```python
-toolkit_edit(
-    file_path='src/main.py',
-    action='insert_lines',
-    start_line=10,
-    new_content='def new_function():\n    pass'
-)
+toolkit_edit(file_path="src/main.py", action="insert_lines", start_line=10, new_content="def new_function():\n    pass")
 ```
 
 **删除行：**
 ```python
-toolkit_edit(
-    file_path='src/main.py',
-    action='delete_lines',
-    start_line=10,
-    end_line=15
-)
+toolkit_edit(file_path="src/main.py", action="delete_lines", start_line=10, end_line=15)
 ```
 
 **替换行：**
 ```python
-toolkit_edit(
-    file_path='src/main.py',
-    action='replace_lines',
-    start_line=10,
-    end_line=15,
-    new_content='def updated_function():\n    pass'
-)
+toolkit_edit(file_path="src/main.py", action="replace_lines", start_line=10, end_line=15, new_content="def updated_function():\n    pass")
 ```
 
 **预览变更（不写入文件）：**
 ```python
-toolkit_edit(
-    file_path='src/main.py',
-    action='preview_patch',
-    content='@@ -10,3 +10,4 @@\n...'
-)
+toolkit_edit(file_path="src/main.py", action="preview_patch", content="@@ -10,3 +10,4 @@\n...")
 ```
 
 #### 安全特性
@@ -235,41 +196,37 @@ pip install tea_agent[all]
 ### 场景 1：分析项目代码结构
 ```python
 # 1. 搜索所有登录相关函数
-toolkit_search(query='login', search_type='code', root_path='.', glob_pattern='*.py')
+toolkit_search(query="login", search_type="code", root_path=".", glob_pattern="*.py")
 
 # 2. 查找特定的类定义
-toolkit_search(query='AuthService', search_type='symbol', root_path='.')
+toolkit_search(query="AuthService", search_type="symbol", root_path=".")
 
 # 3. 读取相关文件
-toolkit_file(action='read', path='src/auth.py')
+toolkit_file(action="read", path="src/auth.py")
 ```
 
 ### 场景 2：使用外部工具（通过 MCP）
 ```python
 # 1. 连接数据库 MCP Server
-toolkit_mcp(action='connect', server_name='db', command='npx',
-           args=['-y', '@modelcontextprotocol/server-sqlite', './data.db'])
+toolkit_mcp(action="connect", server_name="db", command="npx", args=["-y", "@modelcontextprotocol/server-sqlite", "./data.db"])
 
 # 2. 列出可用数据库工具
-toolkit_mcp(action='list_tools', server_name='db')
+toolkit_mcp(action="list_tools", server_name="db")
 
 # 3. 执行查询
-toolkit_mcp(action='call_tool', server_name='db',
-           tool_name='query', tool_args={'sql': 'SELECT * FROM users'})
+toolkit_mcp(action="call_tool", server_name="db", tool_name="query", tool_args={"sql": "SELECT * FROM users"})
 ```
 
 ### 场景 3：精准代码修改
 ```python
 # 1. 搜索需要修改的代码
-toolkit_search(query='old_function_name', search_type='code', root_path='src')
+toolkit_search(query="old_function_name", search_type="code", root_path="src")
 
 # 2. 预览修改效果
-toolkit_edit(file_path='src/main.py', action='preview_patch',
-            content='@@ -42,3 +42,3 @@\n-def old_name():\n+def new_name():\n     pass')
+toolkit_edit(file_path="src/main.py", action="preview_patch", content="@@ -42,3 +42,3 @@\n-def old_name():\n+def new_name():\n     pass")
 
 # 3. 应用修改
-toolkit_edit(file_path='src/main.py', action='apply_patch',
-            content='@@ -42,3 +42,3 @@\n-def old_name():\n+def new_name():\n     pass')
+toolkit_edit(file_path="src/main.py", action="apply_patch", content="@@ -42,3 +42,3 @@\n-def old_name():\n+def new_name():\n     pass")
 ```
 
 ---

@@ -39,6 +39,7 @@ logger = logging.getLogger("toolkit")
 
 # ── 存储路径 ────────────────────────────────────────────
 
+
 def _get_user_commands_dir() -> str:
     """用户级命令目录 ~/.tea_agent/commands/"""
     home = os.path.expanduser("~")
@@ -46,11 +47,13 @@ def _get_user_commands_dir() -> str:
     os.makedirs(d, exist_ok=True)
     return d
 
+
 def _get_project_commands_dir() -> str:
     """项目级命令目录 .tea_commands/"""
     d = os.path.join(os.getcwd(), ".tea_commands")
     os.makedirs(d, exist_ok=True)
     return d
+
 
 def _cmd_path(name: str, scope: str = "user") -> str:
     """获取命令文件路径"""
@@ -58,11 +61,11 @@ def _cmd_path(name: str, scope: str = "user") -> str:
     safe_name = name.replace(" ", "_").replace("/", "_")
     return os.path.join(base, f"{safe_name}.md")
 
+
 def _scan_commands() -> list[dict]:
     """扫描所有可用命令"""
     commands = []
-    for scope, base in [("user", _get_user_commands_dir()),
-                        ("project", _get_project_commands_dir())]:
+    for scope, base in [("user", _get_user_commands_dir()), ("project", _get_project_commands_dir())]:
         if not os.path.isdir(base):
             continue
         for fname in sorted(os.listdir(base)):
@@ -81,6 +84,7 @@ def _scan_commands() -> list[dict]:
 
 
 # ═══ Pi-style 参数替换 ═══════════════════════════════════
+
 
 def _substitute_args(content: str, args: list[str]) -> str:
     """Pi-style 参数替换。
@@ -110,10 +114,10 @@ def _substitute_args(content: str, args: list[str]) -> str:
         if start < 0:
             start = 0
         if length_str:
-            return " ".join(args[start:start + int(length_str)])
+            return " ".join(args[start : start + int(length_str)])
         return " ".join(args[start:])
 
-    result = re.sub(r'\$\{@:(\d+)(?::(\d+))?\}', _replace_range, result)
+    result = re.sub(r"\$\{@:(\d+)(?::(\d+))?\}", _replace_range, result)
 
     # 2. 处理 $@ 和 $ARGUMENTS
     all_args = " ".join(args)
@@ -121,7 +125,7 @@ def _substitute_args(content: str, args: list[str]) -> str:
     result = result.replace("$ARGUMENTS", all_args)
 
     # 3. 处理 $1, $2, ...（先处理多位数避免误替换）
-    result = re.sub(r'\$(\d+)', lambda m: args[int(m.group(1)) - 1] if int(m.group(1)) <= len(args) else "", result)
+    result = re.sub(r"\$(\d+)", lambda m: args[int(m.group(1)) - 1] if int(m.group(1)) <= len(args) else "", result)
 
     # 4. 处理 {{placeholder}} — 保持兼容
     # （注意：{{name}} 占位符需要在 run 时通过 args dict 替换）
@@ -130,6 +134,7 @@ def _substitute_args(content: str, args: list[str]) -> str:
 
 
 # ═══ 解析器 ═══════════════════════════════════════════════
+
 
 def _parse_command_file(fpath: str) -> dict | None:
     """解析命令 Markdown 文件，提取 front matter 和正文"""
@@ -172,7 +177,7 @@ def _parse_command_file(fpath: str) -> dict | None:
 
     # 提取占位符
     placeholders = re.findall(r"\{\{(\w+)\}\}", body)
-    dollar_refs = re.findall(r'\$(\d+)', body)
+    dollar_refs = re.findall(r"\$(\d+)", body)
 
     # 合并 args_def（优先使用显式声明）
     args_def = meta.get("args_def") or meta.get("args") or placeholders
@@ -279,6 +284,7 @@ argument-hint: <目标描述>
 
 # ── 核心功能 ────────────────────────────────────────────
 
+
 def _ensure_builtins():
     """确保内置命令存在"""
     cmd_dir = _get_user_commands_dir()
@@ -288,6 +294,7 @@ def _ensure_builtins():
             with open(fpath, "w", encoding="utf-8") as f:
                 f.write(content.strip())
             logger.info(f"创建内置命令: {name}")
+
 
 def toolkit_custom_commands(
     action: str,
@@ -326,8 +333,7 @@ def toolkit_custom_commands(
             fpath = _cmd_path(name, scope)
             with open(fpath, "w", encoding="utf-8") as f:
                 f.write(content)
-            return {"ok": True, "name": name, "scope": scope, "path": fpath,
-                    "msg": f"命令 '{name}' 已添加 ({scope}级)"}
+            return {"ok": True, "name": name, "scope": scope, "path": fpath, "msg": f"命令 '{name}' 已添加 ({scope}级)"}
 
         if action == "list":
             cmds = _scan_commands()
@@ -336,13 +342,16 @@ def toolkit_custom_commands(
             return {
                 "ok": True,
                 "total": len(cmds),
-                "commands": [{
-                    "name": c["name"],
-                    "description": c["description"][:100],
-                    "scope": c["scope"],
-                    "tags": c.get("tags", []),
-                    "args": c.get("args_def", []),
-                } for c in cmds],
+                "commands": [
+                    {
+                        "name": c["name"],
+                        "description": c["description"][:100],
+                        "scope": c["scope"],
+                        "tags": c.get("tags", []),
+                        "args": c.get("args_def", []),
+                    }
+                    for c in cmds
+                ],
             }
 
         if action == "show":
@@ -378,13 +387,12 @@ def toolkit_custom_commands(
             # 检查未替换的占位符
             unresolved = re.findall(r"\{\{(\w+)\}\}", body)
             # 检查未替换的 $ 引用
-            unresolved_dollar = re.findall(r'\$\d+', body)
+            unresolved_dollar = re.findall(r"\$\d+", body)
             # 检查 $@ 和 $ARGUMENTS
-            if "$@" in body or "$ARGUMENTS" in body:
-                if not pos_args:
-                    unresolved_dollar.append("$@")
+            if ("$@" in body or "$ARGUMENTS" in body) and not pos_args:
+                unresolved_dollar.append("$@")
             # 检查 ${@: 模式
-            unresolved_range = re.findall(r'\$\{@:\d+(?::\d+)?\}', body)
+            unresolved_range = re.findall(r"\$\{@:\d+(?::\d+)?\}", body)
 
             all_unresolved = unresolved + unresolved_dollar + unresolved_range
 
@@ -394,8 +402,7 @@ def toolkit_custom_commands(
                 "description": cmd.get("description", ""),
                 "resolved_prompt": body,
                 "unresolved_placeholders": all_unresolved,
-                "hint": "将 resolved_prompt 作为指令执行" if not all_unresolved
-                        else f"请提供缺失的参数: {', '.join(all_unresolved)}",
+                "hint": "将 resolved_prompt 作为指令执行" if not all_unresolved else f"请提供缺失的参数: {', '.join(all_unresolved)}",
             }
 
         if action == "delete":
@@ -408,8 +415,7 @@ def toolkit_custom_commands(
                     os.remove(fpath)
                     deleted = True
                     break
-            return {"ok": deleted, "name": name,
-                    "msg": f"命令 '{name}' 已删除" if deleted else f"命令 '{name}' 不存在"}
+            return {"ok": deleted, "name": name, "msg": f"命令 '{name}' 已删除" if deleted else f"命令 '{name}' 不存在"}
 
         if action == "search":
             cmds = _scan_commands()
@@ -420,12 +426,14 @@ def toolkit_custom_commands(
                     continue
                 if tag and tag not in c.get("tags", []):
                     continue
-                results.append({
-                    "name": c["name"],
-                    "description": c.get("description", "")[:100],
-                    "scope": c["scope"],
-                    "tags": c.get("tags", []),
-                })
+                results.append(
+                    {
+                        "name": c["name"],
+                        "description": c.get("description", "")[:100],
+                        "scope": c["scope"],
+                        "tags": c.get("tags", []),
+                    }
+                )
             return {"ok": True, "total": len(results), "commands": results}
 
         if action == "builtin":
@@ -454,42 +462,19 @@ def meta_toolkit_custom_commands():
             "parameters": {
                 "type": "object",
                 "properties": {
-                    "action": {
-                        "type": "string",
-                        "enum": ["add", "list", "show", "run", "delete", "search", "builtin"],
-                        "description": "操作类型"
-                    },
-                    "name": {
-                        "type": "string",
-                        "description": "命令名称"
-                    },
-                    "content": {
-                        "type": "string",
-                        "description": "命令 Markdown 内容（支持 YAML front matter 和 {{placeholder}} / $1）"
-                    },
-                    "args": {
-                        "type": "object",
-                        "description": "命名参数键值对，如 {'file': 'main.py', 'title': 'code review'}"
-                    },
-                    "args_list": {
-                        "type": "array",
-                        "items": {"type": "string"},
-                        "description": "位置参数列表，用于 $1, $@ 替换"
-                    },
+                    "action": {"type": "string", "enum": ["add", "list", "show", "run", "delete", "search", "builtin"], "description": "操作类型"},
+                    "name": {"type": "string", "description": "命令名称"},
+                    "content": {"type": "string", "description": "命令 Markdown 内容（支持 YAML front matter 和 {{placeholder}} / $1）"},
+                    "args": {"type": "object", "description": "命名参数键值对，如 {'file': 'main.py', 'title': 'code review'}"},
+                    "args_list": {"type": "array", "items": {"type": "string"}, "description": "位置参数列表，用于 $1, $@ 替换"},
                     "scope": {
                         "type": "string",
                         "enum": ["user", "project"],
                         "description": "存储范围: user=~/.tea_agent/commands/, project=.tea_commands/",
-                        "default": "user"
+                        "default": "user",
                     },
-                    "query": {
-                        "type": "string",
-                        "description": "搜索关键词"
-                    },
-                    "tag": {
-                        "type": "string",
-                        "description": "按标签筛选"
-                    },
+                    "query": {"type": "string", "description": "搜索关键词"},
+                    "tag": {"type": "string", "description": "按标签筛选"},
                 },
                 "required": ["action"],
             },

@@ -12,6 +12,7 @@ Toolkit 系统核心 — 工具加载/注册/执行引擎。
   - exec(code, safe_globals) 隔离执行，不污染命名空间
   - rollback_for_llm() 专门给 LLM 调用，内部调 rollback_impl()
 """
+
 import ast
 import importlib.util
 import inspect
@@ -52,10 +53,7 @@ def llm_tool_names(func_map_keys) -> list[str]:
 
     排序保证工具 JSON Schema 顺序跨进程稳定——这是 DeepSeek 前缀缓存命中的前提。
     """
-    return sorted(
-        k for k in func_map_keys
-        if k.startswith("toolkit_") and k not in LLM_TOOL_EXCLUDES
-    )
+    return sorted(k for k in func_map_keys if k.startswith("toolkit_") and k not in LLM_TOOL_EXCLUDES)
 
 
 def meta_toolkit_reload():
@@ -69,9 +67,10 @@ def meta_toolkit_reload():
                 "type": "object",
                 "properties": {},
                 "required": [],
-            }
-        }
+            },
+        },
     }
+
 
 def meta_toolkit_save() -> dict:
     """Meta toolkit save."""
@@ -91,14 +90,12 @@ def meta_toolkit_save() -> dict:
                         "type": "object",
                         "description": "工具函数的元描述，符合 OpenAI tool func schema",
                     },
-                    "pycode": {
-                        "type": "string",
-                        "description": "工具函数的 python 实现代码"
-                    }
-                }
-            }
-        }
+                    "pycode": {"type": "string", "description": "工具函数的 python 实现代码"},
+                },
+            },
+        },
     }
+
 
 def meta_toolkit_rollback():
     """Meta toolkit rollback."""
@@ -110,19 +107,14 @@ def meta_toolkit_rollback():
             "parameters": {
                 "type": "object",
                 "properties": {
-                    "name": {
-                        "type": "string",
-                        "description": "工具函数名，如 toolkit_my_tool"
-                    },
-                    "version": {
-                        "type": "string",
-                        "description": "要回滚到的版本号，如 1.0.0"
-                    }
+                    "name": {"type": "string", "description": "工具函数名，如 toolkit_my_tool"},
+                    "version": {"type": "string", "description": "要回滚到的版本号，如 1.0.0"},
                 },
-                "required": ["name", "version"]
-            }
-        }
+                "required": ["name", "version"],
+            },
+        },
     }
+
 
 def meta_toolkit_list_versions():
     """Meta toolkit list versions."""
@@ -133,18 +125,15 @@ def meta_toolkit_list_versions():
             "description": "列出工具的所有可用版本。用于查看工具的历史版本。",
             "parameters": {
                 "type": "object",
-                "properties": {
-                    "name": {
-                        "type": "string",
-                        "description": "工具函数名，如 toolkit_my_tool"
-                    }
-                },
-                "required": ["name"]
-            }
-        }
+                "properties": {"name": {"type": "string", "description": "工具函数名，如 toolkit_my_tool"}},
+                "required": ["name"],
+            },
+        },
     }
 
+
 # ========== Skill Document 自动生成 ==========
+
 
 def _auto_generate_skill_doc(name: str, meta: dict, pycode: str, version: str, toolkit_path: str) -> str:
     """工具保存后自动生成 best-skills 风格的 SKILL.md 文档。
@@ -253,10 +242,7 @@ def _auto_generate_skill_doc(name: str, meta: dict, pycode: str, version: str, t
         lines.append("")
 
         # 源码位置
-        rel_path = osp.relpath(
-            osp.join(toolkit_path, f"{name}.py"),
-            osp.dirname(toolkit_path)
-        )
+        rel_path = osp.relpath(osp.join(toolkit_path, f"{name}.py"), osp.dirname(toolkit_path))
         lines.append("## 源码")
         lines.append("")
         lines.append(f"`{rel_path}` → function `{name}()` + `meta_{name}()`")
@@ -273,23 +259,26 @@ def _auto_generate_skill_doc(name: str, meta: dict, pycode: str, version: str, t
         logger.warning(f"SKILL.md 生成失败: {e}")
         return ""
 
+
 # ========== Memory 工具函数 ==========
+
 
 class Toolkit:
     """动态工具加载器 — 管理 75+ 内置工具，支持运行时热加载和版本回滚。"""
+
     _CACHE_TTL = 30  # 默认缓存 30 秒
     # 工具结果缓存改为**白名单**：仅缓存纯函数（只读、无副作用、30s 内结果可视为不变）。
     # 其余工具一律真实执行——旧黑名单制（默认全缓存）会让 question/todo/screenshot/ocr/
     # clipboard/scheduler 等副作用或时间敏感工具在 TTL 内返回陈旧结果（如 question 重复
     # 返回第一次的答案、screenshot 拿到 30s 前的屏幕）。
     _CACHE_WHITELIST = {
-        'toolkit_file',          # read/list（write 单独绕过）
-        'toolkit_lsp',           # 静态代码分析（jedi/ruff）
-        'toolkit_search',        # 只读搜索（web/code）
-        'toolkit_query_chat_history',  # 只读 DB 查询
-        'toolkit_list_provider_models',  # 只读 API 查询
-        'toolkit_eval_loop',     # 确定性规则评分（无 LLM）
-        'toolkit_task_resume',   # 只读状态检查
+        "toolkit_file",  # read/list（write 单独绕过）
+        "toolkit_lsp",  # 静态代码分析（jedi/ruff）
+        "toolkit_search",  # 只读搜索（web/code）
+        "toolkit_query_chat_history",  # 只读 DB 查询
+        "toolkit_list_provider_models",  # 只读 API 查询
+        "toolkit_eval_loop",  # 确定性规则评分（无 LLM）
+        "toolkit_task_resume",  # 只读状态检查
     }
 
     def __init__(self, tool_dir=None):
@@ -303,8 +292,7 @@ class Toolkit:
         self._user_created_tools: set[str] = set()  # 用户通过 toolkit_save 创建的工具，默认不缓存
 
         # User directory for saving and overriding tools
-        self.user_dir = osp.join(
-            os.path.expanduser("~"), ".tea_agent", "toolkit")
+        self.user_dir = osp.join(os.path.expanduser("~"), ".tea_agent", "toolkit")
         os.makedirs(self.user_dir, exist_ok=True)
 
         # Built-in directory (relative to this file)
@@ -348,11 +336,10 @@ class Toolkit:
         try:
             sig.bind(**kwargs)
         except TypeError as e:
-            named = [n for n, p in sig.parameters.items()
-                     if p.kind in (p.POSITIONAL_OR_KEYWORD, p.KEYWORD_ONLY)]
-            required = [n for n, p in sig.parameters.items()
-                        if p.default is inspect.Parameter.empty
-                        and p.kind in (p.POSITIONAL_OR_KEYWORD, p.KEYWORD_ONLY)]
+            named = [n for n, p in sig.parameters.items() if p.kind in (p.POSITIONAL_OR_KEYWORD, p.KEYWORD_ONLY)]
+            required = [
+                n for n, p in sig.parameters.items() if p.default is inspect.Parameter.empty and p.kind in (p.POSITIONAL_OR_KEYWORD, p.KEYWORD_ONLY)
+            ]
             unknown = sorted(set(map(str, kwargs)) - set(named))
             hints = [f"调用 {func_name} 失败：{e}"]
             if unknown:
@@ -391,8 +378,7 @@ class Toolkit:
         try:
             from tea_agent.invariants import registry as inv
 
-            violations = inv.run("toolkit.call_tool",
-                                 func_name=func_name, registered=registered)
+            violations = inv.run("toolkit.call_tool", func_name=func_name, registered=registered)
         except Exception as e:  # noqa: BLE001 — 不变式检查永不影响调用
             logger.debug("invariants(%s) 跳过: %s", func_name, e)
             return
@@ -438,7 +424,7 @@ class Toolkit:
         if func_name not in self._CACHE_WHITELIST or func_name in self._user_created_tools:
             return self.func_map[func_name](**kwargs)
 
-        if func_name == 'toolkit_file' and kwargs.get('action') == 'write':
+        if func_name == "toolkit_file" and kwargs.get("action") == "write":
             return self.func_map[func_name](**kwargs)
 
         now = time.time()
@@ -480,9 +466,15 @@ class Toolkit:
         在 Server 模式下仅报告缺失依赖，不执行 pip install（避免阻塞请求线程）。
         """
         MODULE_MAP = {  # noqa: N806
-            'PIL': 'Pillow', 'cv2': 'opencv-python', 'sklearn': 'scikit-learn',
-            'yaml': 'PyYAML', 'bs4': 'beautifulsoup4', 'dateutil': 'python-dateutil',
-            'jwt': 'PyJWT', 'Crypto': 'pycryptodome', 'Image': 'Pillow'
+            "PIL": "Pillow",
+            "cv2": "opencv-python",
+            "sklearn": "scikit-learn",
+            "yaml": "PyYAML",
+            "bs4": "beautifulsoup4",
+            "dateutil": "python-dateutil",
+            "jwt": "PyJWT",
+            "Crypto": "pycryptodome",
+            "Image": "Pillow",
         }
 
         try:
@@ -494,11 +486,11 @@ class Toolkit:
         for node in ast.walk(tree):
             if isinstance(node, ast.Import):
                 for alias in node.names:
-                    imports.add(alias.name.split('.')[0])
+                    imports.add(alias.name.split(".")[0])
             elif isinstance(node, ast.ImportFrom) and node.module:
-                imports.add(node.module.split('.')[0])
+                imports.add(node.module.split(".")[0])
 
-        std_libs = getattr(sys, 'stdlib_module_names', set())
+        std_libs = getattr(sys, "stdlib_module_names", set())
 
         missing = []
         for mod in imports:
@@ -519,10 +511,7 @@ class Toolkit:
         errors = []
         for pkg in missing:
             try:
-                result = subprocess.run(
-                    [sys.executable, "-m", "pip", "install", pkg],
-                    capture_output=True, text=True, timeout=120
-                )
+                result = subprocess.run([sys.executable, "-m", "pip", "install", pkg], capture_output=True, text=True, timeout=120)
                 if result.returncode == 0:
                     installed.append(pkg)
                 else:
@@ -587,18 +576,15 @@ class Toolkit:
                     func_meta = local_vars.get(f"meta_{name}")
 
                     if not callable(func):
-                        result["invalid_tool"].append(
-                            {"name": name, "reason": f"{name} is NOT callable"})
+                        result["invalid_tool"].append({"name": name, "reason": f"{name} is NOT callable"})
                         continue
                     if not callable(func_meta):
-                        result["invalid_tool"].append(
-                            {"name": name, "reason": f"meta_{name} not callable"})
+                        result["invalid_tool"].append({"name": name, "reason": f"meta_{name} not callable"})
                         continue
 
                     meta = func_meta()
                     if not check_meta(meta):
-                        result["invalid_tool"].append(
-                            {"name": name, "reason": "meta invalid"})
+                        result["invalid_tool"].append({"name": name, "reason": "meta invalid"})
                         continue
 
                     # Override logic: later dirs win
@@ -606,8 +592,7 @@ class Toolkit:
                     temp_metas[name] = meta
 
                 except Exception as e:
-                    result["invalid_tool"].append(
-                        {"name": name, "reason": f"{e} ({source}: {filename})"})
+                    result["invalid_tool"].append({"name": name, "reason": f"{e} ({source}: {filename})"})
 
         self.func_map.clear()
         self.meta_map.clear()
@@ -634,8 +619,11 @@ class Toolkit:
         self.func_map["toolkit_set_topic_title"] = toolkit_set_topic_title
         self.meta_map["toolkit_set_topic_title"] = meta_toolkit_set_topic_title()
 
-        result["valid_tool"] = {k: {"func": v, "meta": self.meta_map[k]} for k, v in self.func_map.items() if k not in (
-            "toolkit_reload", "toolkit_save", "toolkit_rollback", "toolkit_list_versions", "toolkit_set_topic_title")}
+        result["valid_tool"] = {
+            k: {"func": v, "meta": self.meta_map[k]}
+            for k, v in self.func_map.items()
+            if k not in ("toolkit_reload", "toolkit_save", "toolkit_rollback", "toolkit_list_versions", "toolkit_set_topic_title")
+        }
 
         return result
 
@@ -667,11 +655,11 @@ class Toolkit:
                         "param2": {
                             "type": "number",
                             "description": "参数2的说明",
-                        }
+                        },
                     },
                     "required": ["param1"],
-                }
-            }
+                },
+            },
         }
 
         meta_exam_str = json.dumps(meta_exam, ensure_ascii=False)
@@ -735,13 +723,13 @@ class Toolkit:
             old_version = None
             # 自动提取版本号并递增
             if not version:
-                version_match = re.search(r'# version:\s*([\d.]+)', old_content)
+                version_match = re.search(r"# version:\s*([\d.]+)", old_content)
                 if version_match:
                     old_version = version_match.group(1)
                     # 递增最后一位
-                    parts = old_version.split('.')
+                    parts = old_version.split(".")
                     parts[-1] = str(int(parts[-1]) + 1)
-                    version = '.'.join(parts)
+                    version = ".".join(parts)
                 else:
                     version = "1.0.0"
 
@@ -831,11 +819,11 @@ class Toolkit:
         for filename in os.listdir(toolkit_path):
             if filename.startswith(pattern) and filename.endswith(".bak.py"):
                 # 提取版本号
-                version = filename[len(pattern):-len(".bak.py")]
+                version = filename[len(pattern) : -len(".bak.py")]
                 versions.append(version)
 
         # 排序版本号
-        versions.sort(key=lambda v: [int(x) for x in v.split('.')])
+        versions.sort(key=lambda v: [int(x) for x in v.split(".")])
 
         return (0, versions)
 

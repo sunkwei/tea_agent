@@ -32,10 +32,10 @@ logger = logging.getLogger("server.turn_snapshot")
 
 # ── 默认参数 ───────────────────────────────────────────────────
 DEFAULT_DB_NAME = "server_state.db"
-DEFAULT_MAX_EVENTS = 300          # 每回合保留的最近事件数
-DEFAULT_MAX_FIELD = 2000          # 单字段最大字符数（超出截断）
-DEFAULT_MIN_INTERVAL = 0.5        # 写盘节流间隔（秒）
-DEFAULT_TTL = 6 * 3600.0          # 超过此时长未更新的 active 视为 abandoned
+DEFAULT_MAX_EVENTS = 300  # 每回合保留的最近事件数
+DEFAULT_MAX_FIELD = 2000  # 单字段最大字符数（超出截断）
+DEFAULT_MIN_INTERVAL = 0.5  # 写盘节流间隔（秒）
+DEFAULT_TTL = 6 * 3600.0  # 超过此时长未更新的 active 视为 abandoned
 
 _STATUS_ACTIVE = "active"
 _STATUS_DONE = "done"
@@ -166,9 +166,7 @@ def ensure_turn(topic_id: str, conv_id: str = "", path: str | None = None) -> No
         with _lock:
             conn = _connect(path)
             try:
-                row = conn.execute(
-                    "SELECT status FROM turn_snapshots WHERE topic_id=?", (topic_id,)
-                ).fetchone()
+                row = conn.execute("SELECT status FROM turn_snapshots WHERE topic_id=?", (topic_id,)).fetchone()
                 if row is not None and row[0] == _STATUS_ACTIVE:
                     return
                 conn.execute(
@@ -219,21 +217,15 @@ def _merge_events(existing: list, incoming: list, max_events: int) -> list:
         return ordered
     tail = ordered[-max_events:]
     # 只从「将被淘汰的部分」里捞保头事件，天然不会与 tail 重复
-    pinned = [
-        e for e in ordered[:-max_events]
-        if isinstance(e.get("event"), dict)
-        and e["event"].get("type") in _PINNED_EVENT_TYPES
-    ]
+    pinned = [e for e in ordered[:-max_events] if isinstance(e.get("event"), dict) and e["event"].get("type") in _PINNED_EVENT_TYPES]
     return pinned + tail
 
 
-def _flush_locked(topic_id: str, conn, status: str, when: float,
-                  max_events: int, max_field: int) -> None:
+def _flush_locked(topic_id: str, conn, status: str, when: float, max_events: int, max_field: int) -> None:
     """把内存累积落盘（**必须在持有 _lock 时调用**）。"""
     pending = _pending.get(topic_id) or []
     row = conn.execute(
-        "SELECT partial_text, events_json, seen, last_event_index, conv_id"
-        " FROM turn_snapshots WHERE topic_id=?", (topic_id,)
+        "SELECT partial_text, events_json, seen, last_event_index, conv_id FROM turn_snapshots WHERE topic_id=?", (topic_id,)
     ).fetchone()
     if row is None:
         _pending[topic_id] = []
@@ -251,27 +243,21 @@ def _flush_locked(topic_id: str, conn, status: str, when: float,
 
     # partial_text 只追加**本次新增**内容：DB 里已有的部分不重复累加，
     # 且按 _MAX_PARTIAL_CHARS 截尾，避免长回合把快照撑爆。
-    new_text = "".join(_extract_text(e) for i, e in pending
-                       if _is_text_event(e))
-    partial = ((db_partial or "") + new_text)
+    new_text = "".join(_extract_text(e) for i, e in pending if _is_text_event(e))
+    partial = (db_partial or "") + new_text
     if len(partial) > _MAX_PARTIAL_CHARS:
         partial = partial[-_MAX_PARTIAL_CHARS:]
 
     max_index = max([i for i, _ in pending] + [int(db_idx if db_idx is not None else -1)])
     conn.execute(
-        "UPDATE turn_snapshots SET partial_text=?, events_json=?,"
-        " seen=?, last_event_index=?, status=?, updated_at=?"
-        " WHERE topic_id=?",
-        (partial, json.dumps(events, ensure_ascii=False),
-         max(int(db_seen or 0), max_index + 1), max_index, status, when, topic_id),
+        "UPDATE turn_snapshots SET partial_text=?, events_json=?, seen=?, last_event_index=?, status=?, updated_at=? WHERE topic_id=?",
+        (partial, json.dumps(events, ensure_ascii=False), max(int(db_seen or 0), max_index + 1), max_index, status, when, topic_id),
     )
     conn.commit()
     _pending[topic_id] = []
 
 
-def flush_pending(topic_id: str, path: str | None = None,
-                  max_events: int = DEFAULT_MAX_EVENTS,
-                  max_field: int = DEFAULT_MAX_FIELD) -> bool:
+def flush_pending(topic_id: str, path: str | None = None, max_events: int = DEFAULT_MAX_EVENTS, max_field: int = DEFAULT_MAX_FIELD) -> bool:
     """立即把该回合节流窗口内积压的事件落盘。返回是否执行了写入。fail-open。
 
     供「读之前先对齐磁盘」与测试使用；正常路径由 record_event 的节流判定
@@ -285,8 +271,7 @@ def flush_pending(topic_id: str, path: str | None = None,
                 return False
             conn = _connect(path)
             try:
-                _flush_locked(topic_id, conn, _STATUS_ACTIVE, time.time(),
-                              max_events, max_field)
+                _flush_locked(topic_id, conn, _STATUS_ACTIVE, time.time(), max_events, max_field)
             finally:
                 conn.close()
             _last_write[topic_id] = time.time()
@@ -300,13 +285,17 @@ def _is_text_event(event: Any) -> bool:
     return isinstance(event, dict) and event.get("type") in _TEXT_EVENT_TYPES
 
 
-def record_event(topic_id: str, event: Any, index: int | None = None,
-                 path: str | None = None,
-                 min_interval: float = DEFAULT_MIN_INTERVAL,
-                 force: bool = False,
-                 max_events: int = DEFAULT_MAX_EVENTS,
-                 max_field: int = DEFAULT_MAX_FIELD,
-                 now: float | None = None) -> bool:
+def record_event(
+    topic_id: str,
+    event: Any,
+    index: int | None = None,
+    path: str | None = None,
+    min_interval: float = DEFAULT_MIN_INTERVAL,
+    force: bool = False,
+    max_events: int = DEFAULT_MAX_EVENTS,
+    max_field: int = DEFAULT_MAX_FIELD,
+    now: float | None = None,
+) -> bool:
     """记录一条流式事件。返回是否**已接收**（不是"是否已写盘"）。fail-open。
 
     节流只作用于**磁盘写入**，事件本身一律先入内存：0.5s 窗口内的 token 若
@@ -343,8 +332,7 @@ def record_event(topic_id: str, event: Any, index: int | None = None,
             if force or (ts_now - _last_write.get(topic_id, 0.0)) >= min_interval:
                 conn = _connect(path)
                 try:
-                    _flush_locked(topic_id, conn, _STATUS_ACTIVE, ts_now,
-                                  max_events, max_field)
+                    _flush_locked(topic_id, conn, _STATUS_ACTIVE, ts_now, max_events, max_field)
                 finally:
                     conn.close()
                 _last_write[topic_id] = ts_now
@@ -361,10 +349,7 @@ def _adopt_locked(topic_id: str, path: str | None) -> bool:
     """
     conn = _connect(path)
     try:
-        row = conn.execute(
-            "SELECT events_json, last_event_index, partial_text"
-            " FROM turn_snapshots WHERE topic_id=?", (topic_id,)
-        ).fetchone()
+        row = conn.execute("SELECT events_json, last_event_index, partial_text FROM turn_snapshots WHERE topic_id=?", (topic_id,)).fetchone()
     finally:
         conn.close()
     if row is None:
@@ -382,10 +367,9 @@ def _adopt_locked(topic_id: str, path: str | None) -> bool:
     return True
 
 
-def finish_turn(topic_id: str, status: str = _STATUS_DONE,
-                path: str | None = None,
-                max_events: int = DEFAULT_MAX_EVENTS,
-                max_field: int = DEFAULT_MAX_FIELD) -> None:
+def finish_turn(
+    topic_id: str, status: str = _STATUS_DONE, path: str | None = None, max_events: int = DEFAULT_MAX_EVENTS, max_field: int = DEFAULT_MAX_FIELD
+) -> None:
     """标记回合结束（done/error/abandoned），并把节流窗口内残留的事件**先落盘**。
 
     不 flush 就结束，会让回合尾部的 token 永久丢失 —— 而那正是用户最关心的
@@ -398,11 +382,8 @@ def finish_turn(topic_id: str, status: str = _STATUS_DONE,
             if topic_id in _begun:
                 conn = _connect(path)
                 try:
-                    _flush_locked(topic_id, conn, status, time.time(),
-                                  max_events, max_field)
-                    conn.execute(
-                        "UPDATE turn_snapshots SET status=?, updated_at=?"
-                        " WHERE topic_id=?", (status, time.time(), topic_id))
+                    _flush_locked(topic_id, conn, status, time.time(), max_events, max_field)
+                    conn.execute("UPDATE turn_snapshots SET status=?, updated_at=? WHERE topic_id=?", (status, time.time(), topic_id))
                     conn.commit()
                 finally:
                     conn.close()
@@ -436,7 +417,8 @@ def read_snapshot(topic_id: str, path: str | None = None) -> dict | None:
                 row = conn.execute(
                     "SELECT topic_id, conv_id, status, last_event_index, seen,"
                     " partial_text, events_json, created_at, updated_at"
-                    " FROM turn_snapshots WHERE topic_id=?", (topic_id,)
+                    " FROM turn_snapshots WHERE topic_id=?",
+                    (topic_id,),
                 ).fetchone()
             finally:
                 conn.close()
@@ -456,8 +438,7 @@ def read_snapshot(topic_id: str, path: str | None = None) -> dict | None:
     with _lock:
         pending = list(_pending.get(topic_id) or [])
     if pending:
-        events = _merge_events(
-            events, [{"index": i, "event": e} for i, e in pending], DEFAULT_MAX_EVENTS)
+        events = _merge_events(events, [{"index": i, "event": e} for i, e in pending], DEFAULT_MAX_EVENTS)
     last_idx = int(row[3] if row[3] is not None else -1)
     if pending:
         last_idx = max(last_idx, max(i for i, _ in pending))
@@ -468,18 +449,22 @@ def read_snapshot(topic_id: str, path: str | None = None) -> dict | None:
     # partial_text 同样要合并 pending 正文：只补事件不补文本，等于换个地方丢内容
     partial = row[5] or ""
     if pending:
-        extra = "".join(_extract_text(e) for i, e in pending
-                        if _is_text_event(e))
+        extra = "".join(_extract_text(e) for i, e in pending if _is_text_event(e))
         if extra:
-            partial = (partial + extra)
+            partial = partial + extra
             if len(partial) > _MAX_PARTIAL_CHARS:
                 partial = partial[-_MAX_PARTIAL_CHARS:]
 
     return {
-        "topic_id": row[0], "conv_id": row[1], "status": row[2],
-        "last_event_index": last_idx, "seen": seen, "partial_text": partial,
+        "topic_id": row[0],
+        "conv_id": row[1],
+        "status": row[2],
+        "last_event_index": last_idx,
+        "seen": seen,
+        "partial_text": partial,
         "events": events,
-        "created_at": row[7], "updated_at": row[8],
+        "created_at": row[7],
+        "updated_at": row[8],
     }
 
 
@@ -512,8 +497,7 @@ def snapshot_image_ids(path: str | None = None) -> set[int] | None:
     return ids
 
 
-def load_resumable(path: str | None = None, ttl: float = DEFAULT_TTL,
-                   now: float | None = None) -> list[dict]:
+def load_resumable(path: str | None = None, ttl: float = DEFAULT_TTL, now: float | None = None) -> list[dict]:
     """返回仍在途（active 且未超时）的快照，按更新时间升序。fail-open。"""
     ts = time.time() if now is None else now
     try:
@@ -521,8 +505,7 @@ def load_resumable(path: str | None = None, ttl: float = DEFAULT_TTL,
             conn = _connect(path)
             try:
                 rows = conn.execute(
-                    "SELECT topic_id FROM turn_snapshots"
-                    " WHERE status=? AND updated_at>=? ORDER BY updated_at",
+                    "SELECT topic_id FROM turn_snapshots WHERE status=? AND updated_at>=? ORDER BY updated_at",
                     (_STATUS_ACTIVE, ts - ttl),
                 ).fetchall()
             finally:
@@ -532,8 +515,7 @@ def load_resumable(path: str | None = None, ttl: float = DEFAULT_TTL,
     return [s for s in (read_snapshot(r[0], path) for r in rows) if s]
 
 
-def abandon_stale(path: str | None = None, ttl: float = DEFAULT_TTL,
-                  now: float | None = None) -> int:
+def abandon_stale(path: str | None = None, ttl: float = DEFAULT_TTL, now: float | None = None) -> int:
     """把超时未更新的 active 快照标记为 abandoned，返回处理条数。fail-open。"""
     ts = time.time() if now is None else now
     try:
@@ -541,8 +523,7 @@ def abandon_stale(path: str | None = None, ttl: float = DEFAULT_TTL,
             conn = _connect(path)
             try:
                 cur = conn.execute(
-                    "UPDATE turn_snapshots SET status=?, updated_at=?"
-                    " WHERE status=? AND updated_at<?",
+                    "UPDATE turn_snapshots SET status=?, updated_at=? WHERE status=? AND updated_at<?",
                     (_STATUS_ABANDONED, ts, _STATUS_ACTIVE, ts - ttl),
                 )
                 conn.commit()
@@ -575,8 +556,7 @@ def clear(path: str | None = None) -> int:
         return 0
 
 
-def rebuild_buffers(path: str | None = None, ttl: float = DEFAULT_TTL,
-                    state_module: Any = None) -> list[str]:
+def rebuild_buffers(path: str | None = None, ttl: float = DEFAULT_TTL, state_module: Any = None) -> list[str]:
     """启动恢复：把在途快照重建成后台缓冲区，供前端续读。
 
     重建后立即补一个 ``done`` 事件并标记结束 —— 崩溃/重启时在途的回合无法
@@ -606,11 +586,7 @@ def rebuild_buffers(path: str | None = None, ttl: float = DEFAULT_TTL,
             # 已含 content，再补一条会造成**文本重复渲染**（端到端实测踩中：
             # 事件流为 甲 / 乙 / 甲乙，用户会看到内容出现两遍）。
             # 仅当事件被裁剪或缺失、partial_text 是唯一残留文本时才用它兜底。
-            _has_content = any(
-                isinstance(item.get("event"), dict)
-                and item["event"].get("type") == "content"
-                for item in snap["events"]
-            )
+            _has_content = any(isinstance(item.get("event"), dict) and item["event"].get("type") == "content" for item in snap["events"])
             if snap.get("partial_text") and not _has_content:
                 state_module.append_to_buffer(
                     topic_id,
@@ -620,8 +596,7 @@ def rebuild_buffers(path: str | None = None, ttl: float = DEFAULT_TTL,
                 next_idx += 1
             state_module.append_to_buffer(
                 topic_id,
-                {"type": "done", "recovered": True,
-                 "reason": "server restarted while turn was in flight"},
+                {"type": "done", "recovered": True, "reason": "server restarted while turn was in flight"},
                 next_idx,
             )
             state_module.mark_buffer_done(topic_id)

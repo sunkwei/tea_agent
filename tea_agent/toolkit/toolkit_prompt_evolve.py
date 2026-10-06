@@ -30,19 +30,16 @@ def toolkit_prompt_evolve(action: str = "current", version: str = "", content: s
     if not session:
         return "❌ 无活跃会话"
 
-    pm = getattr(session, 'prompt_manager', None)
+    pm = getattr(session, "prompt_manager", None)
     if not pm:
         return "❌ SystemPromptManager 未初始化"
 
     if action == "current":
-        return (
-            f"📋 当前系统提示词版本: v{pm.current_version} (id={pm.current_prompt_id})\n\n"
-            f"---\n{pm.current_prompt}\n---"
-        )
+        return f"📋 当前系统提示词版本: v{pm.current_version} (id={pm.current_prompt_id})\n\n---\n{pm.current_prompt}\n---"
 
     if action == "evolve":
         # 获取最近的反思建议
-        reflection_mgr = getattr(session, 'reflection_manager', None)
+        reflection_mgr = getattr(session, "reflection_manager", None)
         suggestion = None
         if reflection_mgr:
             suggestion = reflection_mgr.last_prompt_suggestion
@@ -85,14 +82,10 @@ def toolkit_prompt_evolve(action: str = "current", version: str = "", content: s
 
     if action == "stats":
         stats = pm.get_stats()
-        return (
-            f"📊 系统提示词统计:\n"
-            f"  总版本数: {stats['total_versions']}\n"
-            f"  当前版本: v{stats['current_version']}\n"
-            f"  当前 ID: {stats['current_id']}"
-        )
+        return f"📊 系统提示词统计:\n  总版本数: {stats['total_versions']}\n  当前版本: v{stats['current_version']}\n  当前 ID: {stats['current_id']}"
 
     return f"❌ 未知操作: {action}。支持: current, evolve, list, rollback, set, stats"
+
 
 def meta_toolkit_prompt_evolve() -> dict:
     """Meta toolkit prompt evolve."""
@@ -104,21 +97,11 @@ def meta_toolkit_prompt_evolve() -> dict:
             "parameters": {
                 "type": "object",
                 "properties": {
-                    "action": {
-                        "type": "string",
-                        "enum": ["current", "evolve", "list", "rollback", "set", "stats"],
-                        "description": "操作类型"
-                    },
-                    "version": {
-                        "type": "string",
-                        "description": "目标版本号"
-                    },
-                    "content": {
-                        "type": "string",
-                        "description": "新的完整系统提示词"
-                    }
+                    "action": {"type": "string", "enum": ["current", "evolve", "list", "rollback", "set", "stats"], "description": "操作类型"},
+                    "version": {"type": "string", "description": "目标版本号"},
+                    "content": {"type": "string", "description": "新的完整系统提示词"},
                 },
-                "required": ["action"]
-            }
-        }
+                "required": ["action"],
+            },
+        },
     }

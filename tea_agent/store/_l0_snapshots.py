@@ -143,8 +143,7 @@ class L0SnapshotStoreMixin:
                     return None
                 if not h:
                     # 标记为已记录但无 hash（当时 L0 为空）
-                    return {"hash": "", "content": "", "chars": 0,
-                            "created_at": "", "recorded": 1}
+                    return {"hash": "", "content": "", "chars": 0, "created_at": "", "recorded": 1}
                 snap = c.execute(
                     "SELECT hash, content, chars, created_at FROM l0_snapshots WHERE hash = ?",
                     (h,),
@@ -153,10 +152,10 @@ class L0SnapshotStoreMixin:
                     # 有指针但内容缺失（快照表被清理/跨库搬迁）——留痕而非静默
                     logger.debug(
                         "get_l0_snapshot: hash %s 在 l0_snapshots 中缺失（conv=%s）",
-                        h[:12], conversation_id,
+                        h[:12],
+                        conversation_id,
                     )
-                    return {"hash": h, "content": "", "chars": 0,
-                            "created_at": "", "recorded": 1, "missing": True}
+                    return {"hash": h, "content": "", "chars": 0, "created_at": "", "recorded": 1, "missing": True}
                 return {
                     "hash": snap["hash"],
                     "content": snap["content"] or "",
@@ -214,8 +213,7 @@ class L0SnapshotStoreMixin:
         try:
             c = self.conn.cursor()
             try:
-                sql = ("SELECT hash, chars, first_topic_id, first_conversation_id, created_at "
-                       "FROM l0_snapshots")
+                sql = "SELECT hash, chars, first_topic_id, first_conversation_id, created_at FROM l0_snapshots"
                 params: tuple = ()
                 if topic_id:
                     sql += " WHERE first_topic_id = ?"

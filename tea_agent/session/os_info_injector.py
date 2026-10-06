@@ -5,6 +5,7 @@
 - inject_os_info: 根据当前 OS 注入差异化的工具使用提示
 """
 
+import contextlib
 import json
 import logging
 import os
@@ -55,9 +56,9 @@ def _warn_bad_state(path: str, reason: str) -> None:
         return
     _bad_state_warned = True
     logger.warning(
-        "OS 签名缓存文件不可用（%s），已忽略其内容，下次写入时自动重建: %s "
-        "（该缓存只用于避免重复注入环境信息，不影响功能）",
-        reason, path,
+        "OS 签名缓存文件不可用（%s），已忽略其内容，下次写入时自动重建: %s （该缓存只用于避免重复注入环境信息，不影响功能）",
+        reason,
+        path,
     )
 
 
@@ -72,7 +73,7 @@ def _read_state_file(path: str) -> dict:
     """
     try:
         # utf-8-sig: 有 BOM 就读掉、无 BOM 也兼容；errors=replace 防坏字节抛错
-        with open(path, "r", encoding="utf-8-sig", errors="replace") as f:
+        with open(path, encoding="utf-8-sig", errors="replace") as f:
             raw = f.read()
     except FileNotFoundError:
         return {}
@@ -128,10 +129,8 @@ def _write_state_file(data: dict, path: str) -> bool:
         return False
     finally:
         if tmp_path:
-            try:
+            with contextlib.suppress(OSError):
                 os.unlink(tmp_path)
-            except OSError:
-                pass
 
 
 def _get_os_signature() -> str:
@@ -179,7 +178,7 @@ def _save_os_sig(topic_id: str, sig: str) -> None:
     topics = data.get("topics")
     if not isinstance(topics, dict):
         topics = {}
-    topics.pop(topic_id, None)      # 重插到末尾 → dict 顺序即最近使用时间
+    topics.pop(topic_id, None)  # 重插到末尾 → dict 顺序即最近使用时间
     topics[topic_id] = sig
     while len(topics) > _MAX_TRACKED_TOPICS:  # 裁剪最久未更新的 topic
         topics.pop(next(iter(topics)))
@@ -199,20 +198,20 @@ def _detect_interface_type() -> str:
         'web' | 'mcp' — 当前服务接口类型
     """
     # 环境变量覆盖（各入口点预置）
-    env_type = os.environ.get('TEA_AGENT_INTERFACE', '') or ''
-    if env_type.lower() in ('web', 'mcp'):
+    env_type = os.environ.get("TEA_AGENT_INTERFACE", "") or ""
+    if env_type.lower() in ("web", "mcp"):
         return env_type.lower()
 
     # 从已加载模块检测
-    if 'starlette' in sys.modules or 'uvicorn' in sys.modules:
-        return 'web'
+    if "starlette" in sys.modules or "uvicorn" in sys.modules:
+        return "web"
 
     # 从 argv 推断
-    script = os.path.basename(sys.argv[0]) if sys.argv else ''
-    if any(x in script.lower() for x in ('server', 'web')):
-        return 'web'
+    script = os.path.basename(sys.argv[0]) if sys.argv else ""
+    if any(x in script.lower() for x in ("server", "web")):
+        return "web"
 
-    return 'web'
+    return "web"
 
 
 def _get_interface_hints(interface_type: str) -> str:
@@ -229,16 +228,12 @@ def _get_interface_hints(interface_type: str) -> str:
             "【下载链接】生成的 .zip/.exe/.pdf 等文件链接会自动添加下载图标。\n"
             "【URL链接】裸 URL 自动转为可点击的超链接。"
         ),
-        "mcp": (
-            "【交互格式】纯文本/JSON 格式。\n"
-            "【链接】使用裸 URL 文本。"
-        ),
+        "mcp": ("【交互格式】纯文本/JSON 格式。\n【链接】使用裸 URL 文本。"),
     }
     return hints.get(interface_type) or hints["web"]
 
 
-def generate_os_info_text(toolkit_root_dir: str = "",
-                         interface_type: str | None = None) -> str:
+def generate_os_info_text(toolkit_root_dir: str = "", interface_type: str | None = None) -> str:
     """生成操作系统环境信息文本（纯文本，不修改消息列表）。
 
     为属性注入模式设计，返回 OS 信息文本，
@@ -295,64 +290,70 @@ def generate_os_info_text(toolkit_root_dir: str = "",
     lines.append("═══ 操作提示（请严格遵循当前 OS 的指令语法）═══")
 
     if is_windows:
-        lines.extend([
-            "🪟 Windows 环境 — 请特别注意：",
-            "",
-            "【路径】使用反斜杠 \\（如 C:\\Users\\...），但在 Python 字符串中请用正斜杠 / 或双反斜杠 \\\\",
-            "【环境变量】用 %VAR% 引用（如 %USERPROFILE%），PowerShell 用 $env:VAR",
-            "",
-            "【文件搜索】使用 findstr（代替 grep）：",
-            "  toolkit_exec(app='findstr', args=['/i', '关键词', 'C:\\path\\file.txt'])",
-            "  或 dir /s /b | findstr /i 关键词",
-            "",
-            "【目录列表】使用 dir（代替 ls）：",
-            "  toolkit_exec(app='cmd', args=['/c', 'dir /b /s C:\\path'])",
-            "",
-            "【文件读取】使用 type（代替 cat）：",
-            "  toolkit_exec(app='cmd', args=['/c', 'type', 'C:\\path\\file.txt'])",
-            "  或在 Python 中直接用 open() 读取（推荐）",
-            "",
-            "【路径环境】可用环境变量：%USERPROFILE%, %APPDATA%, %LOCALAPPDATA%, %TEMP%, %PATH%",
-            "【Shell】默认 cmd.exe；如需 PowerShell 需显式指定 app='powershell'",
-        ])
+        lines.extend(
+            [
+                "🪟 Windows 环境 — 请特别注意：",
+                "",
+                "【路径】使用反斜杠 \\（如 C:\\Users\\...），但在 Python 字符串中请用正斜杠 / 或双反斜杠 \\\\",
+                "【环境变量】用 %VAR% 引用（如 %USERPROFILE%），PowerShell 用 $env:VAR",
+                "",
+                "【文件搜索】使用 findstr（代替 grep）：",
+                "  toolkit_exec(app='findstr', args=['/i', '关键词', 'C:\\path\\file.txt'])",
+                "  或 dir /s /b | findstr /i 关键词",
+                "",
+                "【目录列表】使用 dir（代替 ls）：",
+                "  toolkit_exec(app='cmd', args=['/c', 'dir /b /s C:\\path'])",
+                "",
+                "【文件读取】使用 type（代替 cat）：",
+                "  toolkit_exec(app='cmd', args=['/c', 'type', 'C:\\path\\file.txt'])",
+                "  或在 Python 中直接用 open() 读取（推荐）",
+                "",
+                "【路径环境】可用环境变量：%USERPROFILE%, %APPDATA%, %LOCALAPPDATA%, %TEMP%, %PATH%",
+                "【Shell】默认 cmd.exe；如需 PowerShell 需显式指定 app='powershell'",
+            ]
+        )
     elif is_linux:
-        lines.extend([
-            "🐧 Linux 环境 — 请特别注意：",
-            "",
-            "【路径】使用正斜杠 /（如 /home/user/...）",
-            "【环境变量】用 $VAR 引用（如 $HOME, $PATH）",
-            "",
-            "【文件搜索】使用 grep：",
-            "  toolkit_exec(app='grep', args=['-rn', '关键词', '/path'])",
-            "",
-            "【目录列表】使用 ls：",
-            "  toolkit_exec(app='ls', args=['-la', '/path'])",
-            "",
-            "【文件读取】使用 cat：",
-            "  toolkit_exec(app='cat', args=['/path/file.txt'])",
-            "  或在 Python 中直接用 open() 读取（推荐）",
-            "",
-            "【路径环境】可用环境变量：$HOME, $PWD, $SHELL, $PATH",
-            "【权限】需要 sudo 的操作不会自动执行：请提示用户手动运行（Agent 无提权能力）",
-        ])
+        lines.extend(
+            [
+                "🐧 Linux 环境 — 请特别注意：",
+                "",
+                "【路径】使用正斜杠 /（如 /home/user/...）",
+                "【环境变量】用 $VAR 引用（如 $HOME, $PATH）",
+                "",
+                "【文件搜索】使用 grep：",
+                "  toolkit_exec(app='grep', args=['-rn', '关键词', '/path'])",
+                "",
+                "【目录列表】使用 ls：",
+                "  toolkit_exec(app='ls', args=['-la', '/path'])",
+                "",
+                "【文件读取】使用 cat：",
+                "  toolkit_exec(app='cat', args=['/path/file.txt'])",
+                "  或在 Python 中直接用 open() 读取（推荐）",
+                "",
+                "【路径环境】可用环境变量：$HOME, $PWD, $SHELL, $PATH",
+                "【权限】需要 sudo 的操作不会自动执行：请提示用户手动运行（Agent 无提权能力）",
+            ]
+        )
     elif is_macos:
-        lines.extend([
-            "🍎 macOS 环境 — 请特别注意：",
-            "",
-            "【路径】使用正斜杠 /（如 /Users/username/...）",
-            "【环境变量】用 $VAR 引用（如 $HOME, $PATH）",
-            "",
-            "【文件搜索】使用 grep：",
-            "  toolkit_exec(app='grep', args=['-rn', '关键词', '/path'])",
-            "",
-            "【目录列表】使用 ls：",
-            "  toolkit_exec(app='ls', args=['-la', '/path'])",
-            "",
-            "【文件读取】使用 cat：",
-            "  toolkit_exec(app='cat', args=['/path/file.txt'])",
-            "",
-            "【路径环境】可用环境变量：$HOME, $PWD, $SHELL, $PATH",
-        ])
+        lines.extend(
+            [
+                "🍎 macOS 环境 — 请特别注意：",
+                "",
+                "【路径】使用正斜杠 /（如 /Users/username/...）",
+                "【环境变量】用 $VAR 引用（如 $HOME, $PATH）",
+                "",
+                "【文件搜索】使用 grep：",
+                "  toolkit_exec(app='grep', args=['-rn', '关键词', '/path'])",
+                "",
+                "【目录列表】使用 ls：",
+                "  toolkit_exec(app='ls', args=['-la', '/path'])",
+                "",
+                "【文件读取】使用 cat：",
+                "  toolkit_exec(app='cat', args=['/path/file.txt'])",
+                "",
+                "【路径环境】可用环境变量：$HOME, $PWD, $SHELL, $PATH",
+            ]
+        )
 
     # ── 通用工具提示 ──
     lines.append("")
@@ -374,9 +375,9 @@ def generate_os_info_text(toolkit_root_dir: str = "",
     return info_text
 
 
-def inject_os_info(messages: list[dict], toolkit_root_dir: str = "",
-                   supports_reasoning: bool = True,
-                   interface_type: str | None = None) -> list[dict]:
+def inject_os_info(
+    messages: list[dict], toolkit_root_dir: str = "", supports_reasoning: bool = True, interface_type: str | None = None
+) -> list[dict]:
     """注入操作系统环境信息轮次（放在用户消息之前）。
 
     ⚠️ 已弃用：请使用 generate_os_info_text() 纯函数 + 属性注入方式。
@@ -414,8 +415,7 @@ def inject_os_info(messages: list[dict], toolkit_root_dir: str = "",
     messages.append({"role": "user", "content": info_text})
     ack = {
         "role": "assistant",
-        "content": f"✅ 已识别当前环境为 {os_name} {os_machine}，"
-                    f"接口类型: {iface_label}。将遵循对应的路径约定、命令语法和交互格式。"
+        "content": f"✅ 已识别当前环境为 {os_name} {os_machine}，接口类型: {iface_label}。将遵循对应的路径约定、命令语法和交互格式。",
     }
     if supports_reasoning:
         ack["reasoning_content"] = ""

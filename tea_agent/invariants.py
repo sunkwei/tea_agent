@@ -68,8 +68,7 @@ class InvariantRegistry:
     def __init__(self) -> None:
         self._items: dict[str, Invariant] = {}
 
-    def install(self, name: str, where: str, check: CheckFn,
-                description: str = "") -> Invariant:
+    def install(self, name: str, where: str, check: CheckFn, description: str = "") -> Invariant:
         """注册（或覆盖）一个不变式检查器。"""
         inv = Invariant(name=name, where=where, check=check, description=description)
         self._items[name] = inv
@@ -81,8 +80,7 @@ class InvariantRegistry:
 
     def names(self, where: str | None = None) -> tuple[str, ...]:
         """已注册不变式名（确定性排序；可按检查点过滤）。"""
-        return tuple(sorted(n for n, it in self._items.items()
-                            if where is None or it.where == where))
+        return tuple(sorted(n for n, it in self._items.items() if where is None or it.where == where))
 
     def clear(self) -> None:
         """清空（测试隔离用）。"""
@@ -96,8 +94,7 @@ class InvariantRegistry:
             try:
                 detail = inv.check(**ctx)
             except Exception as e:  # noqa: BLE001 — 检查器自身异常按违例处理
-                out.append(InvariantViolation(name, where,
-                                              f"检查器异常: {e.__class__.__name__}: {e}"))
+                out.append(InvariantViolation(name, where, f"检查器异常: {e.__class__.__name__}: {e}"))
                 continue
             if detail:
                 out.append(InvariantViolation(name, where, str(detail)))

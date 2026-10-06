@@ -82,9 +82,7 @@ def _resolve_storage():
     Returns:
         (storage, source) ；都不行时返回 (None, "")。
     """
-    for probe, source in ((_probe_agent_db, "agent"),
-                          (_probe_peek, "singleton"),
-                          (_probe_new, "new")):
+    for probe, source in ((_probe_agent_db, "agent"), (_probe_peek, "singleton"), (_probe_new, "new")):
         val, _err = _safe_call(probe, None)
         if val is not None:
             return val, source
@@ -154,6 +152,7 @@ def _parse_levels(levels) -> list:
 
 # ── 各层提取 ────────────────────────────────────────────────
 
+
 def _extract_l0(storage, conversation_id: str, max_chars: int) -> dict:
     """L0：本回合实际发给模型的富化 system 消息（回合级）。"""
     out = {
@@ -185,9 +184,7 @@ def _extract_l0(storage, conversation_id: str, max_chars: int) -> dict:
         if exists is False:
             out["reason"] = f"回合 {conversation_id} 不存在（请核对 conversation_id）"
         elif exists is True:
-            out["reason"] = (
-                "该回合未记录 L0（可能是 L0 快照功能上线前的历史回合）"
-            )
+            out["reason"] = "该回合未记录 L0（可能是 L0 快照功能上线前的历史回合）"
         else:
             out["reason"] = "未记录 L0（无法确认该回合是否存在）"
         return out
@@ -204,8 +201,7 @@ def _extract_l0(storage, conversation_id: str, max_chars: int) -> dict:
     return out
 
 
-def _extract_l1(storage, conversation_id: str, topic_id: str,
-                 max_chars: int, max_rounds: int) -> dict:
+def _extract_l1(storage, conversation_id: str, topic_id: str, max_chars: int, max_rounds: int) -> dict:
     """L1：最新对话明细（含工具调用链），回合级。"""
     out = {
         "scope": "conversation",
@@ -222,9 +218,7 @@ def _extract_l1(storage, conversation_id: str, topic_id: str,
             return out
     elif topic_id:
         # 未指定回合 → 返回该主题最近的对话（便捷视角，非单回合）
-        convs, err = _safe_call(
-            lambda: storage.get_conversations(topic_id, limit=1, include_rounds=True) or []
-        )
+        convs, err = _safe_call(lambda: storage.get_conversations(topic_id, limit=1, include_rounds=True) or [])
         if err:
             out["reason"] = f"读取失败: {err}"
             return out
@@ -239,11 +233,10 @@ def _extract_l1(storage, conversation_id: str, topic_id: str,
 
     if not rounds:
         # 事件投影兜底（rounds 无数据才启用，主路径仍是 rounds）
-        events, ev_err = _safe_call(
-            lambda: storage.events.query_events(topic_id) if (topic_id and getattr(storage, "events", None)) else None,
-            None)
+        events, ev_err = _safe_call(lambda: storage.events.query_events(topic_id) if (topic_id and getattr(storage, "events", None)) else None, None)
         if not ev_err and events:
             from tea_agent import session_events as se
+
             projected = se.project_l1([se.SessionEvent.from_dict(e) for e in events])
             if projected:
                 out["available"] = True
@@ -270,11 +263,7 @@ def _extract_l1(storage, conversation_id: str, topic_id: str,
         if cut:
             out["truncated"] = True
         if r.get("tool_calls"):
-            entry["tool_calls"] = [
-                tc.get("function", {}).get("name", "?")
-                if isinstance(tc, dict) else str(tc)
-                for tc in r["tool_calls"]
-            ]
+            entry["tool_calls"] = [tc.get("function", {}).get("name", "?") if isinstance(tc, dict) else str(tc) for tc in r["tool_calls"]]
         if r.get("tool_call_id"):
             entry["tool_call_id"] = r["tool_call_id"]
         rc = r.get("reasoning_content")
@@ -297,10 +286,7 @@ def _extract_l2(storage, topic_id: str, max_chars: int) -> dict:
         "entries": 0,
         "items": [],
         "truncated": False,
-        "caveat": (
-            "L2 是主题级**滚动窗口**（溢出即交 L3 摘要），只反映当前保留的条目，"
-            "无法复原某一回合当时的 L2 视图。"
-        ),
+        "caveat": ("L2 是主题级**滚动窗口**（溢出即交 L3 摘要），只反映当前保留的条目，无法复原某一回合当时的 L2 视图。"),
     }
     if not topic_id:
         out["reason"] = "需要 topic_id（L2 是主题级数据）"
@@ -314,6 +300,7 @@ def _extract_l2(storage, topic_id: str, max_chars: int) -> dict:
         events, ev_err = _safe_call(lambda: storage.events.query_events(topic_id), None)
         if not ev_err and events:
             from tea_agent import session_events as se
+
             proj = se.project_l2([se.SessionEvent.from_dict(e) for e in events])
             if proj:
                 out["available"] = True
@@ -390,6 +377,7 @@ def _extract_l3(storage, topic_id: str, max_chars: int) -> dict:
         events, ev_err = _safe_call(lambda: storage.events.query_events(topic_id), None)
         if not ev_err and events:
             from tea_agent import session_events as se
+
             agg = se.project_l3([se.SessionEvent.from_dict(e) for e in events])
             out["topic_summary"] = agg.get("topic_summary", "")
             out["series_resets"] = agg.get("series_resets", 0)
@@ -402,9 +390,10 @@ def _extract_l3(storage, topic_id: str, max_chars: int) -> dict:
 
 # ── 主入口 ──────────────────────────────────────────────────
 
-def toolkit_history_extract(action: str = "extract", topic_id: str = "",
-                            conversation_id: str = "", levels=None,
-                            max_chars: int = 20000, max_rounds: int = 100) -> str:
+
+def toolkit_history_extract(
+    action: str = "extract", topic_id: str = "", conversation_id: str = "", levels=None, max_chars: int = 20000, max_rounds: int = 100
+) -> str:
     """按会话提取 L0/L1/L2/L3 四级历史（严格审计读取侧）。
 
     ⚠️ 四级历史作用域不同：
@@ -427,25 +416,24 @@ def toolkit_history_extract(action: str = "extract", topic_id: str = "",
     act = (action or "extract").strip().lower()
 
     if act == "levels":
-        return json.dumps({
-            "ok": True,
-            "levels": {
-                "L0": {"scope": "conversation", "historical": True,
-                       "desc": "本回合实际发给模型的富化 system 消息（运行时合成）"},
-                "L1": {"scope": "conversation", "historical": True,
-                       "desc": "最近对话明细（含工具调用链与 reasoning_content）"},
-                "L2": {"scope": "topic", "historical": False,
-                       "desc": "近期相关历史；主题级滚动窗口，溢出即交 L3"},
-                "L3": {"scope": "topic", "historical": False,
-                       "desc": "压缩摘要（语义/工具链/话题）；主题级 UPSERT 覆盖"},
+        return json.dumps(
+            {
+                "ok": True,
+                "levels": {
+                    "L0": {"scope": "conversation", "historical": True, "desc": "本回合实际发给模型的富化 system 消息（运行时合成）"},
+                    "L1": {"scope": "conversation", "historical": True, "desc": "最近对话明细（含工具调用链与 reasoning_content）"},
+                    "L2": {"scope": "topic", "historical": False, "desc": "近期相关历史；主题级滚动窗口，溢出即交 L3"},
+                    "L3": {"scope": "topic", "historical": False, "desc": "压缩摘要（语义/工具链/话题）；主题级 UPSERT 覆盖"},
+                },
+                "note": "L2/L3 是主题级当前值，无法复原某一回合当时的历史视图。",
             },
-            "note": "L2/L3 是主题级当前值，无法复原某一回合当时的历史视图。",
-        }, ensure_ascii=False, indent=2)
+            ensure_ascii=False,
+            indent=2,
+        )
 
     storage, source = _resolve_storage()
     if storage is None:
-        return json.dumps({"ok": False, "error": "无法定位 Storage 实例"},
-                          ensure_ascii=False)
+        return json.dumps({"ok": False, "error": "无法定位 Storage 实例"}, ensure_ascii=False)
 
     topic_id = _resolve_topic_id(storage, topic_id)
     try:
@@ -460,73 +448,82 @@ def toolkit_history_extract(action: str = "extract", topic_id: str = "",
     # ── 列出话题下的回合（便于定位 conversation_id）──
     if act == "list_conversations":
         if not topic_id:
-            return json.dumps({"ok": False, "error": "需要 topic_id 或当前活动主题"},
-                              ensure_ascii=False)
+            return json.dumps({"ok": False, "error": "需要 topic_id 或当前活动主题"}, ensure_ascii=False)
         try:
             convs = storage.get_conversations(topic_id, limit=0, include_rounds=False) or []
         except Exception as e:
-            return json.dumps({"ok": False, "error": f"{type(e).__name__}: {e}"},
-                              ensure_ascii=False)
+            return json.dumps({"ok": False, "error": f"{type(e).__name__}: {e}"}, ensure_ascii=False)
         items = []
         for cv in convs:
-            items.append({
-                "conversation_id": cv.get("id", ""),
-                "stamp": str(cv.get("stamp", "")),
-                "status": cv.get("status", ""),
-                "is_func_calling": cv.get("is_func_calling", 0),
-                "user_msg": _clip(cv.get("user_msg", ""), 120)[0],
-                "ai_msg": _clip(cv.get("ai_msg", ""), 120)[0],
-            })
-        return json.dumps({"ok": True, "topic_id": topic_id,
-                           "count": len(items), "conversations": items},
-                          ensure_ascii=False, indent=2)
+            items.append(
+                {
+                    "conversation_id": cv.get("id", ""),
+                    "stamp": str(cv.get("stamp", "")),
+                    "status": cv.get("status", ""),
+                    "is_func_calling": cv.get("is_func_calling", 0),
+                    "user_msg": _clip(cv.get("user_msg", ""), 120)[0],
+                    "ai_msg": _clip(cv.get("ai_msg", ""), 120)[0],
+                }
+            )
+        return json.dumps({"ok": True, "topic_id": topic_id, "count": len(items), "conversations": items}, ensure_ascii=False, indent=2)
 
     # ── 列出 L0 版本（内容寻址；同 topic 逐字节稳定→通常仅少数几份）──
     if act == "l0_versions":
         snaps, err = _safe_call(lambda: storage.list_l0_snapshots(topic_id or "", limit=100), [])
         if err:
             return json.dumps({"ok": False, "error": err}, ensure_ascii=False)
-        return json.dumps({
-            "ok": True, "topic_id": topic_id, "count": len(snaps),
-            "snapshots": snaps,
-            "note": "同内容共享同一 hash（内容寻址）；多版本=该主题 L0 曾发生变化。",
-        }, ensure_ascii=False, indent=2)
+        return json.dumps(
+            {
+                "ok": True,
+                "topic_id": topic_id,
+                "count": len(snaps),
+                "snapshots": snaps,
+                "note": "同内容共享同一 hash（内容寻址）；多版本=该主题 L0 曾发生变化。",
+            },
+            ensure_ascii=False,
+            indent=2,
+        )
 
     # ── 列出 L3 历史版本（append-only；回答「T 时刻 Agent 相信什么」）──
     if act == "l3_versions":
         if not topic_id:
-            return json.dumps({"ok": False, "error": "需要 topic_id 或当前活动主题"},
-                              ensure_ascii=False)
+            return json.dumps({"ok": False, "error": "需要 topic_id 或当前活动主题"}, ensure_ascii=False)
         fn = getattr(storage, "get_l3_versions", None)
         if not callable(fn):
-            return json.dumps({
-                "ok": False,
-                "error": "该 Storage 不支持 L3 版本查询（旧库/替身）",
-            }, ensure_ascii=False)
+            return json.dumps(
+                {
+                    "ok": False,
+                    "error": "该 Storage 不支持 L3 版本查询（旧库/替身）",
+                },
+                ensure_ascii=False,
+            )
         versions, err = _safe_call(lambda: fn(topic_id, "", 200) or [], [])
         if err:
             return json.dumps({"ok": False, "error": err}, ensure_ascii=False)
         items = []
         for v in versions:
             body, cut = _clip(v.get("content", ""), max_chars)
-            items.append({
-                "kind": v.get("kind", ""),
-                "version": v.get("version", 0),
-                "chars": v.get("chars", 0),
-                "created_at": str(v.get("created_at", "")),
-                "content": body,
-                "truncated": cut,
-            })
-        return json.dumps({
-            "ok": True,
-            "topic_id": topic_id,
-            "count": len(items),
-            "versions": items,
-            "note": (
-                "L3 版本为 append-only：每次**内容实际变化**时新增一版"
-                "（同值重写不产生新版本，避免版本号被无意义重复写撑爆）。"
-            ),
-        }, ensure_ascii=False, indent=2)
+            items.append(
+                {
+                    "kind": v.get("kind", ""),
+                    "version": v.get("version", 0),
+                    "chars": v.get("chars", 0),
+                    "created_at": str(v.get("created_at", "")),
+                    "content": body,
+                    "truncated": cut,
+                }
+            )
+        return json.dumps(
+            {
+                "ok": True,
+                "topic_id": topic_id,
+                "count": len(items),
+                "versions": items,
+                "note": ("L3 版本为 append-only：每次**内容实际变化**时新增一版（同值重写不产生新版本，避免版本号被无意义重复写撑爆）。"),
+            },
+            ensure_ascii=False,
+            indent=2,
+        )
 
     # ── 提取四级 ──
     wanted = _parse_levels(levels)
@@ -536,16 +533,12 @@ def toolkit_history_extract(action: str = "extract", topic_id: str = "",
         "conversation_id": conversation_id,
         "storage_source": source,
         "levels_requested": wanted,
-        "scope_note": (
-            "L0/L1 为回合级；L2/L3 为主题级且是当前滚动值（historical=false），"
-            "不能复原某一回合当时的 L2/L3 视图。"
-        ),
+        "scope_note": ("L0/L1 为回合级；L2/L3 为主题级且是当前滚动值（historical=false），不能复原某一回合当时的 L2/L3 视图。"),
     }
 
     extractors = {
         "L0": lambda: _extract_l0(storage, conversation_id, max_chars),
-        "L1": lambda: _extract_l1(storage, conversation_id, topic_id,
-                                  max_chars, max_rounds),
+        "L1": lambda: _extract_l1(storage, conversation_id, topic_id, max_chars, max_rounds),
         "L2": lambda: _extract_l2(storage, topic_id, max_chars),
         "L3": lambda: _extract_l3(storage, topic_id, max_chars),
     }
@@ -556,59 +549,58 @@ def toolkit_history_extract(action: str = "extract", topic_id: str = "",
         result[lv] = val if not err else {"available": False, "reason": err}
 
     # 汇总可用性，便于一眼判断
-    result["availability"] = {
-        lv: bool(isinstance(result.get(lv), dict) and result[lv].get("available"))
-        for lv in wanted
-    }
+    result["availability"] = {lv: bool(isinstance(result.get(lv), dict) and result[lv].get("available")) for lv in wanted}
     return json.dumps(result, ensure_ascii=False, indent=2)
 
 
 def meta_toolkit_history_extract() -> dict:
-    return {"type": "function", "function": {
-        "name": "toolkit_history_extract",
-        "description": (
-            "按会话提取 L0/L1/L2/L3 四级历史（审计/复盘用）。"
-            "L0=本回合实际发给模型的富化 system 消息（回合级）；"
-            "L1=最近对话明细含工具链（回合级）；"
-            "L2=近期相关历史（主题级滚动窗口）；L3=压缩摘要（主题级当前版本）。"
-            "注意 L2/L3 是主题级当前值，无法复原历史版本。"
-            "action=extract 提取 / list_conversations 列出回合以定位 conversation_id / "
-            "l0_versions 列出该主题的 L0 版本 / levels 查看各层作用域说明。"
-        ),
-        "parameters": {
-            "type": "object",
-            "properties": {
-                "action": {
-                    "type": "string",
-                    "enum": ["extract", "list_conversations", "l0_versions",
-                             "l3_versions", "levels"],
-                    "description": "extract=提取四级历史; list_conversations=列出话题下回合; l0_versions=列出L0版本; l3_versions=列出L3摘要历史版本; levels=查看各层作用域",
-                    "default": "extract",
+    return {
+        "type": "function",
+        "function": {
+            "name": "toolkit_history_extract",
+            "description": (
+                "按会话提取 L0/L1/L2/L3 四级历史（审计/复盘用）。"
+                "L0=本回合实际发给模型的富化 system 消息（回合级）；"
+                "L1=最近对话明细含工具链（回合级）；"
+                "L2=近期相关历史（主题级滚动窗口）；L3=压缩摘要（主题级当前版本）。"
+                "注意 L2/L3 是主题级当前值，无法复原历史版本。"
+                "action=extract 提取 / list_conversations 列出回合以定位 conversation_id / "
+                "l0_versions 列出该主题的 L0 版本 / levels 查看各层作用域说明。"
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "action": {
+                        "type": "string",
+                        "enum": ["extract", "list_conversations", "l0_versions", "l3_versions", "levels"],
+                        "description": "extract=提取四级历史; list_conversations=列出话题下回合; l0_versions=列出L0版本; l3_versions=列出L3摘要历史版本; levels=查看各层作用域",
+                        "default": "extract",
+                    },
+                    "topic_id": {
+                        "type": "string",
+                        "description": "主题 ID；空则取当前活动主题",
+                    },
+                    "conversation_id": {
+                        "type": "string",
+                        "description": "回合 ID（L0/L1 需要；L1 缺省时回落该主题最近一轮）",
+                    },
+                    "levels": {
+                        "type": "array",
+                        "items": {"type": "string"},
+                        "description": "要提取的层，如 ['L0','L1']；空=全部四级",
+                    },
+                    "max_chars": {
+                        "type": "integer",
+                        "description": "每字段截断上限（默认 20000；0=不限）",
+                        "default": 20000,
+                    },
+                    "max_rounds": {
+                        "type": "integer",
+                        "description": "L1 最多返回轮数（默认 100；0=不限）",
+                        "default": 100,
+                    },
                 },
-                "topic_id": {
-                    "type": "string",
-                    "description": "主题 ID；空则取当前活动主题",
-                },
-                "conversation_id": {
-                    "type": "string",
-                    "description": "回合 ID（L0/L1 需要；L1 缺省时回落该主题最近一轮）",
-                },
-                "levels": {
-                    "type": "array",
-                    "items": {"type": "string"},
-                    "description": "要提取的层，如 ['L0','L1']；空=全部四级",
-                },
-                "max_chars": {
-                    "type": "integer",
-                    "description": "每字段截断上限（默认 20000；0=不限）",
-                    "default": 20000,
-                },
-                "max_rounds": {
-                    "type": "integer",
-                    "description": "L1 最多返回轮数（默认 100；0=不限）",
-                    "default": 100,
-                },
+                "required": [],
             },
-            "required": [],
         },
-    }}
+    }

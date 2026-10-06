@@ -25,9 +25,9 @@ def _extract_usage(response):
     try:
         u = response.usage
         return {
-            "total_tokens": getattr(u, 'total_tokens', 0) or 0,
-            "prompt_tokens": getattr(u, 'prompt_tokens', 0) or 0,
-            "completion_tokens": getattr(u, 'completion_tokens', 0) or 0,
+            "total_tokens": getattr(u, "total_tokens", 0) or 0,
+            "prompt_tokens": getattr(u, "prompt_tokens", 0) or 0,
+            "completion_tokens": getattr(u, "completion_tokens", 0) or 0,
         }
     except Exception:
         return _empty_usage()
@@ -54,13 +54,13 @@ def generate_topic_summary(client, model: str, conversations: list[dict]) -> tup
     for conv in conversations[-2:]:
         um = conv.get("user_msg", "").strip()
         if um:
-            if um.startswith('{'):
+            if um.startswith("{"):
                 try:
                     parsed = _json_gs.loads(um)
                     if isinstance(parsed, dict):
                         um = parsed.get("text", um)
                 except Exception:
-                    logger.exception('op_failed')
+                    logger.exception("op_failed")
 
             if len(um) > 200:
                 um = um[:200] + "..."
@@ -69,9 +69,7 @@ def generate_topic_summary(client, model: str, conversations: list[dict]) -> tup
     if not user_msgs:
         return None, _empty_usage()
 
-    user_content = TOPIC_SUMMARY_USER_TEMPLATE.format(
-        user_msgs="\n".join(user_msgs)
-    )
+    user_content = TOPIC_SUMMARY_USER_TEMPLATE.format(user_msgs="\n".join(user_msgs))
 
     try:
         logger.debug(f"generate_topic_summary request: model={model}, conversations={len(conversations)}, user_msgs={len(user_msgs)}")
@@ -92,7 +90,7 @@ def generate_topic_summary(client, model: str, conversations: list[dict]) -> tup
         content = response.choices[0].message.content
         # DeepSeek 等推理模型可能把回复放到 reasoning_content 中，content 为空
         if not content:
-            content = getattr(response.choices[0].message, 'reasoning_content', None)
+            content = getattr(response.choices[0].message, "reasoning_content", None)
         if not content or not isinstance(content, str):
             logger.warning(f"generate_topic_summary: API 返回空 content, model={model}")
             return None, _empty_usage()
@@ -101,8 +99,8 @@ def generate_topic_summary(client, model: str, conversations: list[dict]) -> tup
         # 调试日志：记录 LLM 原始返回
         logger.info(f"generate_topic_summary 原始返回: model={model}, raw_len={len(raw)}, raw={raw[:80]!r}")
         # 去掉各种引号包裹（中英文全角半角）
-        raw = re.sub(r'^[\'"\u201c\u201d\u2018\u2019\u300c\u300d\uff02\uff07]+', '', raw)
-        raw = re.sub(r'[\'"\u201c\u201d\u2018\u2019\u300c\u300d\uff02\uff07]+$', '', raw)
+        raw = re.sub(r'^[\'"\u201c\u201d\u2018\u2019\u300c\u300d\uff02\uff07]+', "", raw)
+        raw = re.sub(r'[\'"\u201c\u201d\u2018\u2019\u300c\u300d\uff02\uff07]+$', "", raw)
         raw = raw.strip()
 
         if not raw:
@@ -110,8 +108,7 @@ def generate_topic_summary(client, model: str, conversations: list[dict]) -> tup
             return None, _empty_usage()
 
         # 硬过滤：禁止输出废词标题
-        forbidden = ['我们', '用户', '您', '对话', '消息', '根据', '以下', '上文',
-                     '主题', '这个', '输入', '生成']
+        forbidden = ["我们", "用户", "您", "对话", "消息", "根据", "以下", "上文", "主题", "这个", "输入", "生成"]
         for word in forbidden:
             if word in raw:
                 logger.warning(f"generate_topic_summary: 标题含禁词'{word}'被拒: {raw!r}")

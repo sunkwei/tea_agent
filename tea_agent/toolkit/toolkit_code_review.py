@@ -30,15 +30,16 @@ logger = logging.getLogger("toolkit.code_review")
 # ── 安全模式库 ──────────────────────────────────────────
 SUSPICIOUS_PATTERNS = [
     (r'(?i)(password|passwd|pwd|secret|api_key|apikey|token)\s*[=:]\s*["\'][^"\'\s]{8,}["\']', "hardcoded_credential", "硬编码凭据"),
-    (r'\b(eval|exec)\s*\(', "dangerous_exec", "危险动态执行"),
-    (r'subprocess\..*shell\s*=\s*True', "dangerous_shell", "Shell注入风险"),
-    (r'pickle\.loads?\s*\(', "unsafe_deserialize", "不安全的反序列化"),
+    (r"\b(eval|exec)\s*\(", "dangerous_exec", "危险动态执行"),
+    (r"subprocess\..*shell\s*=\s*True", "dangerous_shell", "Shell注入风险"),
+    (r"pickle\.loads?\s*\(", "unsafe_deserialize", "不安全的反序列化"),
     (r'(?i)(?:execute|executemany)\s*\([\'"].*%[sd]|f[\'"].*\{.*\}.*(?:SELECT|INSERT|UPDATE|DELETE)', "sql_injection", "SQL注入风险"),
-    (r'tempfile\.mktemp\b', "insecure_temp", "不安全的临时文件"),
-    (r'(?i)(md5|sha1)\s*\(', "weak_hash", "弱哈希算法"),
+    (r"tempfile\.mktemp\b", "insecure_temp", "不安全的临时文件"),
+    (r"(?i)(md5|sha1)\s*\(", "weak_hash", "弱哈希算法"),
 ]
 
 # ── 审查引擎 ────────────────────────────────────────────
+
 
 def _check_compile(filepath: str) -> dict[str, Any]:
     """Python 编译检查"""
@@ -54,7 +55,9 @@ def _check_ruff(filepath: str) -> dict[str, Any]:
     try:
         r = subprocess.run(
             ["ruff", "check", "--output-format", "json", filepath],
-            capture_output=True, text=True, timeout=30,
+            capture_output=True,
+            text=True,
+            timeout=30,
         )
         issues = json.loads(r.stdout) if r.stdout.strip() else []
         return {"ok": len(issues) == 0, "issues": issues, "count": len(issues)}
@@ -83,12 +86,16 @@ def _check_security(filepath: str) -> dict[str, Any]:
         findings = []
         for pattern, category, desc in SUSPICIOUS_PATTERNS:
             for match in re.finditer(pattern, content):
-                line_num = content[:match.start()].count('\n') + 1
-                findings.append({
-                    "line": line_num, "category": category,
-                    "description": desc, "matched": match.group()[:80],
-                    "severity": "high" if category in ("hardcoded_credential", "dangerous_exec", "sql_injection") else "medium",
-                })
+                line_num = content[: match.start()].count("\n") + 1
+                findings.append(
+                    {
+                        "line": line_num,
+                        "category": category,
+                        "description": desc,
+                        "matched": match.group()[:80],
+                        "severity": "high" if category in ("hardcoded_credential", "dangerous_exec", "sql_injection") else "medium",
+                    }
+                )
         return {"ok": len(findings) == 0, "findings": findings, "count": len(findings)}
     except Exception as e:
         return {"ok": True, "findings": [], "count": 0, "hint": f"安全扫描错误: {e}"}
@@ -99,13 +106,13 @@ def _assess_complexity(filepath: str) -> dict[str, Any]:
     try:
         with open(filepath, encoding="utf-8", errors="replace") as f:
             content = f.read()
-        lines = content.split('\n')
+        lines = content.split("\n")
         total_lines = len(lines)
-        code_lines = sum(1 for l in lines if l.strip() and not l.strip().startswith('#'))
-        blank_lines = sum(1 for l in lines if not l.strip())
-        comment_lines = sum(1 for l in lines if l.strip().startswith('#'))
-        func_pattern = re.compile(r'^def\s+\w+\s*\(', re.MULTILINE)
-        class_pattern = re.compile(r'^class\s+\w+', re.MULTILINE)
+        code_lines = sum(1 for ln in lines if ln.strip() and not ln.strip().startswith("#"))
+        blank_lines = sum(1 for ln in lines if not ln.strip())
+        comment_lines = sum(1 for ln in lines if ln.strip().startswith("#"))
+        func_pattern = re.compile(r"^def\s+\w+\s*\(", re.MULTILINE)
+        class_pattern = re.compile(r"^class\s+\w+", re.MULTILINE)
         max_indent = 0
         for line in lines:
             stripped = line.rstrip()
@@ -115,13 +122,15 @@ def _assess_complexity(filepath: str) -> dict[str, Any]:
         return {
             "ok": True,
             "metrics": {
-                "total_lines": total_lines, "code_lines": code_lines,
-                "blank_lines": blank_lines, "comment_lines": comment_lines,
+                "total_lines": total_lines,
+                "code_lines": code_lines,
+                "blank_lines": blank_lines,
+                "comment_lines": comment_lines,
                 "comment_ratio": round(comment_lines / max(code_lines, 1) * 100, 1),
                 "function_count": len(func_pattern.findall(content)),
                 "class_count": len(class_pattern.findall(content)),
                 "max_indent": max_indent,
-                "avg_line_length": round(sum(len(l) for l in lines if l.strip()) / max(code_lines, 1), 1),
+                "avg_line_length": round(sum(len(ln) for ln in lines if ln.strip()) / max(code_lines, 1), 1),
             },
             "complexity_score": _complexity_score(total_lines, code_lines, max_indent),
         }
@@ -137,12 +146,14 @@ def _complexity_score(total: int, code: int, max_indent: int) -> str:
         score += 7
     elif total < 500:
         score += 4
-    else: score += 1
+    else:
+        score += 1
     if max_indent <= 2:
         score += 5
     elif max_indent <= 4:
         score += 3
-    else: score += 1
+    else:
+        score += 1
     if score >= 13:
         return "简单"
     if score >= 8:
@@ -156,7 +167,7 @@ def _check_style(filepath: str) -> dict[str, Any]:
         with open(filepath, encoding="utf-8", errors="replace") as f:
             content = f.read()
         issues = []
-        lines = content.split('\n')
+        lines = content.split("\n")
         for i, line in enumerate(lines, 1):
             if len(line) > 100 and line.strip():
                 issues.append({"line": i, "type": "line_too_long", "description": f"行过长: {len(line)}字符(建议≤100)", "severity": "low"})
@@ -167,7 +178,10 @@ def _check_style(filepath: str) -> dict[str, Any]:
         return {"ok": len(issues) == 0, "issues": issues, "count": len(issues)}
     except Exception as e:
         return {"ok": True, "issues": [], "count": 0, "hint": f"风格检查错误: {e}"}
+
+
 # ── 报告生成 ────────────────────────────────────────────
+
 
 def _generate_report(filepath, compile_result, lint_result, semantic_result, security_result, complexity_result, style_result):
     """生成 Markdown 格式审查报告"""
@@ -264,10 +278,11 @@ def _generate_report(filepath, compile_result, lint_result, semantic_result, sec
     else:
         report.append(f"❌ **需要修复** — {error_count} 个错误, {warning_count} 个警告")
 
-    return '\n'.join(report)
+    return "\n".join(report)
 
 
 # ── 主入口 ──────────────────────────────────────────────
+
 
 def toolkit_code_review(filepath="", directory="", output="", level="standard", glob_pattern="*.py", max_files=20):
     """
@@ -327,9 +342,11 @@ def toolkit_code_review(filepath="", directory="", output="", level="standard", 
             report_md = _generate_report(fp, compile_r, lint_r, semantic_r, security_r, complexity_r, style_r)
             reports.append({"file": fp, "report": report_md, "compile_ok": compile_r.get("ok", True)})
 
-            issue_count = (0 if compile_r.get("ok", True) else len(compile_r.get("errors", [])) +
-                          lint_r.get("count", 0) + security_r.get("count", 0) +
-                          style_r.get("count", 0))
+            issue_count = (
+                0
+                if compile_r.get("ok", True)
+                else len(compile_r.get("errors", [])) + lint_r.get("count", 0) + security_r.get("count", 0) + style_r.get("count", 0)
+            )
             summary["issues"] += issue_count
             if compile_r.get("ok", True):
                 summary["passed"] += 1
@@ -357,6 +374,7 @@ def toolkit_code_review(filepath="", directory="", output="", level="standard", 
 
 # ── Meta ────────────────────────────────────────────────
 
+
 def meta_toolkit_code_review():
     """Meta for code review tool."""
     return {
@@ -370,7 +388,12 @@ def meta_toolkit_code_review():
                     "filepath": {"type": "string", "description": "单文件审查路径（与 directory 二选一）"},
                     "directory": {"type": "string", "description": "目录审查路径（与 filepath 二选一）"},
                     "output": {"type": "string", "description": "审查报告输出文件路径（可选）"},
-                    "level": {"type": "string", "enum": ["quick", "standard", "thorough"], "description": "审查深度: quick=快速, standard=标准, thorough=全面", "default": "standard"},
+                    "level": {
+                        "type": "string",
+                        "enum": ["quick", "standard", "thorough"],
+                        "description": "审查深度: quick=快速, standard=标准, thorough=全面",
+                        "default": "standard",
+                    },
                     "glob_pattern": {"type": "string", "description": "目录审查时的文件匹配模式", "default": "*.py"},
                     "max_files": {"type": "integer", "description": "最大审查文件数", "default": 20},
                 },

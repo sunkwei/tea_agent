@@ -5,7 +5,26 @@ import logging
 
 logger = logging.getLogger("toolkit")
 
-def toolkit_memory(action: str, content: str = "", category: str = "general", priority: int = 2, importance: int = 3, expires_at: str = None, tags: str = "", id: int = 0, hard: bool = False, query: str = "", min_importance: int = 0, limit: int = 10, topic_id: str = "", max_chars: int = 4000, force: bool = False, top_k: int = 10, **kwargs):
+
+def toolkit_memory(
+    action: str,
+    content: str = "",
+    category: str = "general",
+    priority: int = 2,
+    importance: int = 3,
+    expires_at: str = None,
+    tags: str = "",
+    id: int = 0,
+    hard: bool = False,
+    query: str = "",
+    min_importance: int = 0,
+    limit: int = 10,
+    topic_id: str = "",
+    max_chars: int = 4000,
+    force: bool = False,
+    top_k: int = 10,
+    **kwargs,
+):
     """
     统一长期记忆管理入口。根据 action 执行不同操作：
 
@@ -19,10 +38,13 @@ def toolkit_memory(action: str, content: str = "", category: str = "general", pr
     - "auto_extract": 自动从对话中提取记忆。需 topic_id。
     - "stats": 获取记忆统计信息。
     """
-    logger.info(f"toolkit_memory called: action={action!r}, content={repr(content)[:80]}, category={category!r}, priority={priority!r}, importance={importance!r}, expires_at={expires_at!r}, tags={tags!r}, id={id!r}, hard={hard!r}, query={repr(query)[:80]}, min_importance={min_importance!r}, limit={limit!r}, topic_id={topic_id!r}, max_chars={max_chars!r}")
+    logger.info(
+        f"toolkit_memory called: action={action!r}, content={repr(content)[:80]}, category={category!r}, priority={priority!r}, importance={importance!r}, expires_at={expires_at!r}, tags={tags!r}, id={id!r}, hard={hard!r}, query={repr(query)[:80]}, min_importance={min_importance!r}, limit={limit!r}, topic_id={topic_id!r}, max_chars={max_chars!r}"
+    )
 
     try:
         from tea_agent.store import get_storage
+
         storage = get_storage()
     except Exception as e:
         return f"❌ 无法连接存储: {e}"
@@ -42,8 +64,7 @@ def toolkit_memory(action: str, content: str = "", category: str = "general", pr
         if expires_at is not None and str(expires_at).strip() == "":
             expires_at = None
         try:
-            mid = storage.add_memory(content=content, category=category, priority=priority,
-                                     importance=importance, expires_at=expires_at, tags=tags)
+            mid = storage.add_memory(content=content, category=category, priority=priority, importance=importance, expires_at=expires_at, tags=tags)
             pl = priority_labels.get(priority, str(priority))
             return f"✅ 记忆 #{mid} 已添加 [{pl}/{category}]: {content}"
         except Exception as e:
@@ -56,7 +77,10 @@ def toolkit_memory(action: str, content: str = "", category: str = "general", pr
             if not memories:
                 return "📭 当前没有活跃的记忆。"
             stats = storage.get_memory_stats()
-            lines = [f"🧠 活跃记忆: {stats['total']} 条 (指令:{stats['by_priority'].get(0,0)} 高:{stats['by_priority'].get(1,0)} 中:{stats['by_priority'].get(2,0)} 低:{stats['by_priority'].get(3,0)})", ""]
+            lines = [
+                f"🧠 活跃记忆: {stats['total']} 条 (指令:{stats['by_priority'].get(0, 0)} 高:{stats['by_priority'].get(1, 0)} 中:{stats['by_priority'].get(2, 0)} 低:{stats['by_priority'].get(3, 0)})",
+                "",
+            ]
             for m in memories[:limit]:
                 pl = priority_labels.get(m["priority"], str(m["priority"]))
                 cat = m.get("category", "general")
@@ -74,8 +98,7 @@ def toolkit_memory(action: str, content: str = "", category: str = "general", pr
     elif action == "search":
         try:
             tag_list = [t.strip() for t in tags.split(",") if t.strip()] if tags else None
-            results = storage.search_memories(query=query, category=category, tags=tag_list,
-                                              min_importance=min_importance, limit=limit)
+            results = storage.search_memories(query=query, category=category, tags=tag_list, min_importance=min_importance, limit=limit)
             if not results:
                 return "📭 未找到匹配的记忆。"
             lines = [f"📋 找到 {len(results)} 条记忆:"]
@@ -112,7 +135,7 @@ def toolkit_memory(action: str, content: str = "", category: str = "general", pr
             for i, conv in enumerate(unsummarized):
                 user = conv.get("user_msg", "")[:300]
                 ai = conv.get("ai_msg", "")[:500]
-                entry = f"--- 对话 {i+1} ---\n用户: {user}\n助手: {ai}\n"
+                entry = f"--- 对话 {i + 1} ---\n用户: {user}\n助手: {ai}\n"
                 if total_chars + len(entry) > max_chars:
                     lines.append(f"... 还有 {len(unsummarized) - i} 条对话因长度限制未显示")
                     break
@@ -133,10 +156,13 @@ def toolkit_memory(action: str, content: str = "", category: str = "general", pr
             return "❌ auto_extract 操作需要 topic_id 参数"
         try:
             from ..session_memory_component import AutoMemoryExtractor
+
             extractor = AutoMemoryExtractor(storage)
             result = extractor.extract_from_topic(topic_id, force=force)
             if result["status"] == "success":
-                return f"✅ 自动提取完成: 保存 {result['extracted']} 条记忆, 跳过 {result['skipped']} 条 (共分析 {result['total_conversations']} 条对话)"
+                return (
+                    f"✅ 自动提取完成: 保存 {result['extracted']} 条记忆, 跳过 {result['skipped']} 条 (共分析 {result['total_conversations']} 条对话)"
+                )
             return f"⚠️ {result['status']}"
         except Exception as e:
             return f"❌ 自动提取失败: {e}"
@@ -158,6 +184,7 @@ def toolkit_memory(action: str, content: str = "", category: str = "general", pr
     else:
         return f"❌ 未知 action: '{action}'，可选: add/list/search/forget/extract/auto_extract/stats"
 
+
 def meta_toolkit_memory() -> dict:
     """Meta toolkit memory."""
     return {
@@ -171,10 +198,15 @@ def meta_toolkit_memory() -> dict:
                     "action": {
                         "type": "string",
                         "enum": ["add", "list", "search", "forget", "extract", "auto_extract", "stats"],
-                        "description": "操作类型"
+                        "description": "操作类型",
                     },
                     "content": {"type": "string", "description": "记忆内容，精简摘要"},
-                    "category": {"type": "string", "enum": ["instruction", "preference", "fact", "reminder", "general"], "description": "分类", "default": "general"},
+                    "category": {
+                        "type": "string",
+                        "enum": ["instruction", "preference", "fact", "reminder", "general"],
+                        "description": "分类",
+                        "default": "general",
+                    },
                     "priority": {"type": "integer", "description": "优先级 0-3，0=CRITICAL, 1=HIGH, 2=MEDIUM, 3=LOW", "default": 2},
                     "importance": {"type": "integer", "description": "重要度 1-5", "default": 3},
                     "expires_at": {"type": "string", "description": "过期时间 ISO datetime，null=永不过期"},

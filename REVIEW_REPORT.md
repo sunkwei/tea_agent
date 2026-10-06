@@ -78,11 +78,11 @@
 `tea_agent/toolkit/toolkit_edit.py:106-129`
 
 ```python
-original_norm = original.replace('\r\n', '\n').replace('\r', '\n')
-old_norm = old_text.replace('\r\n', '\n').replace('\r', '\n')
-idx = original_norm.find(old_norm)                       # 在"规范化"串上算下标
+original_norm = original.replace("\r\n", "\n").replace("\r", "\n")
+old_norm = old_text.replace("\r\n", "\n").replace("\r", "\n")
+idx = original_norm.find(old_norm)  # 在"规范化"串上算下标
 ...
-new_text_raw = original[:idx] + new_norm + original[idx + len(old_norm):]  # 却切"原始"串
+new_text_raw = original[:idx] + new_norm + original[idx + len(old_norm) :]  # 却切"原始"串
 ```
 - `idx` 是对 `original_norm`（已把 CRLF→LF，长度变小）计算的，但切片用在 `original`（原始 CRLF 串）。
 - 当文件含 CRLF（Windows 项目常见）时，`idx` 与原始字节位置错位，替换内容插到错误位置、混入新的换行风格，甚至乱码。
@@ -105,8 +105,8 @@ new_text_raw = original[:idx] + new_norm + original[idx + len(old_norm):]  # 却
 `tea_agent/toolkit/toolkit_self_evolve.py:85-97, 414-433`
 
 ```python
-m = re.search(r'(\d+)\s+passed', output)
-m = re.search(r'(\d+)\s+failed', output)
+m = re.search(r"(\d+)\s+passed", output)
+m = re.search(r"(\d+)\s+failed", output)
 total = passed + failed
 ```
 - 只解析 `passed`/`failed`，**不解析 pytest 的 `errors` 行**。集内/夹具设置错误会以“errors”呈现，不被计入 `total`。

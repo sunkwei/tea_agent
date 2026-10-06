@@ -81,6 +81,7 @@ class SymbolIndex:
 
     def build_index(self, force: bool = False) -> dict:
         from tea_agent.lsp.ts_analyzer import parse_file
+
         py_files = list(self.project_root.rglob("*.py"))
         scanned = indexed = skipped = errors = 0
         for pf in py_files:
@@ -99,31 +100,43 @@ class SymbolIndex:
             self._clear_file_data(pf_str)
             module = rel.replace("/", ".").replace(".py", "")
             for func in parsed.get("functions", []):
-                self._insert_symbol(rel, func["name"], "function", func["line"],
-                                    params=json.dumps(func.get("params", [])),
-                                    docstring=func.get("docstring", ""), module=module,
-                                    calls=func.get("calls", []))
+                self._insert_symbol(
+                    rel,
+                    func["name"],
+                    "function",
+                    func["line"],
+                    params=json.dumps(func.get("params", [])),
+                    docstring=func.get("docstring", ""),
+                    module=module,
+                    calls=func.get("calls", []),
+                )
                 indexed += 1
             for cls in parsed.get("classes", []):
-                self._insert_symbol(rel, cls["name"], "class", cls["line"],
-                                    docstring=cls.get("docstring", ""), module=module)
+                self._insert_symbol(rel, cls["name"], "class", cls["line"], docstring=cls.get("docstring", ""), module=module)
                 indexed += 1
                 for m in cls.get("methods", []):
-                    self._insert_symbol(rel, m["name"], "method", m["line"],
-                                        parent=cls["name"],
-                                        params=json.dumps(m.get("params", [])),
-                                        docstring=m.get("docstring", ""), module=module,
-                                        calls=m.get("calls", []))
+                    self._insert_symbol(
+                        rel,
+                        m["name"],
+                        "method",
+                        m["line"],
+                        parent=cls["name"],
+                        params=json.dumps(m.get("params", [])),
+                        docstring=m.get("docstring", ""),
+                        module=module,
+                        calls=m.get("calls", []),
+                    )
                     indexed += 1
             for imp in parsed.get("imports", []):
                 c = self._conn.cursor()
-                c.execute("INSERT INTO imports (file_path, module, names, line) VALUES (?, ?, ?, ?)",
-                          (rel, imp.get("module", ""), json.dumps(imp.get("names", [])), imp.get("line", 0)))
+                c.execute(
+                    "INSERT INTO imports (file_path, module, names, line) VALUES (?, ?, ?, ?)",
+                    (rel, imp.get("module", ""), json.dumps(imp.get("names", [])), imp.get("line", 0)),
+                )
                 self._conn.commit()
                 c.close()
             self._record_file(pf_str)
-        return {"scanned": scanned, "indexed": indexed, "skipped": skipped,
-                "errors": errors, "total_symbols": self.get_symbol_count()}
+        return {"scanned": scanned, "indexed": indexed, "skipped": skipped, "errors": errors, "total_symbols": self.get_symbol_count()}
 
     def _is_file_changed(self, file_path: str) -> bool:
         c = self._conn.cursor()
@@ -136,7 +149,8 @@ class SymbolIndex:
             cm = os.path.getmtime(file_path)
             if abs(cm - row["mtime"]) > 0.01:
                 return True
-            ch = hashlib.md5(open(file_path, "rb").read()).hexdigest()[:16]
+            with open(file_path, "rb") as _fh:
+                ch = hashlib.md5(_fh.read()).hexdigest()[:16]
             if ch != row["hash"]:
                 return True
         except Exception:
@@ -146,9 +160,11 @@ class SymbolIndex:
     def _record_file(self, file_path: str):
         c = self._conn.cursor()
         mtime = os.path.getmtime(file_path)
-        fhash = hashlib.md5(open(file_path, "rb").read()).hexdigest()[:16]
-        c.execute("INSERT OR REPLACE INTO file_tracking (file_path, mtime, hash, last_indexed) VALUES (?, ?, ?, datetime('now'))",
-                  (file_path, mtime, fhash))
+        with open(file_path, "rb") as _fh:
+            fhash = hashlib.md5(_fh.read()).hexdigest()[:16]
+        c.execute(
+            "INSERT OR REPLACE INTO file_tracking (file_path, mtime, hash, last_indexed) VALUES (?, ?, ?, datetime('now'))", (file_path, mtime, fhash)
+        )
         self._conn.commit()
         c.close()
 
@@ -162,18 +178,29 @@ class SymbolIndex:
         self._conn.commit()
         c.close()
 
-    def _insert_symbol(self, file_path: str, name: str, kind: str, line: int,
-                        parent: str = "", params: str = "[]", docstring: str = "",
-                        module: str = "", calls: list = None):
+    def _insert_symbol(
+        self,
+        file_path: str,
+        name: str,
+        kind: str,
+        line: int,
+        parent: str = "",
+        params: str = "[]",
+        docstring: str = "",
+        module: str = "",
+        calls: list = None,
+    ):
         c = self._conn.cursor()
         try:
-            c.execute("INSERT OR IGNORE INTO symbols (file_path, name, kind, line, parent, params, docstring, module) "
-                      "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-                      (file_path, name, kind, line, parent, params, docstring, module))
+            c.execute(
+                "INSERT OR IGNORE INTO symbols (file_path, name, kind, line, parent, params, docstring, module) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                (file_path, name, kind, line, parent, params, docstring, module),
+            )
             if calls:
                 for callee in calls:
-                    c.execute("INSERT INTO calls (caller_file, caller_name, caller_line, callee_name) VALUES (?, ?, ?, ?)",
-                              (file_path, name, line, callee))
+                    c.execute(
+                        "INSERT INTO calls (caller_file, caller_name, caller_line, callee_name) VALUES (?, ?, ?, ?)", (file_path, name, line, callee)
+                    )
             self._conn.commit()
         except sqlite3.Error as e:
             logger.error(f"Insert symbol failed {file_path}:{name}: {e}")
@@ -187,8 +214,7 @@ class SymbolIndex:
     def search_by_name(self, query: str, limit: int = 20) -> list[dict]:
         c = self._conn.cursor()
         escaped = query.replace("%", r"\%").replace("_", r"\_")
-        c.execute("SELECT * FROM symbols WHERE name LIKE ? ESCAPE '\\' ORDER BY kind, name LIMIT ?",
-                  (f"%{escaped}%", limit))
+        c.execute("SELECT * FROM symbols WHERE name LIKE ? ESCAPE '\\' ORDER BY kind, name LIMIT ?", (f"%{escaped}%", limit))
         rows = [dict(r) for r in c.fetchall()]
         c.close()
         return rows
@@ -203,8 +229,7 @@ class SymbolIndex:
 
     def get_callers(self, symbol_name: str, limit: int = 50) -> list[dict]:
         c = self._conn.cursor()
-        c.execute("SELECT * FROM calls WHERE callee_name = ? ORDER BY caller_file, caller_line LIMIT ?",
-                  (symbol_name, limit))
+        c.execute("SELECT * FROM calls WHERE callee_name = ? ORDER BY caller_file, caller_line LIMIT ?", (symbol_name, limit))
         rows = [dict(r) for r in c.fetchall()]
         c.close()
         return rows
@@ -212,8 +237,7 @@ class SymbolIndex:
     def get_callees(self, name: str, file_path: str = "") -> list[dict]:
         c = self._conn.cursor()
         if file_path:
-            c.execute("SELECT * FROM calls WHERE caller_name = ? AND caller_file = ? ORDER BY callee_name",
-                      (name, file_path))
+            c.execute("SELECT * FROM calls WHERE caller_name = ? AND caller_file = ? ORDER BY callee_name", (name, file_path))
         else:
             c.execute("SELECT * FROM calls WHERE caller_name = ? ORDER BY callee_name", (name,))
         rows = [dict(r) for r in c.fetchall()]
@@ -291,8 +315,7 @@ class SymbolIndex:
         c.execute("SELECT COUNT(*) as cnt FROM file_tracking")
         files = c.fetchone()["cnt"]
         c.close()
-        return {"symbols": dict(by_kind), "total_symbols": sum(by_kind.values()),
-                "call_edges": calls, "tracked_files": files}
+        return {"symbols": dict(by_kind), "total_symbols": sum(by_kind.values()), "call_edges": calls, "tracked_files": files}
 
     def close(self):
         with contextlib.suppress(Exception):

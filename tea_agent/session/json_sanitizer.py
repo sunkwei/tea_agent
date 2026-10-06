@@ -224,7 +224,7 @@ def escape_raw_control_chars(s: str) -> str:
 
 
 def fix_invalid_escapes(s: str) -> str:
-    r'''修复 JSON 字符串内部的**非法转义序列**（典型为 \'）。
+    r"""修复 JSON 字符串内部的**非法转义序列**（典型为 \'）。
 
     LLM 把 Python / shell 字面量写进 JSON 时，常按母语习惯转义单引号，
     但 JSON 只允许 \' \" \/ \b \f \n \r \t \u 这 9 种转义前导字符，
@@ -246,7 +246,7 @@ def fix_invalid_escapes(s: str) -> str:
 
     Returns:
         非法转义已修复的文本；无需修改时原样返回
-    '''
+    """
     if not s or "\\" not in s:
         return s
 
@@ -385,7 +385,7 @@ def try_fix_truncated_json(s: str) -> str | None:
     if not s or not s.strip():
         return None
 
-    close_map = {'{': '}', '[': ']'}
+    close_map = {"{": "}", "[": "]"}
 
     def _try_fix_with_stack(text, stack, in_str):
         """尝试用给定的栈状态修复 JSON"""
@@ -395,7 +395,7 @@ def try_fix_truncated_json(s: str) -> str | None:
             m = _TRAILING_BACKSLASH_RE.search(text)
             if m and len(m.group(0)) % 2 == 1:
                 text = text[:-1]
-        suffix = ''.join(close_map[c] for c in reversed(stack))
+        suffix = "".join(close_map[c] for c in reversed(stack))
         if in_str:
             suffix = '"' + suffix
         fixed = text + suffix
@@ -415,7 +415,7 @@ def try_fix_truncated_json(s: str) -> str | None:
             if escape:
                 escape = False
                 continue
-            if ch == '\\':
+            if ch == "\\":
                 escape = True
                 continue
             if ch == '"' and not escape:
@@ -423,9 +423,9 @@ def try_fix_truncated_json(s: str) -> str | None:
                 continue
             if in_str:
                 continue
-            if ch in '{[':
+            if ch in "{[":
                 stack.append(ch)
-            elif ch in '}]' and stack and ((ch == '}' and stack[-1] == '{') or (ch == ']' and stack[-1] == '[')):
+            elif ch in "}]" and stack and ((ch == "}" and stack[-1] == "{") or (ch == "]" and stack[-1] == "[")):
                 stack.pop()
 
         if not stack:
@@ -444,8 +444,8 @@ def try_fix_truncated_json(s: str) -> str | None:
         # 找到最后一个逗号或冒号的位置
         for i in range(len(text) - 1, -1, -1):
             ch = text[i]
-            if ch in ',:':
-                truncated = text[:i].rstrip(',').rstrip(':')
+            if ch in ",:":
+                truncated = text[:i].rstrip(",").rstrip(":")
                 if not truncated:
                     continue
 
@@ -457,7 +457,7 @@ def try_fix_truncated_json(s: str) -> str | None:
                     if t_escape:
                         t_escape = False
                         continue
-                    if c == '\\':
+                    if c == "\\":
                         t_escape = True
                         continue
                     if c == '"' and not t_escape:
@@ -465,9 +465,9 @@ def try_fix_truncated_json(s: str) -> str | None:
                         continue
                     if t_in_str:
                         continue
-                    if c in '{[':
+                    if c in "{[":
                         t_stack.append(c)
-                    elif c in '}]' and t_stack and ((c == '}' and t_stack[-1] == '{') or (c == ']' and t_stack[-1] == '[')):
+                    elif c in "}]" and t_stack and ((c == "}" and t_stack[-1] == "{") or (c == "]" and t_stack[-1] == "[")):
                         t_stack.pop()
 
                 result = _try_fix_with_stack(truncated, t_stack, t_in_str)
@@ -565,20 +565,14 @@ def sanitize_api_messages(messages: list[dict]) -> list[dict]:
                 logger.debug(f"sanitize_api_messages: 修复截断JSON → {fixed[:80]}...")
             else:
                 removed_count += 1
-                logger.debug(
-                    f"sanitize_api_messages: 移除非法tool_call → "
-                    f"func={func.get('name','?')}, args前80={raw_args[:80]}"
-                )
+                logger.debug(f"sanitize_api_messages: 移除非法tool_call → func={func.get('name', '?')}, args前80={raw_args[:80]}")
 
         if valid_calls:
             msg_copy = dict(msg)
             msg_copy["tool_calls"] = valid_calls
             sanitized.append(msg_copy)
         else:
-            sanitized.append({
-                "role": "assistant",
-                "content": msg.get("content", "") or "[工具调用参数损坏，已移除]"
-            })
+            sanitized.append({"role": "assistant", "content": msg.get("content", "") or "[工具调用参数损坏，已移除]"})
 
     if removed_count > 0:
         logger.debug(f"sanitize_api_messages: 共移除 {removed_count} 个非法 tool_call")
@@ -673,7 +667,5 @@ def normalize_tool_args(func_name: str, raw: str) -> str | None:
     except Exception:
         pass
 
-    logger.warning(
-        f"tool call failed: {func_name} 参数 JSON 无法修复，已丢弃: {raw[:100]}"
-    )
+    logger.warning(f"tool call failed: {func_name} 参数 JSON 无法修复，已丢弃: {raw[:100]}")
     return None

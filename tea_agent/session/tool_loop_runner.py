@@ -73,11 +73,7 @@ def _is_rc_passed_back_error(err_str: str) -> bool:
     """
     if not err_str:
         return False
-    return (
-        "reasoning_content" in err_str
-        and "passed back" in err_str
-        and "400" in err_str
-    )
+    return "reasoning_content" in err_str and "passed back" in err_str and "400" in err_str
 
 
 def _is_multimodal_content_rejected(err_str: str) -> bool:
@@ -143,20 +139,21 @@ def _log_content_type_diagnostic(api_messages: list[dict], err_str: str) -> None
                 for f in ("content", "reasoning_content", "name", "tool_call_id", "prefix")
                 if f in m and not isinstance(m[f], (str, type(None)))
             ]
-            for tc in (m.get("tool_calls") or []):
+            for tc in m.get("tool_calls") or []:
                 fn = tc.get("function") or {}
                 if not isinstance(fn.get("arguments"), (str, type(None))):
                     weird.append(f"tool_calls.arguments={type(fn['arguments']).__name__}")
             if weird:
                 anomalies.append(f"  [{i}] role={m.get('role')} {' '.join(weird)}")
             content = m.get("content")
-            if isinstance(content, list) and any(
-                isinstance(p, dict) and p.get("type") == "image_url" for p in content
-            ):
+            if isinstance(content, list) and any(isinstance(p, dict) and p.get("type") == "image_url" for p in content):
                 image_msgs.append(i)
 
-        lines = [f"  错误下标 messages[{idx}]（payload 共 {len(api_messages)} 条）"
-                 if idx is not None else f"  错误未给出下标（payload 共 {len(api_messages)} 条）"]
+        lines = [
+            f"  错误下标 messages[{idx}]（payload 共 {len(api_messages)} 条）"
+            if idx is not None
+            else f"  错误未给出下标（payload 共 {len(api_messages)} 条）"
+        ]
         if idx is not None and 0 <= idx < len(api_messages):
             m = api_messages[idx]
             fields = {k: type(v).__name__ for k, v in m.items()}
@@ -185,9 +182,7 @@ def _log_rc_diagnostic(session, api_messages: list[dict]) -> None:
             _tc = bool(_m.get("tool_calls"))
             _content = _m.get("content") or ""
             if rc is None:
-                lines.append(
-                    f"  [{_i}] tool_calls={_tc} RC=缺失 content_len={len(_content) if isinstance(_content, str) else '?'}"
-                )
+                lines.append(f"  [{_i}] tool_calls={_tc} RC=缺失 content_len={len(_content) if isinstance(_content, str) else '?'}")
             else:
                 lines.append(
                     f"  [{_i}] tool_calls={_tc} RC_len={len(rc)}"
@@ -199,6 +194,7 @@ def _log_rc_diagnostic(session, api_messages: list[dict]) -> None:
 
 
 # ═══ A8: 上下文溢出防线（max_context_tokens × max_tokens 感知）═══
+
 
 def _parse_context_overflow(err_str: str) -> dict | None:
     """解析"模型上下文溢出" 400 错误体（输入 + 输出 > 窗口）。
@@ -311,10 +307,7 @@ def _ensure_within_output_budget(session) -> None:
         ctx._loop_trim_done = False
         if est + out_cap >= max_ctx:
             ctx._token_exhausted = True
-        logger.warning(
-            f"A8 发送前护栏: 估算输入 {est} + 输出 {out_cap} + 余量 > 窗口 {max_ctx}，"
-            f"强制重新裁剪"
-        )
+        logger.warning(f"A8 发送前护栏: 估算输入 {est} + 输出 {out_cap} + 余量 > 窗口 {max_ctx}，强制重新裁剪")
     except Exception:
         logger.debug("A8 发送前护栏失败（隔离）", exc_info=True)
 
@@ -350,10 +343,7 @@ def _apply_context_overflow_recovery(session, info: dict) -> None:
                     f"本会话已自动修正，请同步更新 provider.yaml settings"
                 )
             else:
-                logger.warning(
-                    f"A8 溢出自愈: max_context_tokens 未配置，"
-                    f"改用模型真实窗口 {max_ctx_reported}"
-                )
+                logger.warning(f"A8 溢出自愈: max_context_tokens 未配置，改用模型真实窗口 {max_ctx_reported}")
             ctx.max_context_tokens = max_ctx_reported
             try:
                 from tea_agent.config import get_config
@@ -398,14 +388,13 @@ def _apply_context_overflow_recovery(session, info: dict) -> None:
     try:
         summarizer = getattr(session, "summarizer_comp", None)
         if summarizer is not None:
-            summarizer.summarize_old_history(
-                session.api, session._get_summarize_client, force=True
-            )
+            summarizer.summarize_old_history(session.api, session._get_summarize_client, force=True)
     except Exception:
         logger.debug("A8 紧急强制摘要失败（隔离）", exc_info=True)
 
 
 # ═══ 并行工具执行引擎 ═══════════════════════════════════
+
 
 class ParallelExecutor:
     """并行工具执行引擎。
@@ -419,19 +408,27 @@ class ParallelExecutor:
 
     # 标记为"顺序执行"的工具（读写类，有副作用）
     SERIAL_TOOLS = {
-        "toolkit_edit", "toolkit_self_evolve",
-        "toolkit_file", "toolkit_exec",
-        "toolkit_save", "toolkit_reload", "toolkit_diff",
+        "toolkit_edit",
+        "toolkit_self_evolve",
+        "toolkit_file",
+        "toolkit_exec",
+        "toolkit_save",
+        "toolkit_reload",
+        "toolkit_diff",
     }
 
     # 标记为"并行安全"的工具（只读查询类）
     PARALLEL_SAFE = {
-        "toolkit_file", "toolkit_search", "toolkit_lsp",
+        "toolkit_file",
+        "toolkit_search",
+        "toolkit_lsp",
         "toolkit_config",
-        "toolkit_memory", "toolkit_kb",
+        "toolkit_memory",
+        "toolkit_kb",
         "toolkit_list_provider_models",
         "toolkit_plan",
-        "toolkit_batch_process", "toolkit_code_review",
+        "toolkit_batch_process",
+        "toolkit_code_review",
     }
 
     def __init__(self, max_workers: int = 4, serial_if_any_serial: bool = True):
@@ -462,19 +459,13 @@ class ParallelExecutor:
             return []
 
         # 检查是否需要全部顺序执行
-        has_serial = any(
-            tc.function.name in self.SERIAL_TOOLS
-            for tc in tool_calls
-        )
+        has_serial = any(tc.function.name in self.SERIAL_TOOLS for tc in tool_calls)
 
         if has_serial and self.serial_if_any_serial:
             return [[tc] for tc in tool_calls]  # 每个工具单独一批
 
         # 检查是否全部是并行安全工具
-        all_parallel_safe = all(
-            tc.function.name in self.PARALLEL_SAFE
-            for tc in tool_calls
-        )
+        all_parallel_safe = all(tc.function.name in self.PARALLEL_SAFE for tc in tool_calls)
 
         if all_parallel_safe:
             # 全是只读查询，放一个批次并行执行
@@ -552,8 +543,8 @@ def execute_tools_parallel(
                 }
             except Exception as e:
                 results[idx] = {
-                    "call_id": getattr(tool_calls[idx], 'id', 'unknown'),
-                    "func_name": getattr(tool_calls[idx], 'function.name', 'unknown'),
+                    "call_id": getattr(tool_calls[idx], "id", "unknown"),
+                    "func_name": getattr(tool_calls[idx], "function.name", "unknown"),
                     "result_str": json.dumps({"error": str(e)}),
                     "success": False,
                     "error": str(e),
@@ -563,6 +554,7 @@ def execute_tools_parallel(
 
 
 # ═══ 循环检测器 ═════════════════════════════════════════
+
 
 class LoopDetector:
     """循环检测器 - 检测 LLM 重复输出/工具调用。
@@ -587,6 +579,7 @@ class LoopDetector:
 
     def _hash_tool_call(self, name: str, args: str) -> str:
         import hashlib
+
         try:
             args_dict = json.loads(args) if args else {}
             args_normalized = json.dumps(args_dict, sort_keys=True)
@@ -621,21 +614,13 @@ class LoopDetector:
         if current_hashes:
             current_hash_str = "|".join(current_hashes)
             if self._tool_hashes and current_hash_str == self._tool_hashes[-1]:
-                result = {
-                    "is_loop": True,
-                    "type": "tool_repeat",
-                    "detail": "工具调用与上一轮完全相同（连续重复）"
-                }
+                result = {"is_loop": True, "type": "tool_repeat", "detail": "工具调用与上一轮完全相同（连续重复）"}
 
         # ── 检测 2: 输出内容与上一轮高度相似 ──
         if not result["is_loop"] and content and self._contents:
             sim = self._text_similarity(content, self._contents[-1])
             if sim >= self.threshold:
-                result = {
-                    "is_loop": True,
-                    "type": "content_repeat",
-                    "detail": f"输出内容与上一轮相似度 {sim:.0%}"
-                }
+                result = {"is_loop": True, "type": "content_repeat", "detail": f"输出内容与上一轮相似度 {sim:.0%}"}
 
         # ── 检测 3: 工具序列循环 ──
         if not result["is_loop"] and len(self._tool_hashes) >= 3:
@@ -643,39 +628,47 @@ class LoopDetector:
 
             if not result["is_loop"] and len(self._tool_hashes) >= 3:
                 last_three_hashes = self._tool_hashes[-3:]
-                if (len(last_three_hashes) == 3 and
-                    current_hash_str and
-                    all(h == current_hash_str for h in last_three_hashes)):
-                    result = {
-                        "is_loop": True,
-                        "type": "sequence_loop",
-                        "detail": f"检测到连续相同工具调用模式: {'→'.join(current_names)}"
-                    }
+                if len(last_three_hashes) == 3 and current_hash_str and all(h == current_hash_str for h in last_three_hashes):
+                    result = {"is_loop": True, "type": "sequence_loop", "detail": f"检测到连续相同工具调用模式: {'→'.join(current_names)}"}
 
             if not result["is_loop"] and len(self._tool_hashes) >= 3:
                 recent_hashes = self._tool_hashes[-3:]
-                if (len(recent_hashes) == 3 and
-                    current_hash_str and recent_hashes[0] and recent_hashes[1] and recent_hashes[2] and
-                    current_hash_str == recent_hashes[1] and recent_hashes[0] == recent_hashes[2] and
-                    current_hash_str != recent_hashes[2]):
+                if (
+                    len(recent_hashes) == 3
+                    and current_hash_str
+                    and recent_hashes[0]
+                    and recent_hashes[1]
+                    and recent_hashes[2]
+                    and current_hash_str == recent_hashes[1]
+                    and recent_hashes[0] == recent_hashes[2]
+                    and current_hash_str != recent_hashes[2]
+                ):
                     result = {
                         "is_loop": True,
                         "type": "sequence_loop",
-                        "detail": f"检测到交替循环模式: {'→'.join(current_names)} ↔ {'→'.join(self._tool_names[-3])}"
+                        "detail": f"检测到交替循环模式: {'→'.join(current_names)} ↔ {'→'.join(self._tool_names[-3])}",
                     }
 
             if not result["is_loop"] and len(self._tool_hashes) >= 6:
                 recent_hashes = self._tool_hashes[-5:]
-                if (len(recent_hashes) == 5 and
-                    current_hash_str and recent_hashes[0] and recent_hashes[1] and recent_hashes[2] and recent_hashes[3] and recent_hashes[4] and
-                    current_hash_str == recent_hashes[0] == recent_hashes[3] and
-                    recent_hashes[1] == recent_hashes[4] and
-                    recent_hashes[2] == current_hash_str and
-                    current_hash_str != recent_hashes[1] and recent_hashes[1] != recent_hashes[2]):
+                if (
+                    len(recent_hashes) == 5
+                    and current_hash_str
+                    and recent_hashes[0]
+                    and recent_hashes[1]
+                    and recent_hashes[2]
+                    and recent_hashes[3]
+                    and recent_hashes[4]
+                    and current_hash_str == recent_hashes[0] == recent_hashes[3]
+                    and recent_hashes[1] == recent_hashes[4]
+                    and recent_hashes[2] == current_hash_str
+                    and current_hash_str != recent_hashes[1]
+                    and recent_hashes[1] != recent_hashes[2]
+                ):
                     result = {
                         "is_loop": True,
                         "type": "sequence_loop",
-                        "detail": f"检测到三元循环模式: {'→'.join(current_names)} → {'→'.join(self._tool_names[-3])} → {'→'.join(self._tool_names[-2])}"
+                        "detail": f"检测到三元循环模式: {'→'.join(current_names)} → {'→'.join(self._tool_names[-3])} → {'→'.join(self._tool_names[-2])}",
                     }
 
         # ── 记录本轮 ──
@@ -684,9 +677,9 @@ class LoopDetector:
         self._tool_names.append(current_names)
 
         if len(self._tool_hashes) > self.window * 2:
-            self._tool_hashes = self._tool_hashes[-self.window:]
-            self._contents = self._contents[-self.window:]
-            self._tool_names = self._tool_names[-self.window:]
+            self._tool_hashes = self._tool_hashes[-self.window :]
+            self._contents = self._contents[-self.window :]
+            self._tool_names = self._tool_names[-self.window :]
 
         return result
 
@@ -697,6 +690,7 @@ class LoopDetector:
 
 
 # ═══ 工具摘要格式化 ═════════════════════════════════════
+
 
 def _format_tool_summary(tool_calls) -> str:
     """构造多行工具调用摘要用于回调显示。"""
@@ -726,14 +720,17 @@ def _format_tool_summary(tool_calls) -> str:
 
 _skill_validate_cache: dict = {}
 
+
 def _get_validate_rules(session) -> dict:
-    _rules = getattr(session.context, '_skill_validate_rules', None) or {}
+    _rules = getattr(session.context, "_skill_validate_rules", None) or {}
     return _rules
+
 
 def _validate_tool_call(tool_name: str, rules: dict) -> tuple:
     if not rules:
         return True, ""
     return True, ""
+
 
 def _validate_output_format(content: str, rules: dict) -> tuple:
     if not rules or not content:
@@ -750,6 +747,7 @@ def _validate_output_format(content: str, rules: dict) -> tuple:
     if rules.get("output_format") == "json":
         try:
             import json as _json
+
             _json.loads(content)
         except (ValueError, TypeError):
             warnings.append("⚠️ 输出应为 JSON 格式但解析失败")
@@ -757,6 +755,7 @@ def _validate_output_format(content: str, rules: dict) -> tuple:
 
 
 # ═══ 主工具循环 ═════════════════════════════════════════
+
 
 def _record_interruption_anchor(session, iterations: int, last_tool_names: list, full_reply: str) -> None:
     """M1/M2/M4: 记录打断锚点到内存（session._last_interruption）+ 持久化事件表。
@@ -861,16 +860,19 @@ def execute_tool_loop(session, context: dict) -> dict:
             api_messages = session._build_api_messages()
             eff = session._get_effective_params("main")
             response = session.api.create_chat_stream(
-                api_messages, tools=[],
+                api_messages,
+                tools=[],
                 temperature=eff.get("temperature"),
                 max_tokens=_request_max_tokens(session, eff),
                 top_p=eff.get("top_p"),
                 request_timeout=120,
             )
             content, _, reasoning = session._process_stream_with_reasoning(
-                response, callback,
+                response,
+                callback,
                 retry_factory=lambda: session.api.create_chat_stream(
-                    api_messages, tools=[],
+                    api_messages,
+                    tools=[],
                     temperature=eff.get("temperature"),
                     max_tokens=_request_max_tokens(session, eff),
                     top_p=eff.get("top_p"),
@@ -904,7 +906,7 @@ def execute_tool_loop(session, context: dict) -> dict:
     # 参数非法自纠：畸形 tool_call 轮不直接终止回合，注入失败原因反馈让模型
     # 用合法 JSON 重发（计入迭代预算）；连续畸形超过上限才终止并标记 error
     invalid_args_retries = 0
-    _MAX_INVALID_ARGS_RETRIES = 2
+    _MAX_INVALID_ARGS_RETRIES = 2  # noqa: N806 — 局部上限常量，与模块级常量同名同义
 
     while iterations < session.max_iterations + session._extra_iterations:
         if session.interrupted:
@@ -947,7 +949,8 @@ def execute_tool_loop(session, context: dict) -> dict:
             try:
                 eff = session._get_effective_params("main")
                 response = session.api.create_chat_stream(
-                    api_messages, session.tools,
+                    api_messages,
+                    session.tools,
                     temperature=eff.get("temperature"),
                     max_tokens=_request_max_tokens(session, eff),
                     top_p=eff.get("top_p"),
@@ -958,9 +961,9 @@ def execute_tool_loop(session, context: dict) -> dict:
             except Exception as e:
                 err_str = str(e)
                 if "429" in err_str and _retry < max_retries:
-                    wait_sec = retry_base_delay * (2 ** _retry)
-                    logger.warning(f"⚠️ API 429 速率限制，{wait_sec}s 后重试 ({_retry+1}/{max_retries})")
-                    callback(f"\n⚠️ 请求频率过高，{wait_sec}秒后自动重试 ({_retry+1}/{max_retries})...\n")
+                    wait_sec = retry_base_delay * (2**_retry)
+                    logger.warning(f"⚠️ API 429 速率限制，{wait_sec}s 后重试 ({_retry + 1}/{max_retries})")
+                    callback(f"\n⚠️ 请求频率过高，{wait_sec}秒后自动重试 ({_retry + 1}/{max_retries})...\n")
                     time.sleep(wait_sec)
                     continue
                 ovf = _parse_context_overflow(err_str)
@@ -971,32 +974,21 @@ def execute_tool_loop(session, context: dict) -> dict:
                     ctx_overflow_recovery_used = True
                     _apply_context_overflow_recovery(session, ovf)
                     _cap = int(getattr(session.context, "_output_cap", 0) or 0)
-                    callback(
-                        f"\n⚠️ 上下文溢出（输入+输出超过模型窗口）："
-                        f"已自动修正窗口并激进压缩历史，max_tokens 钳制到 {_cap} 重试…\n"
-                    )
+                    callback(f"\n⚠️ 上下文溢出（输入+输出超过模型窗口）：已自动修正窗口并激进压缩历史，max_tokens 钳制到 {_cap} 重试…\n")
                     api_messages = session._build_api_messages()
                     continue
-                if (
-                    "image input" in err_str.lower()
-                    or _is_multimodal_content_rejected(err_str)
-                ) and session.context.supports_vision:
-                    logger.warning(
-                        f"请求被端点拒绝（多模态 content 类型不符），"
-                        f"本次按纯文本重建重试: {_extract_api_error_detail(e)}"
-                    )
+                if ("image input" in err_str.lower() or _is_multimodal_content_rejected(err_str)) and session.context.supports_vision:
+                    logger.warning(f"请求被端点拒绝（多模态 content 类型不符），本次按纯文本重建重试: {_extract_api_error_detail(e)}")
                     # 现场诊断：把 400 只给的下标翻译成 role + 字段类型，下次可直接定位
                     _log_content_type_diagnostic(api_messages, err_str)
-                    callback(
-                        "\n⚠️ 本次请求因多模态内容被端点拒绝，已按纯文本重建后重试"
-                        "（图片内容本次跳过）。\n"
-                    )
+                    callback("\n⚠️ 本次请求因多模态内容被端点拒绝，已按纯文本重建后重试（图片内容本次跳过）。\n")
                     session.context.supports_vision = False
                     api_messages = session._build_api_messages()
                     try:
                         eff = session._get_effective_params("main")
                         response = session.api.create_chat_stream(
-                            api_messages, session.tools,
+                            api_messages,
+                            session.tools,
                             temperature=eff.get("temperature"),
                             max_tokens=_request_max_tokens(session, eff),
                             top_p=eff.get("top_p"),
@@ -1005,10 +997,7 @@ def execute_tool_loop(session, context: dict) -> dict:
                         )
                     except Exception as e2:
                         error_msg = f"API调用错误: {e2}"
-                        logger.warning(
-                            f"API调用失败: model={session.context.model}, iteration={iterations}, "
-                            f"detail={_extract_api_error_detail(e2)}"
-                        )
+                        logger.warning(f"API调用失败: model={session.context.model}, iteration={iterations}, detail={_extract_api_error_detail(e2)}")
                         callback(error_msg)
                         session.add_assistant_message(full_reply + error_msg)
                         session.tools_comp.collect_api_error_round(full_reply + error_msg)
@@ -1023,27 +1012,15 @@ def execute_tool_loop(session, context: dict) -> dict:
                     _log_rc_diagnostic(session, api_messages)
                     rc_recovery_used = True
                     session.context._rc400_recovery = True
-                    logger.warning(
-                        f"DeepSeek RC 回传 400 (iteration={iterations})："
-                        f"自动降级为无思考重试（本回合剩余请求保持 thinking 关闭）"
-                    )
+                    logger.warning(f"DeepSeek RC 回传 400 (iteration={iterations})：自动降级为无思考重试（本回合剩余请求保持 thinking 关闭）")
                     callback("\n⚠️ DeepSeek 思考模式 RC 校验失败，已自动降级为无思考模式重试…\n")
                     continue
                 else:
                     error_msg = f"API调用错误: {e}"
-                    if (
-                        _parse_context_overflow(err_str) is not None
-                        and ctx_overflow_recovery_used
-                    ):
+                    if _parse_context_overflow(err_str) is not None and ctx_overflow_recovery_used:
                         # 自愈后仍溢出：本地裁剪手段已用尽，给出可操作的处置提示
-                        error_msg += (
-                            "（上下文溢出自愈后仍失败：请调小 config 的 max_tokens / "
-                            "max_context_tokens，或开启新会话继续）"
-                        )
-                    logger.warning(
-                        f"API调用失败: model={session.context.model}, iteration={iterations}, "
-                        f"detail={_extract_api_error_detail(e)}"
-                    )
+                        error_msg += "（上下文溢出自愈后仍失败：请调小 config 的 max_tokens / max_context_tokens，或开启新会话继续）"
+                    logger.warning(f"API调用失败: model={session.context.model}, iteration={iterations}, detail={_extract_api_error_detail(e)}")
                     callback(error_msg)
                     session.add_assistant_message(full_reply + error_msg)
                     session.tools_comp.collect_api_error_round(full_reply + error_msg)
@@ -1058,9 +1035,11 @@ def execute_tool_loop(session, context: dict) -> dict:
             return {"full_reply": full_reply + error_msg, "used_tools": used_tools, "error": "429 rate limit exhausted"}
 
         content, tool_calls_data, reasoning_content = session._process_stream_with_reasoning(
-            response, callback,
-            retry_factory=lambda: session.api.create_chat_stream(
-                api_messages, session.tools,
+            response,
+            callback,
+            retry_factory=lambda api_messages=api_messages, eff=eff, rc_recovery_used=rc_recovery_used: session.api.create_chat_stream(
+                api_messages,
+                session.tools,
                 temperature=eff.get("temperature"),
                 max_tokens=_request_max_tokens(session, eff),
                 top_p=eff.get("top_p"),
@@ -1069,10 +1048,7 @@ def execute_tool_loop(session, context: dict) -> dict:
             ),
         )
         full_reply += content
-        logger.debug(
-            f"model response: content_len={len(content)}, reasoning_len={len(reasoning_content)}, "
-            f"tool_calls_data={len(tool_calls_data)}"
-        )
+        logger.debug(f"model response: content_len={len(content)}, reasoning_len={len(reasoning_content)}, tool_calls_data={len(tool_calls_data)}")
         _emit_usage()  # 每轮 LLM 响应完成 → 实时推送累计 usage
 
         valid_tool_calls = session.tools_comp.parse_tool_calls_from_stream(tool_calls_data)
@@ -1081,14 +1057,11 @@ def execute_tool_loop(session, context: dict) -> dict:
         # （实测正常 p90≈21），不设上限会在一轮内烧掉数千次工具执行。
         # 超限直接截断并告警；被截断的调用不进 assistant 消息历史，
         # 模型不会期待其结果（保持上下文一致），下轮可重新发起合理数量的调用。
-        _MAX_TC_PER_ROUND = 64
+        _MAX_TC_PER_ROUND = 64  # noqa: N806 — 局部上限常量，与模块级常量同名同义
         if len(valid_tool_calls) > _MAX_TC_PER_ROUND:
             _total = len(valid_tool_calls)
             valid_tool_calls = valid_tool_calls[:_MAX_TC_PER_ROUND]
-            _warn = (
-                f"[警告] 单轮工具调用 {_total} 个，超过上限 {_MAX_TC_PER_ROUND}，"
-                f"已截断保留前 {_MAX_TC_PER_ROUND} 个（疑似模型输出退化）"
-            )
+            _warn = f"[警告] 单轮工具调用 {_total} 个，超过上限 {_MAX_TC_PER_ROUND}，已截断保留前 {_MAX_TC_PER_ROUND} 个（疑似模型输出退化）"
             logger.warning(_warn)
             callback(_warn)
 
@@ -1104,21 +1077,17 @@ def execute_tool_loop(session, context: dict) -> dict:
             callback("[THINK_DONE]")
 
             if on_status:
-                on_status(f"⏳ 生成中... 调用工具第{iterations+1}轮 (ESC 打断)")
+                on_status(f"⏳ 生成中... 调用工具第{iterations + 1}轮 (ESC 打断)")
 
             session.tools_comp.collect_assistant_tool_calls_round(content, valid_tool_calls, reasoning_content)
 
             assistant_msg = {
                 "role": "assistant",
                 "content": session._cap_message_text(content) if content else None,
-                "tool_calls": [{
-                    "id": tc.id,
-                    "type": "function",
-                    "function": {
-                        "name": tc.function.name,
-                        "arguments": tc.function.arguments
-                    }
-                } for tc in valid_tool_calls]
+                "tool_calls": [
+                    {"id": tc.id, "type": "function", "function": {"name": tc.function.name, "arguments": tc.function.arguments}}
+                    for tc in valid_tool_calls
+                ],
             }
             if session.context.supports_reasoning:
                 # DeepSeek V4 思考模式要求：带 tools 的请求必须把 reasoning_content
@@ -1138,51 +1107,40 @@ def execute_tool_loop(session, context: dict) -> dict:
             if enable_parallel and parallel_executor:
                 # 分析依赖，分组为可并行批次
                 batches = parallel_executor.analyze_dependencies(valid_tool_calls)
-                logger.info(f"🔀 工具执行计划: {len(batches)} 批次, "
-                           f"总 {len(valid_tool_calls)} 个工具调用")
+                logger.info(f"🔀 工具执行计划: {len(batches)} 批次, 总 {len(valid_tool_calls)} 个工具调用")
 
                 for batch_idx, batch in enumerate(batches):
                     if len(batch) == 1:
                         # 单工具 — 顺序执行
                         tc = batch[0]
-                        call_id, func_name, result_str = _execute_single_tool(
-                            session, tc, callback, iterations, on_status
-                        )
+                        call_id, func_name, result_str = _execute_single_tool(session, tc, callback, iterations, on_status)
                         session.tools_comp.collect_tool_call_round(call_id, result_str)
                         _emit_tool_results(callback, result_str)
                     else:
                         # 多工具 — 并行执行
-                        logger.info(f"⚡ 并行执行批次 {batch_idx + 1}: "
-                                   f"{[tc.function.name for tc in batch]}")
+                        logger.info(f"⚡ 并行执行批次 {batch_idx + 1}: {[tc.function.name for tc in batch]}")
                         callback(f"[PARALLEL:{','.join(tc.function.name for tc in batch)}]")
 
                         results = execute_tools_parallel(
                             batch,
-                            lambda tc: _execute_single_tool(
-                                session, tc, callback, iterations, on_status
-                            ),
+                            lambda tc, iterations=iterations: _execute_single_tool(session, tc, callback, iterations, on_status),
                             max_workers=parallel_executor.max_workers,
                         )
 
-                        for r_idx, result in enumerate(results):
+                        for result in results:
                             if result["success"]:
-                                session.tools_comp.collect_tool_call_round(
-                                    result["call_id"], result["result_str"]
-                                )
+                                session.tools_comp.collect_tool_call_round(result["call_id"], result["result_str"])
                                 _emit_tool_results(callback, result["result_str"])
                             else:
                                 session.tools_comp.collect_tool_call_round(
-                                    result["call_id"],
-                                    json.dumps({"error": result.get("error", "Unknown error")})
+                                    result["call_id"], json.dumps({"error": result.get("error", "Unknown error")})
                                 )
                                 callback(f"[TOOL_RESULT:ERROR:{result.get('error', '')[:120]}]")
                             callback("[TOOL_DONE]")
             else:
                 # ═══ 旧版：顺序执行 ═══════════════════════
                 for tc in valid_tool_calls:
-                    call_id, func_name, result_str = _execute_single_tool(
-                        session, tc, callback, iterations, on_status
-                    )
+                    call_id, func_name, result_str = _execute_single_tool(session, tc, callback, iterations, on_status)
                     session.tools_comp.collect_tool_call_round(call_id, result_str)
                     _emit_tool_results(callback, result_str)
 
@@ -1193,7 +1151,7 @@ def execute_tool_loop(session, context: dict) -> dict:
             tool_calls_for_check = [(tc.function.name, tc.function.arguments) for tc in valid_tool_calls]
             loop_result = loop_detector.check_and_record(content, tool_calls_for_check)
             if loop_result["is_loop"]:
-                loop_count = getattr(session, '_loop_count', 0) + 1
+                loop_count = getattr(session, "_loop_count", 0) + 1
                 session._loop_count = loop_count
                 logger.warning(f"检测到循环: {loop_result['type']} - {loop_result['detail']} (连续第 {loop_count} 次)")
 
@@ -1219,15 +1177,14 @@ def execute_tool_loop(session, context: dict) -> dict:
             except Exception:
                 pending_ctxs = []
             if pending_ctxs:
-                injected_text = "\n\n".join(
-                    f"[上下文注入] {c}" if isinstance(c, str) else f"[上下文注入] {c}"
-                    for c in pending_ctxs
-                )
+                injected_text = "\n\n".join(f"[上下文注入] {c}" if isinstance(c, str) else f"[上下文注入] {c}" for c in pending_ctxs)
                 # S2: 注入文本入库定型，防止超长注入进入 _progressive_trim 二次改写候选
-                session.context.messages.append({
-                    "role": "user",
-                    "content": session._cap_message_text(injected_text) if injected_text else injected_text,
-                })
+                session.context.messages.append(
+                    {
+                        "role": "user",
+                        "content": session._cap_message_text(injected_text) if injected_text else injected_text,
+                    }
+                )
                 logger.info(f"additionalContexts 注入 {len(pending_ctxs)} 条 → 下一轮模型请求")
 
             if iterations >= session.max_iterations + session._extra_iterations:
@@ -1278,14 +1235,11 @@ def execute_tool_loop(session, context: dict) -> dict:
             # 自纠重试」：反馈失败原因与参数片段，模型可用合法 JSON 重发；重试
             # 计入迭代预算并设独立上限，超限才终止并标记 error（调用方仍可诊断）。
             dropped = len(tool_calls_data)
-            names = "、".join(
-                str(tc.get("name") or tc.get("function", {}).get("name") or "?") for tc in tool_calls_data
-            )
+            names = "、".join(str(tc.get("name") or tc.get("function", {}).get("name") or "?") for tc in tool_calls_data)
             invalid_args_retries += 1
             if invalid_args_retries <= _MAX_INVALID_ARGS_RETRIES:
                 bad_samples = " | ".join(
-                    str(tc.get("arguments") or tc.get("function", {}).get("arguments") or "")[:160]
-                    for tc in tool_calls_data[:2]
+                    str(tc.get("arguments") or tc.get("function", {}).get("arguments") or "")[:160] for tc in tool_calls_data[:2]
                 )
                 feedback = (
                     f"[系统提示] 上一轮你发出的 {dropped} 个工具调用（{names}）参数不是合法 JSON，"
@@ -1298,10 +1252,7 @@ def execute_tool_loop(session, context: dict) -> dict:
                     f"全部 tool_call 参数不可修复，已丢弃 {dropped} 个: {names}，注入反馈自纠重试 "
                     f"({invalid_args_retries}/{_MAX_INVALID_ARGS_RETRIES})"
                 )
-                callback(
-                    f"⚠️ {dropped} 个工具调用参数非法，已反馈模型自纠重试"
-                    f"（{invalid_args_retries}/{_MAX_INVALID_ARGS_RETRIES}）"
-                )
+                callback(f"⚠️ {dropped} 个工具调用参数非法，已反馈模型自纠重试（{invalid_args_retries}/{_MAX_INVALID_ARGS_RETRIES}）")
                 # 重试计入迭代预算：上限守卫仍兜底，畸形轮不会造成无限循环
                 iterations += 1
                 session.context.messages.append({"role": "user", "content": feedback})
@@ -1369,6 +1320,7 @@ def execute_tool_loop(session, context: dict) -> dict:
 
 # ═══ 辅助函数 ═══════════════════════════════════════════
 
+
 def _execute_single_tool(session, tc, callback, iterations, on_status) -> tuple:
     """执行单个工具调用。"""
     _asctime = time.strftime("%Y-%m-%d %H:%M:%S")
@@ -1378,6 +1330,7 @@ def _execute_single_tool(session, tc, callback, iterations, on_status) -> tuple:
     if tc.function.arguments:
         try:
             import json as _json
+
             _args = _json.loads(tc.function.arguments) if isinstance(tc.function.arguments, str) else tc.function.arguments
             if isinstance(_args, dict):
                 _parts = []
@@ -1399,7 +1352,7 @@ def _execute_single_tool(session, tc, callback, iterations, on_status) -> tuple:
                 _raw = _raw[:120] + "…"
             callback(f"[TOOL_ARG:{_raw}]")
 
-    logger.info(f"    tool call #{iterations+1}: {tc.function.name}, args_len={len(tc.function.arguments)}")
+    logger.info(f"    tool call #{iterations + 1}: {tc.function.name}, args_len={len(tc.function.arguments)}")
 
     # SKILL 校验
     _rules = _get_validate_rules(session)
@@ -1407,20 +1360,17 @@ def _execute_single_tool(session, tc, callback, iterations, on_status) -> tuple:
     if not _allowed:
         logger.warning(f"SKILL 校验拦截: {tc.function.name} — {_reason}")
         callback(f"\n⚠️ {_reason}\n")
-        _blocked_result = json.dumps({
-            "error": "tool_call_blocked",
-            "reason": _reason,
-            "message": "该工具调用被当前 SKILL.md 规则拦截。"
-        })
+        _blocked_result = json.dumps({"error": "tool_call_blocked", "reason": _reason, "message": "该工具调用被当前 SKILL.md 规则拦截。"})
         callback("[TOOL_DONE]")
         return tc.id, tc.function.name, _blocked_result
 
     call_id, func_name, result_str = session.tools_comp.execute_tool_call(tc)
-    logger.debug(f"tool result #{iterations+1}: {func_name}, result_len={len(result_str) if result_str else 0}")
+    logger.debug(f"tool result #{iterations + 1}: {func_name}, result_len={len(result_str) if result_str else 0}")
 
     # DAG 可视化检测
     try:
         import ast as _ast_mod
+
         _parsed = _ast_mod.literal_eval(result_str) if isinstance(result_str, str) else result_str
         if isinstance(_parsed, dict) and _parsed.get("dag_viz_id"):
             callback(f"[DAG_VIZ:{_parsed['dag_viz_id']}]")

@@ -24,10 +24,7 @@ HISTORY_SUMMARIZE_SYSTEM = (
     "同一文件的最新状态覆盖旧状态；总长 300 字以内。"
 )
 
-HISTORY_SUMMARIZE_USER = (
-    "{existing}新增对话内容：\n{old_text}\n\n"
-    "请输出合并后的结构化四段摘要（进展/文件/待办/上下文）："
-)
+HISTORY_SUMMARIZE_USER = "{existing}新增对话内容：\n{old_text}\n\n请输出合并后的结构化四段摘要（进展/文件/待办/上下文）："
 
 # ── Topic 摘要 Prompt ──
 
@@ -45,10 +42,7 @@ TOPIC_SUMMARY_SYSTEM = (
     "坏的示例：'我们根据用户消息生成摘要'、'主题 06-08 20:03'、'这个项目的进展'"
 )
 
-TOPIC_SUMMARY_USER_TEMPLATE = (
-    "用户最新消息：\n\n{user_msgs}\n\n"
-    "直接输出不超过20字的摘要标题，禁止任何解释："
-)
+TOPIC_SUMMARY_USER_TEMPLATE = "用户最新消息：\n\n{user_msgs}\n\n直接输出不超过20字的摘要标题，禁止任何解释："
 
 # ── 系统提示词 ──
 
@@ -97,17 +91,31 @@ SMALL_MODEL_CONSTRAINT = (
 
 # 匹配模式：模型名含以下关键词时视为小模型
 _SMALL_MODEL_PATTERNS = [
-    "1.3b", "1.5b", "2.7b", "3.8b", "4b",
-    "tiny", "small", "mini", "nano", "pico",
-    "phi-1", "phi-2",
+    "1.3b",
+    "1.5b",
+    "2.7b",
+    "3.8b",
+    "4b",
+    "tiny",
+    "small",
+    "mini",
+    "nano",
+    "pico",
+    "phi-1",
+    "phi-2",
     "deepseek-coder-1.3b",
-    "gemma-2b", "gemma-7b",
-    "llama-2-7b", "llama-3.2-1b", "llama-3.2-3b",
+    "gemma-2b",
+    "gemma-7b",
+    "llama-2-7b",
+    "llama-3.2-1b",
+    "llama-3.2-3b",
     "mistral-7b",
     "starcoder",
-    "codegemma-2b", "codegemma-7b",
+    "codegemma-2b",
+    "codegemma-7b",
     "codellama-7b",
-    "bloom-3b", "bloom-7b",
+    "bloom-3b",
+    "bloom-7b",
     "mpt-7b",
     "falcon-7b",
 ]
@@ -136,7 +144,7 @@ def is_small_model(model_name: str) -> bool:
             return True
 
     # 规则 2: 匹配 "Nb" 模式（N < 14 视为小模型，即 14B 及以下）
-    m = re.search(r'(\d+\.?\d*)b', name_lower)
+    m = re.search(r"(\d+\.?\d*)b", name_lower)
     if m:
         try:
             param_count = float(m.group(1))
@@ -162,6 +170,7 @@ def get_skill_validate_rules(skill_name: str) -> dict | None:
     """
     try:
         import yaml
+
         # 搜索路径：包内 → 用户级 → 项目级
         search_dirs = [
             Path(__file__).parent.parent / "skills" / skill_name,

@@ -21,17 +21,13 @@ _QUALIFIED = r"[A-Za-z_][A-Za-z0-9_]*(?:\.[A-Za-z_][A-Za-z0-9_]*)?"
 _UNSAFE_SQL_RE = re.compile(r";|--|/\*|\*/")
 # WHERE 片段：`列 运算符 值`，值可为 ?（参数化）/ 数字 / 引号字面量 / NULL / 括号组
 _WHERE_OP = r"(?:=|!=|<>|>=|<=|>|<|LIKE|GLOB|NOT\s+LIKE|NOT\s+GLOB)"
-_WHERE_VAL = (r"(?:\?|-?\d+(?:\.\d+)?|NULL|CURRENT_TIMESTAMP|"
-              r"'(?:[^']|'')*'|\"(?:[^\"]|\"\")*\"|\([^()]*\))")
-_WHERE_FRAG_RE = re.compile(
-    rf"^{_QUALIFIED}\s*{_WHERE_OP}\s*{_WHERE_VAL}$", re.IGNORECASE
+_WHERE_VAL = (
+    r"(?:\?|-?\d+(?:\.\d+)?|NULL|CURRENT_TIMESTAMP|"
+    r"'(?:[^']|'')*'|\"(?:[^\"]|\"\")*\"|\([^()]*\))"
 )
-_WHERE_NULL_RE = re.compile(
-    rf"^{_QUALIFIED}\s+IS\s+(?:NOT\s+)?NULL$", re.IGNORECASE
-)
-_WHERE_IN_RE = re.compile(
-    rf"^{_QUALIFIED}\s+(?:NOT\s+)?IN\s*\([^();]*\)$", re.IGNORECASE
-)
+_WHERE_FRAG_RE = re.compile(rf"^{_QUALIFIED}\s*{_WHERE_OP}\s*{_WHERE_VAL}$", re.IGNORECASE)
+_WHERE_NULL_RE = re.compile(rf"^{_QUALIFIED}\s+IS\s+(?:NOT\s+)?NULL$", re.IGNORECASE)
+_WHERE_IN_RE = re.compile(rf"^{_QUALIFIED}\s+(?:NOT\s+)?IN\s*\([^();]*\)$", re.IGNORECASE)
 
 
 def safe_ident(name, allowed=None) -> str:
@@ -131,12 +127,8 @@ def safe_where_clause(fragments, joiner=" AND ", wrap=False) -> str:
     parts = []
     for f in fragments:
         s = str(f).strip()
-        if (_UNSAFE_SQL_RE.search(s)
-                or not (_WHERE_FRAG_RE.match(s) or _WHERE_NULL_RE.match(s)
-                        or _WHERE_IN_RE.match(s))):
-            raise ValueError(
-                f"非法 WHERE 片段: {f!r}（仅允许『列 运算符 值』，值须为 ? 或字面量）"
-            )
+        if _UNSAFE_SQL_RE.search(s) or not (_WHERE_FRAG_RE.match(s) or _WHERE_NULL_RE.match(s) or _WHERE_IN_RE.match(s)):
+            raise ValueError(f"非法 WHERE 片段: {f!r}（仅允许『列 运算符 值』，值须为 ? 或字面量）")
         parts.append(f"({s})" if wrap else s)
     return joiner.join(parts) if parts else "1=1"
 

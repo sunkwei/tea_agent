@@ -1,5 +1,5 @@
-"""
-"""
+""" """
+
 import json
 import logging
 
@@ -13,8 +13,6 @@ from ._sql_safety import safe_placeholders, safe_where_clause
 __all__ = ["ConversationStore", "l0_content_hash"]
 
 logger = logging.getLogger("Storage.Conversations")
-
-
 
 
 class ConversationStore(L0SnapshotStoreMixin, ImageStoreMixin, StoreComponent):
@@ -76,13 +74,10 @@ class ConversationStore(L0SnapshotStoreMixin, ImageStoreMixin, StoreComponent):
 
         # P2 事件溯源：turn/start + user/message（审计事实源）
         self._log_event(topic_id, "turn/start", {}, conversation_id=conv_id)
-        self._log_event(topic_id, "user/message",
-                        {"content": user_msg_text, "raw": user_msg_json},
-                        conversation_id=conv_id)
+        self._log_event(topic_id, "user/message", {"content": user_msg_text, "raw": user_msg_json}, conversation_id=conv_id)
         return conv_id
 
-    def save_msg(self, topic_id: str, user_msg, ai_msg: str, is_func: bool,
-                 update_active_cb=None) -> str:
+    def save_msg(self, topic_id: str, user_msg, ai_msg: str, is_func: bool, update_active_cb=None) -> str:
         """一次性写入完整对话（``create_turn`` + 定稿的便捷封装，兼容旧调用方）。
 
         Args:
@@ -112,9 +107,9 @@ class ConversationStore(L0SnapshotStoreMixin, ImageStoreMixin, StoreComponent):
                 logger.exception("update_active_cb failed (isolated)")
         return conv_id
 
-    def append_round(self, conversation_id: str, round_num: int, role: str,
-                     content: str = "", tool_calls=None, tool_call_id=None,
-                     reasoning_content: str = "") -> bool:
+    def append_round(
+        self, conversation_id: str, round_num: int, role: str, content: str = "", tool_calls=None, tool_call_id=None, reasoning_content: str = ""
+    ) -> bool:
         """实时追加单轮明细（append-only，幂等）。
 
         ``reasoning_content`` 独立成列：此前它被拼进 content 的 ``[思考] `` 前缀，
@@ -140,8 +135,7 @@ class ConversationStore(L0SnapshotStoreMixin, ImageStoreMixin, StoreComponent):
             # 幂等键 = (round_num, role, tool_call_id)：round_num 单独不足以定位一行 ——
             # 既有 API 允许同一 round_num 存在多行（如 assistant + 其 tool 结果）。
             c.execute(
-                "SELECT 1 FROM agent_rounds WHERE conversation_id = ? AND round_num = ? "
-                "AND role = ? AND COALESCE(tool_call_id, '') = ? LIMIT 1",
+                "SELECT 1 FROM agent_rounds WHERE conversation_id = ? AND round_num = ? AND role = ? AND COALESCE(tool_call_id, '') = ? LIMIT 1",
                 (conversation_id, int(round_num), role or "", tool_call_id or ""),
             )
             if c.fetchone():
@@ -151,8 +145,7 @@ class ConversationStore(L0SnapshotStoreMixin, ImageStoreMixin, StoreComponent):
                 "(id, conversation_id, round_num, role, content, tool_calls, "
                 " tool_call_id, reasoning_content, stamp) "
                 "VALUES (?, ?, ?, ?, ?, ?, ?, ?, datetime('now', 'localtime'))",
-                (self._new_id(), conversation_id, int(round_num), role, content or "",
-                 tc_json, tool_call_id, reasoning_content or ""),
+                (self._new_id(), conversation_id, int(round_num), role, content or "", tc_json, tool_call_id, reasoning_content or ""),
             )
             self.conn.commit()
             return True
@@ -170,8 +163,7 @@ class ConversationStore(L0SnapshotStoreMixin, ImageStoreMixin, StoreComponent):
         c = self.conn.cursor()
         try:
             c.execute(
-                "SELECT round_num, role, COALESCE(tool_call_id, '') FROM agent_rounds "
-                "WHERE conversation_id = ?",
+                "SELECT round_num, role, COALESCE(tool_call_id, '') FROM agent_rounds WHERE conversation_id = ?",
                 (conversation_id,),
             )
             existing = {(int(x[0]), x[1] or "", x[2] or "") for x in c.fetchall()}
@@ -183,13 +175,18 @@ class ConversationStore(L0SnapshotStoreMixin, ImageStoreMixin, StoreComponent):
                 if (i, r.get("role", "") or "", r.get("tool_call_id") or "") in existing:
                     continue
                 tc = r.get("tool_calls")
-                rows.append((
-                    self._new_id(), conversation_id, i, r.get("role", ""),
-                    r.get("content", "") or "",
-                    json.dumps(tc, ensure_ascii=False) if tc else None,
-                    r.get("tool_call_id"),
-                    r.get("reasoning_content", "") or "",
-                ))
+                rows.append(
+                    (
+                        self._new_id(),
+                        conversation_id,
+                        i,
+                        r.get("role", ""),
+                        r.get("content", "") or "",
+                        json.dumps(tc, ensure_ascii=False) if tc else None,
+                        r.get("tool_call_id"),
+                        r.get("reasoning_content", "") or "",
+                    )
+                )
             if not rows:
                 return 0
             c.executemany(
@@ -204,10 +201,9 @@ class ConversationStore(L0SnapshotStoreMixin, ImageStoreMixin, StoreComponent):
         finally:
             c.close()
 
-    def finalize_turn(self, conversation_id: str, ai_msg: str,
-                      is_func_calling: bool = False,
-                      rounds: list | None = None,
-                      status: str = "done") -> bool:
+    def finalize_turn(
+        self, conversation_id: str, ai_msg: str, is_func_calling: bool = False, rounds: list | None = None, status: str = "done"
+    ) -> bool:
         """回合结束：补齐 ai_msg / 状态，并兜底写入尚未落盘的轮次。
 
         ``rounds`` 若已在回合中经 ``append_round`` 实时落盘，此处按 round_num
@@ -229,8 +225,7 @@ class ConversationStore(L0SnapshotStoreMixin, ImageStoreMixin, StoreComponent):
             self._write_rounds(conversation_id, rounds or [])
             c = self.conn.cursor()
             c.execute(
-                "UPDATE conversations SET ai_msg = ?, is_func_calling = ?, status = ? "
-                "WHERE id = ?",
+                "UPDATE conversations SET ai_msg = ?, is_func_calling = ?, status = ? WHERE id = ?",
                 (ai_msg or "", 1 if is_func_calling else 0, status, conversation_id),
             )
             self.conn.commit()
@@ -245,20 +240,17 @@ class ConversationStore(L0SnapshotStoreMixin, ImageStoreMixin, StoreComponent):
             if topic_id:
                 tool_calls_summary = None
                 if rounds:
-                    tcs = [r.get("tool_calls") for r in rounds
-                           if isinstance(r, dict) and r.get("tool_calls")]
+                    tcs = [r.get("tool_calls") for r in rounds if isinstance(r, dict) and r.get("tool_calls")]
                     if tcs:
                         tool_calls_summary = [
-                            {"name": tc.get("function", {}).get("name", ""),
-                             "arguments": tc.get("function", {}).get("arguments", "")}
+                            {"name": tc.get("function", {}).get("name", ""), "arguments": tc.get("function", {}).get("arguments", "")}
                             for tc_list in tcs
                             for tc in (tc_list if isinstance(tc_list, list) else [tc_list])
                         ][:20]
-                self._log_event(topic_id, "assistant/message",
-                                {"content": ai_msg or "", "tool_calls": tool_calls_summary},
-                                conversation_id=conversation_id)
-                self._log_event(topic_id, "turn/end",
-                                {"reason": status}, conversation_id=conversation_id)
+                self._log_event(
+                    topic_id, "assistant/message", {"content": ai_msg or "", "tool_calls": tool_calls_summary}, conversation_id=conversation_id
+                )
+                self._log_event(topic_id, "turn/end", {"reason": status}, conversation_id=conversation_id)
         except Exception:
             logger.exception("append assistant event failed (isolated)")
         return True
@@ -274,8 +266,7 @@ class ConversationStore(L0SnapshotStoreMixin, ImageStoreMixin, StoreComponent):
         except Exception:
             return ""
 
-    def _log_event(self, topic_id: str, event_type: str, payload: dict,
-                   conversation_id: str = "") -> None:
+    def _log_event(self, topic_id: str, event_type: str, payload: dict, conversation_id: str = "") -> None:
         """P2 事件溯源：追加事件日志（失败仅告警，不影响主流程）。"""
         try:
             self.events.append_event(topic_id, event_type, payload, conversation_id)
@@ -283,7 +274,10 @@ class ConversationStore(L0SnapshotStoreMixin, ImageStoreMixin, StoreComponent):
             logger.exception("append event failed (isolated)")
 
     def update_msg_rounds(
-        self, conversation_id: int, ai_msg: str, is_func_calling: bool,
+        self,
+        conversation_id: int,
+        ai_msg: str,
+        is_func_calling: bool,
         rounds: list[dict] | None = None,
     ):
         """Update msg rounds and persist individual rounds to agent_rounds table.
@@ -301,12 +295,16 @@ class ConversationStore(L0SnapshotStoreMixin, ImageStoreMixin, StoreComponent):
         # rounds_json 已废弃：它与 agent_rounds 重复存储（实测占库 38.4%，
         # 单轮最大 8.79 MB），且写入前需把全部轮次 json.dumps 一次。
         # 统一走 finalize_turn：幂等补齐轮次 + 补 ai_msg/状态 + 事件溯源。
-        self.finalize_turn(conversation_id, ai_msg,
-                           is_func_calling=is_func_calling, rounds=rounds)
+        self.finalize_turn(conversation_id, ai_msg, is_func_calling=is_func_calling, rounds=rounds)
 
     def save_agent_round(
-        self, conversation_id: int, round_num: int, role: str, content: str,
-        tool_calls: list[dict] | None = None, tool_call_id: str | None = None,
+        self,
+        conversation_id: int,
+        round_num: int,
+        role: str,
+        content: str,
+        tool_calls: list[dict] | None = None,
+        tool_call_id: str | None = None,
     ):
         """写入单轮明细（薄封装，幂等）。
 
@@ -318,8 +316,7 @@ class ConversationStore(L0SnapshotStoreMixin, ImageStoreMixin, StoreComponent):
             tool_calls: 工具调用列表。
             tool_call_id: 工具结果对应的调用 id。
         """
-        self.append_round(conversation_id, round_num, role, content,
-                          tool_calls=tool_calls, tool_call_id=tool_call_id)
+        self.append_round(conversation_id, round_num, role, content, tool_calls=tool_calls, tool_call_id=tool_call_id)
 
     def get_rounds(self, conversation_id: str) -> list[dict]:
         """从 ``agent_rounds`` 派生结构化轮次（唯一事实源）。
@@ -365,7 +362,8 @@ class ConversationStore(L0SnapshotStoreMixin, ImageStoreMixin, StoreComponent):
                     # 静默 pass 会让数据损坏永远不可见（且触碰 except:pass 基线）
                     logger.debug(
                         "round %s 的 tool_calls 不是合法 JSON，已降级为空",
-                        r["id"], exc_info=True,
+                        r["id"],
+                        exc_info=True,
                     )
             if r["tool_call_id"]:
                 entry["tool_call_id"] = r["tool_call_id"]
@@ -390,15 +388,12 @@ class ConversationStore(L0SnapshotStoreMixin, ImageStoreMixin, StoreComponent):
         """
         c = self.conn.cursor()
         if include_rounds:
-            c.execute(
-                "SELECT * FROM conversations WHERE topic_id = ? AND deleted_at IS NULL "
-                "ORDER BY stamp ASC", (topic_id,)
-            )
+            c.execute("SELECT * FROM conversations WHERE topic_id = ? AND deleted_at IS NULL ORDER BY stamp ASC", (topic_id,))
         else:
             c.execute(
                 "SELECT id, topic_id, user_msg, ai_msg, is_func_calling, is_summarized, stamp "
                 "FROM conversations WHERE topic_id = ? AND deleted_at IS NULL ORDER BY stamp ASC",
-                (topic_id,)
+                (topic_id,),
             )
         rows = c.fetchall()
         c.close()
@@ -436,8 +431,7 @@ class ConversationStore(L0SnapshotStoreMixin, ImageStoreMixin, StoreComponent):
         """
         c = self.conn.cursor()
         c.execute(
-            "SELECT * FROM agent_rounds WHERE conversation_id = ? AND deleted_at IS NULL "
-            "ORDER BY rowid ASC",
+            "SELECT * FROM agent_rounds WHERE conversation_id = ? AND deleted_at IS NULL ORDER BY rowid ASC",
             (conversation_id,),
         )
         rows = c.fetchall()
@@ -455,18 +449,19 @@ class ConversationStore(L0SnapshotStoreMixin, ImageStoreMixin, StoreComponent):
                     # 放大成「整轮读不出来」。
                     d["tool_calls"] = None
                     logger.debug(
-                        "get_agent_rounds: round %s (conv=%s) 的 tool_calls 不是"
-                        "合法 JSON，已降级为空",
-                        d.get("round_num"), conversation_id, exc_info=True,
+                        "get_agent_rounds: round %s (conv=%s) 的 tool_calls 不是合法 JSON，已降级为空",
+                        d.get("round_num"),
+                        conversation_id,
+                        exc_info=True,
                     )
             result.append(d)
         return result
 
     # ── 全文搜索（FTS5 fallback LIKE）──
 
-    def search_conversations(self, query: str, limit: int = 30,
-                              include_ai: bool = True, include_rounds: bool = True,
-                              date_from: str = "", date_to: str = "") -> list[dict]:
+    def search_conversations(
+        self, query: str, limit: int = 30, include_ai: bool = True, include_rounds: bool = True, date_from: str = "", date_to: str = ""
+    ) -> list[dict]:
         """跨主题全文搜索对话内容。
 
         同时搜索 user_msg、ai_msg 和 agent_rounds.content，
@@ -505,7 +500,7 @@ class ConversationStore(L0SnapshotStoreMixin, ImageStoreMixin, StoreComponent):
 
         where = safe_where_clause(conditions, joiner=" OR ", wrap=True)
 
-        sql = f'''
+        sql = f"""
             SELECT c.id as conversation_id, c.topic_id, t.title as topic_title,
                    c.user_msg, c.ai_msg, c.stamp
             FROM conversations c
@@ -513,7 +508,7 @@ class ConversationStore(L0SnapshotStoreMixin, ImageStoreMixin, StoreComponent):
             WHERE ({where})
             ORDER BY c.stamp DESC
             LIMIT ?
-        '''
+        """
         params.append(limit)
 
         c = self.conn.cursor()
@@ -524,11 +519,14 @@ class ConversationStore(L0SnapshotStoreMixin, ImageStoreMixin, StoreComponent):
         # 如果也搜索 agent_rounds，补充查询
         if include_rounds:
             rc = self.conn.cursor()
-            rc.execute('''
+            rc.execute(
+                """
                 SELECT DISTINCT r.conversation_id
                 FROM agent_rounds r
                 WHERE r.content LIKE ?
-            ''', (like_pat,))
+            """,
+                (like_pat,),
+            )
             round_conv_ids = {row["conversation_id"] for row in rc.fetchall()}
             rc.close()
 
@@ -538,13 +536,16 @@ class ConversationStore(L0SnapshotStoreMixin, ImageStoreMixin, StoreComponent):
                 if missing_ids:
                     placeholders = safe_placeholders(len(missing_ids))
                     rc2 = self.conn.cursor()
-                    rc2.execute(f'''
+                    rc2.execute(
+                        f"""
                         SELECT c.id as conversation_id, c.topic_id, t.title as topic_title,
                                c.user_msg, c.ai_msg, c.stamp
                         FROM conversations c
                         JOIN topics t ON c.topic_id = t.topic_id
                         WHERE c.id IN ({placeholders})
-                    ''', list(missing_ids))
+                    """,
+                        list(missing_ids),
+                    )
                     conv_results.extend(dict(r) for r in rc2.fetchall())
                     rc2.close()
 
@@ -579,7 +580,7 @@ class ConversationStore(L0SnapshotStoreMixin, ImageStoreMixin, StoreComponent):
         text_lower = text.lower()
         idx = text_lower.find(q_lower)
         if idx < 0:
-            return text[:context_chars * 2] + ("..." if len(text) > context_chars * 2 else "")
+            return text[: context_chars * 2] + ("..." if len(text) > context_chars * 2 else "")
         start = max(0, idx - context_chars)
         end = min(len(text), idx + len(query) + context_chars)
         snippet = text[start:end]
@@ -592,8 +593,7 @@ class ConversationStore(L0SnapshotStoreMixin, ImageStoreMixin, StoreComponent):
 
     # ── Session Fork（分支实验，借鉴 DeepSeek Harness） ──
 
-    def fork_topic(self, source_topic_id: str, target_topic_id: str,
-                   title: str = "", boundary_conv_id: str = "") -> dict:
+    def fork_topic(self, source_topic_id: str, target_topic_id: str, title: str = "", boundary_conv_id: str = "") -> dict:
         """将源 topic 的全部对话复制到目标 topic（session fork）。
 
         分支语义：
@@ -620,9 +620,14 @@ class ConversationStore(L0SnapshotStoreMixin, ImageStoreMixin, StoreComponent):
             (source_topic_id, target_topic_id),
         ).fetchone()
         if dup:
-            return {"ok": False, "copied": 0, "source": source_topic_id,
-                    "target": target_topic_id, "boundary": boundary_conv_id,
-                    "error": "该分支已存在（禁止重复 fork，请换 target_topic_id 或复用现有分支）"}
+            return {
+                "ok": False,
+                "copied": 0,
+                "source": source_topic_id,
+                "target": target_topic_id,
+                "boundary": boundary_conv_id,
+                "error": "该分支已存在（禁止重复 fork，请换 target_topic_id 或复用现有分支）",
+            }
 
         copied = 0
         # ── S2 事务包裹：全部 INSERT 在单事务内，异常自动 rollback，杜绝半 fork ──
@@ -657,8 +662,7 @@ class ConversationStore(L0SnapshotStoreMixin, ImageStoreMixin, StoreComponent):
                 )
             rows = c.fetchall()
             if not rows:
-                return {"ok": True, "copied": 0, "source": source_topic_id,
-                        "target": target_topic_id, "boundary": boundary_conv_id, "error": ""}
+                return {"ok": True, "copied": 0, "source": source_topic_id, "target": target_topic_id, "boundary": boundary_conv_id, "error": ""}
 
             # 记录旧 id → 新 id 映射（用于 agent_rounds 外键迁移）
             id_map: dict[str, str] = {}
@@ -670,9 +674,17 @@ class ConversationStore(L0SnapshotStoreMixin, ImageStoreMixin, StoreComponent):
                     "is_func_calling, is_summarized, stamp, rounds_json, "
                     "fork_source_id, fork_stamp) "
                     "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now', 'localtime'))",
-                    (new_id, target_topic_id, r["user_msg"], r["ai_msg"],
-                     r["is_func_calling"], r["is_summarized"], r["stamp"],
-                     r["rounds_json"], r["id"]),
+                    (
+                        new_id,
+                        target_topic_id,
+                        r["user_msg"],
+                        r["ai_msg"],
+                        r["is_func_calling"],
+                        r["is_summarized"],
+                        r["stamp"],
+                        r["rounds_json"],
+                        r["id"],
+                    ),
                 )
                 copied += 1
 
@@ -691,8 +703,7 @@ class ConversationStore(L0SnapshotStoreMixin, ImageStoreMixin, StoreComponent):
                         "INSERT INTO agent_rounds (id, conversation_id, round_num, role, "
                         "content, tool_calls, tool_call_id, stamp) "
                         "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-                        (rid, new_id, rr["round_num"], rr["role"], rr["content"],
-                         rr["tool_calls"], rr["tool_call_id"], rr["stamp"]),
+                        (rid, new_id, rr["round_num"], rr["role"], rr["content"], rr["tool_calls"], rr["tool_call_id"], rr["stamp"]),
                     )
                     round_copied += 1
 
@@ -706,13 +717,16 @@ class ConversationStore(L0SnapshotStoreMixin, ImageStoreMixin, StoreComponent):
             )
             # 事务提交在 with 块退出时自动 commit；异常自动 rollback
 
-        logger.info(
-            f"fork_topic: {source_topic_id} → {target_topic_id} "
-            f"(conversations={copied}, rounds={round_copied})"
-        )
-        return {"ok": True, "copied": copied, "rounds_copied": round_copied,
-                "source": source_topic_id, "target": target_topic_id,
-                "boundary": boundary_conv_id, "error": ""}
+        logger.info(f"fork_topic: {source_topic_id} → {target_topic_id} (conversations={copied}, rounds={round_copied})")
+        return {
+            "ok": True,
+            "copied": copied,
+            "rounds_copied": round_copied,
+            "source": source_topic_id,
+            "target": target_topic_id,
+            "boundary": boundary_conv_id,
+            "error": "",
+        }
 
     def get_fork_lineage(self, topic_id: str, limit: int = 10) -> list[dict]:
         """查询 topic 的 fork 血统（被谁 fork / 从谁 fork）。

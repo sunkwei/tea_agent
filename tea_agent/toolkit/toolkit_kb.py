@@ -7,8 +7,11 @@ logger = logging.getLogger("toolkit")
 
 """toolkit_kb -- Markdown 知识库管理工具。"""
 
+
 def toolkit_kb(action, title="", content="", tags="", category="", query="", brief="", sort="time"):
-    logger.info(f"toolkit_kb called: action={action!r}, title={repr(title)[:80]}, content={repr(content)[:80]}, tags={tags!r}, category={category!r}, query={repr(query)[:80]}, brief={repr(brief)[:80]}, sort={sort!r}")
+    logger.info(
+        f"toolkit_kb called: action={action!r}, title={repr(title)[:80]}, content={repr(content)[:80]}, tags={tags!r}, category={category!r}, query={repr(query)[:80]}, brief={repr(brief)[:80]}, sort={sort!r}"
+    )
 
     import os
     import re
@@ -18,6 +21,7 @@ def toolkit_kb(action, title="", content="", tags="", category="", query="", bri
 
     try:
         from tea_agent.config import get_config
+
         KB_DIR = Path(get_config().paths.kb_dir_abs)  # noqa: N806
     except Exception:
         KB_DIR = Path(os.environ.get("HOME", "/tmp")) / ".tea_agent" / "kb"  # noqa: N806
@@ -51,7 +55,10 @@ def toolkit_kb(action, title="", content="", tags="", category="", query="", bri
                 tg = _meta(text, "tags")
                 bf = _meta(text, "brief")
             except Exception:
-                first_line = f.stem; ct = ""; tg = ""; bf = ""
+                first_line = f.stem
+                ct = ""
+                tg = ""
+                bf = ""
             entry = f"- **[{first_line}]({f.name})** | `{ct}` | {mtime} | {size}B"
             if tg:
                 entry += f" | 🏷️ {tg}"
@@ -99,7 +106,7 @@ def toolkit_kb(action, title="", content="", tags="", category="", query="", bri
                     if f"category:{category}" in text:
                         filtered.append(f)
                 except Exception:
-                    logger.exception('op_failed')
+                    logger.exception("op_failed")
 
             md_files = filtered
         if sort == "time":
@@ -144,9 +151,7 @@ def toolkit_kb(action, title="", content="", tags="", category="", query="", bri
             return "❌ grep 不可用"
         if not results:
             return f"🔍 未找到匹配 '{query}' 的文档"
-        return f"🔍 '{query}' 匹配 {len(results)} 处:\n" + "\n".join(
-            f"  {f}:{l}: {c}" for f, l, c in results[:30]
-        )
+        return f"🔍 '{query}' 匹配 {len(results)} 处:\n" + "\n".join(f"  {f}:{ln}: {c}" for f, ln, c in results[:30])
 
     if action == "index":
         rebuild_index()
@@ -168,6 +173,31 @@ def toolkit_kb(action, title="", content="", tags="", category="", query="", bri
 
     return f"❌ 未知操作: {action}"
 
+
 def meta_toolkit_kb() -> dict:
     """Meta toolkit kb."""
-    return {"type": "function", "function": {"name": "toolkit_kb", "description": "Markdown 知识库管理。文档存储在 $HOME/.tea_agent/kb/，所有主题共享。支持 add/update/read/list/search/index/delete/status 操作。", "parameters": {"type": "object", "properties": {"action": {"type": "string", "enum": ["add", "update", "read", "list", "search", "index", "delete", "status"], "description": "操作类型"}, "title": {"type": "string", "description": "文档标题（用作文件名，add/update/read/delete 时使用）"}, "content": {"type": "string", "description": "Markdown 内容，add 时覆盖写入，update 时追加"}, "tags": {"type": "string", "description": "逗号分隔标签。search 时多标签 OR 匹配"}, "category": {"type": "string", "description": "分类，如 memory/reflection/analysis/temp"}, "query": {"type": "string", "description": "grep 搜索关键词"}, "brief": {"type": "string", "description": "简短摘要，用于索引显示"}, "sort": {"type": "string", "enum": ["time", "title", "size"], "description": "排序方式，默认 time"}}, "required": ["action"]}}}
+    return {
+        "type": "function",
+        "function": {
+            "name": "toolkit_kb",
+            "description": "Markdown 知识库管理。文档存储在 $HOME/.tea_agent/kb/，所有主题共享。支持 add/update/read/list/search/index/delete/status 操作。",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "action": {
+                        "type": "string",
+                        "enum": ["add", "update", "read", "list", "search", "index", "delete", "status"],
+                        "description": "操作类型",
+                    },
+                    "title": {"type": "string", "description": "文档标题（用作文件名，add/update/read/delete 时使用）"},
+                    "content": {"type": "string", "description": "Markdown 内容，add 时覆盖写入，update 时追加"},
+                    "tags": {"type": "string", "description": "逗号分隔标签。search 时多标签 OR 匹配"},
+                    "category": {"type": "string", "description": "分类，如 memory/reflection/analysis/temp"},
+                    "query": {"type": "string", "description": "grep 搜索关键词"},
+                    "brief": {"type": "string", "description": "简短摘要，用于索引显示"},
+                    "sort": {"type": "string", "enum": ["time", "title", "size"], "description": "排序方式，默认 time"},
+                },
+                "required": ["action"],
+            },
+        },
+    }

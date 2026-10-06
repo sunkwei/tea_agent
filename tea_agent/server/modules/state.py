@@ -63,6 +63,7 @@ config_cache: dict = {}
 
 # ── Helper functions ──
 
+
 def register_active(topic_id: str, session) -> None:
     with active_sessions_lock:
         active_sessions[topic_id] = session
@@ -112,14 +113,19 @@ def _bump_queue_version() -> None:
 
 def queue_add(topic_id: str, message: str, images: list | None = None) -> str:
     import uuid
+
     item_id = uuid.uuid4().hex[:12]
     with message_queue_lock:
         if topic_id not in message_queue:
             message_queue[topic_id] = []
-        message_queue[topic_id].append({
-            "id": item_id, "message": message,
-            "images": images or [], "timestamp": time.time(),
-        })
+        message_queue[topic_id].append(
+            {
+                "id": item_id,
+                "message": message,
+                "images": images or [],
+                "timestamp": time.time(),
+            }
+        )
         _bump_queue_version()
     _persist_queues()
     return item_id
@@ -169,10 +175,10 @@ def queue_pop(topic_id: str) -> dict | None:
 # 队列原本只在内存里，重启即丢 —— 用户「已排队但未开始」的消息会静默消失。
 # 这里落一份快照（原子写），启动时由 restore_queues() 还原。
 
+
 def _queue_store_path() -> str:
     override = os.environ.get("TEA_SERVER_STATE_DB", "").strip()
-    base = override or os.path.join(os.path.expanduser("~"), ".tea_agent",
-                                    "server_state.db")
+    base = override or os.path.join(os.path.expanduser("~"), ".tea_agent", "server_state.db")
     return base + "_queues.json"
 
 
@@ -220,8 +226,7 @@ def restore_queues() -> int:
             for tid, items in data.items():
                 if not isinstance(tid, str) or not isinstance(items, list) or not items:
                     continue
-                kept = [it for it in items
-                        if isinstance(it, dict) and it.get("message")]
+                kept = [it for it in items if isinstance(it, dict) and it.get("message")]
                 if kept:
                     message_queue.setdefault(tid, []).extend(kept)
                     restored += len(kept)
@@ -279,8 +284,7 @@ def read_buffer_since(topic_id: str, since: int) -> dict:
             return {"events": [], "done": True, "next_index": 0}
         events_since = [e for e in buf["events"] if e["index"] >= since]
         next_index = (buf["events"][-1]["index"] + 1) if buf["events"] else 0
-        return {"events": events_since, "done": buf["done"],
-                "next_index": next_index}
+        return {"events": events_since, "done": buf["done"], "next_index": next_index}
 
 
 def cleanup_buffer(topic_id: str) -> None:

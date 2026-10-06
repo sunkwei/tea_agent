@@ -80,7 +80,6 @@ def _is_home_dir(cwd: str | None = None) -> bool:
     return _same_path(os.path.abspath(cwd or os.getcwd()), _home_abs())
 
 
-
 def resolve_scope(storage_scope_cfg: str | None = None) -> str:
     """解析最终存储作用域。
 
@@ -150,7 +149,6 @@ def temp_db_path(cwd: str | None = None) -> str:
     return os.path.join(tempfile.gettempdir(), f"tea_agent_{name[:24]}_{digest}.db")
 
 
-
 def is_temp_fallback(db_path: str) -> bool:
     """判断 db 路径是否为「临时目录回退」产物。
 
@@ -206,7 +204,6 @@ def _ensure_parent_writable(path: str) -> bool:
         return True
     except OSError:
         return False
-
 
 
 def resolve_db_path(

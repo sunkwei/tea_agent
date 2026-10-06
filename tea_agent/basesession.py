@@ -20,7 +20,7 @@ logger = logging.getLogger("basesession")
 # 提供 env 覆盖是为了让「保留量偏小」这一已知取舍可在运行时调整，
 # 而不必改动代码 —— 是否上调默认值涉及历史消息成本，留给部署侧决定。
 _ARGS_COMPRESS_BYTES_DEFAULT = 2048  # 整个 arguments JSON 超过此字节数即触发压缩
-_ARGS_KEEP_BYTES_DEFAULT = 1024      # 单个 string 值超过此字节数即压缩（首尾各半）
+_ARGS_KEEP_BYTES_DEFAULT = 1024  # 单个 string 值超过此字节数即压缩（首尾各半）
 
 
 def _int_env(name: str, default: int) -> int:
@@ -353,9 +353,7 @@ class BaseChatSession(ABC):
         self._last_interruption: dict | None = None
 
     @abstractmethod
-    def chat_stream(
-        self, msg: str, callback: Callable[[str], None]
-    ) -> tuple[str, bool]:
+    def chat_stream(self, msg: str, callback: Callable[[str], None]) -> tuple[str, bool]:
         """
         流式对话（抽象方法，子类必须实现）
 
@@ -466,10 +464,7 @@ class BaseChatSession(ABC):
                 max_chars = get_tool_prune_threshold(ctx)
         except Exception as e:
             logger.debug("basesession.py.add_tool_result: Exception 已忽略: %s", e)
-        self.messages.append(
-            {"role": "tool", "tool_call_id": tool_call_id,
-             "content": self._compress_tool_content(content, max_chars=max_chars)}
-        )
+        self.messages.append({"role": "tool", "tool_call_id": tool_call_id, "content": self._compress_tool_content(content, max_chars=max_chars)})
 
     def get_recent_messages(self) -> list[dict]:
         """获取最近的消息（排除系统消息）"""
@@ -578,9 +573,7 @@ class BaseChatSession(ABC):
         )
 
     @staticmethod
-    def _compress_json_args(
-        args_str: str, args_bytes: int, max_bytes: int | None = None
-    ) -> str:
+    def _compress_json_args(args_str: str, args_bytes: int, max_bytes: int | None = None) -> str:
         """
         JSON 感知截断 tool_calls 参数。
 
@@ -646,7 +639,7 @@ class BaseChatSession(ABC):
 
         # Step 2: 递归压缩超长 string value
         _keep = _args_keep_bytes()  # 单值触发阈值（默认 1024；TEA_ARGS_KEEP_BYTES 可覆盖）
-        HALF = _keep // 2           # 首尾各保留半量（默认 512）  # noqa: N806
+        HALF = _keep // 2  # 首尾各保留半量（默认 512）  # noqa: N806
 
         def _compress_value(val, path=""):
             """递归压缩值，返回 (compressed_val, truncated_count)"""
@@ -666,9 +659,7 @@ class BaseChatSession(ABC):
                     head_t = raw[:head_end].decode("utf-8", errors="replace")
                     tail_t = raw[tail_start:].decode("utf-8", errors="replace")
                     return (
-                        head_t
-                        + f"\n... [截断 {vbytes}B→{len(head_t.encode('utf-8')) + len(tail_t.encode('utf-8'))}B] ...\n"
-                        + tail_t,
+                        head_t + f"\n... [截断 {vbytes}B→{len(head_t.encode('utf-8')) + len(tail_t.encode('utf-8'))}B] ...\n" + tail_t,
                         1,
                     )
                 return (val, 0)
@@ -719,11 +710,7 @@ class BaseChatSession(ABC):
 
         # 尝试从参数中提取文件路径/扩展名
         try:
-            args = (
-                _json_gt.loads(arguments)
-                if isinstance(arguments, str)
-                else (arguments or {})
-            )
+            args = _json_gt.loads(arguments) if isinstance(arguments, str) else (arguments or {})
         except Exception as e:
             logger.debug("tool_threshold parse failed: %s", e)
             return BaseChatSession._DEFAULT_TOOL_THRESHOLD
@@ -824,11 +811,7 @@ class BaseChatSession(ABC):
                             if isinstance(args_str, str):
                                 args_bytes = len(args_str.encode("utf-8"))
                                 if args_bytes > _args_compress_threshold():
-                                    func["arguments"] = (
-                                        BaseChatSession._compress_json_args(
-                                            args_str, args_bytes
-                                        )
-                                    )
+                                    func["arguments"] = BaseChatSession._compress_json_args(args_str, args_bytes)
                             tc_copy["function"] = func
                         new_tc.append(tc_copy)
                     compressed["tool_calls"] = new_tc
@@ -843,9 +826,7 @@ class BaseChatSession(ABC):
                 tc_id = rd.get("tool_call_id", "")
                 tool_name, args_str = tc_map.get(tc_id, ("", ""))
                 threshold = BaseChatSession._guess_tool_threshold(tool_name, args_str)
-                compressed["content"] = BaseChatSession._compress_tool_content(
-                    rd.get("content", ""), max_chars=threshold
-                )
+                compressed["content"] = BaseChatSession._compress_tool_content(rd.get("content", ""), max_chars=threshold)
                 result.append(compressed)
 
             else:
@@ -891,11 +872,7 @@ class BaseChatSession(ABC):
 
                 # 记录新的 tool_call_ids
                 tc_list = rd["tool_calls"]
-                tc_ids = (
-                    [tc.get("id", "") for tc in tc_list if tc.get("id")]
-                    if isinstance(tc_list, list)
-                    else []
-                )
+                tc_ids = [tc.get("id", "") for tc in tc_list if tc.get("id")] if isinstance(tc_list, list) else []
 
                 if not tc_ids:
                     # 有 tool_calls 字段但没有有效 id，视为纯 assistant 消息
@@ -940,10 +917,7 @@ class BaseChatSession(ABC):
         # 末尾检查：如果还有未清空的 pending，回滚到最后一个安全点
         if pending:
             result = result[:last_safe_len]
-            logger.warning(
-                f"_repair: 截断不完整工具调用链，移除 {len(pending)} 个未匹配的 tool_call_id: "
-                f"{list(pending.keys())}"
-            )
+            logger.warning(f"_repair: 截断不完整工具调用链，移除 {len(pending)} 个未匹配的 tool_call_id: {list(pending.keys())}")
 
         # 最终清理：结果中不应再有 reasoning_content（非 assistant 消息）
         BaseChatSession._strip_reasoning_content(result)

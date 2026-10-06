@@ -173,8 +173,7 @@ def summarize(samples: object) -> dict | None:
     ttfts: list[float] = []
     streams = 0
 
-    def _accumulate(items: list, require_real: bool
-                    ) -> tuple[int, float, list, int, float]:
+    def _accumulate(items: list, require_real: bool) -> tuple[int, float, list, int, float]:
         agg_t = 0
         agg_s = 0.0
         agg_ttft: list[float] = []
@@ -208,12 +207,10 @@ def summarize(samples: object) -> dict | None:
         return agg_t, agg_s, agg_ttft, agg_n, agg_wait
 
     # 实测优先：只要存在实测样本，估算样本就不参与展示（口径纯度）。
-    tokens, decode_secs, ttfts, streams, wait_secs = _accumulate(
-        list(samples), require_real=True)
+    tokens, decode_secs, ttfts, streams, wait_secs = _accumulate(list(samples), require_real=True)
     estimated_only = False
     if streams == 0:
-        tokens, decode_secs, ttfts, streams, wait_secs = _accumulate(
-            list(samples), require_real=False)
+        tokens, decode_secs, ttfts, streams, wait_secs = _accumulate(list(samples), require_real=False)
         estimated_only = streams > 0
 
     if streams == 0 or decode_secs < _MIN_DECODE_SECONDS:
@@ -234,8 +231,7 @@ def summarize(samples: object) -> dict | None:
         # ⚡ 只量解码；以下是**没被 ⚡ 计入**的开销。缺了它们，一个 81.9 tok/s
         # 会被读成"整个回合只花了这么多时间"，进而误判在线模型不如自部署。
         "wait_seconds": _fmt_secs(wait_secs) if wait_secs > 0 else None,
-        "request_seconds": (_fmt_secs(wait_secs + decode_secs)
-                            if wait_secs > 0 else None),
+        "request_seconds": (_fmt_secs(wait_secs + decode_secs) if wait_secs > 0 else None),
         "streams": streams,
         # True → 全部样本来自本地文本估算，前端加 ~ 前缀标示口径
         "estimated": estimated_only,

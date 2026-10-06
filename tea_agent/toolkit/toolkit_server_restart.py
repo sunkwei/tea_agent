@@ -32,8 +32,7 @@ import logging
 logger = logging.getLogger("toolkit")
 
 
-def toolkit_server_restart(mode: str = "defer", wait_seconds: float = 300,
-                           reason: str = "") -> dict:
+def toolkit_server_restart(mode: str = "defer", wait_seconds: float = 300, reason: str = "") -> dict:
     """安排一次 server 重启（默认等当前回合结束后执行）。
 
     Args:
@@ -45,18 +44,15 @@ def toolkit_server_restart(mode: str = "defer", wait_seconds: float = 300,
         {'ok': True, ...} 表示已安排；{'ok': False, 'error': ...} 表示未安排。
     """
     mode_norm = (mode or "defer").strip().lower()
-    logger.info("toolkit_server_restart called: mode=%r wait=%r reason=%r",
-                mode_norm, wait_seconds, (reason or "")[:120])
+    logger.info("toolkit_server_restart called: mode=%r wait=%r reason=%r", mode_norm, wait_seconds, (reason or "")[:120])
 
     if mode_norm not in ("defer", "immediate"):
-        return {"ok": False,
-                "error": f"mode 仅支持 defer|immediate，收到 {mode!r}"}
+        return {"ok": False, "error": f"mode 仅支持 defer|immediate，收到 {mode!r}"}
 
     try:
         from tea_agent.server.server import restart_server
     except ImportError as e:
-        return {"ok": False,
-                "error": f"当前不在 server 进程中（server 模块不可用）：{e}"}
+        return {"ok": False, "error": f"当前不在 server 进程中（server 模块不可用）：{e}"}
 
     try:
         wait = float(wait_seconds)
@@ -76,17 +72,20 @@ def toolkit_server_restart(mode: str = "defer", wait_seconds: float = 300,
         return {"ok": False, "error": result.get("error", "restart rejected")}
 
     if graceful:
-        note = ("已安排优雅重启：当前回合会正常回答完，随后自动换新进程。"
-                "期间新消息会排队，不会丢失。")
+        note = "已安排优雅重启：当前回合会正常回答完，随后自动换新进程。期间新消息会排队，不会丢失。"
     else:
         note = "已触发立即重启：当前回合可能被切断，前端将在服务恢复后续读。"
     if reason:
         note += f"（原因：{reason}）"
 
-    return {"ok": True, "mode": mode_norm, "message": note,
-            "wait_seconds": wait,
-            "inflight_turns": result.get("inflight_turns"),
-            "server_message": result.get("message", "")}
+    return {
+        "ok": True,
+        "mode": mode_norm,
+        "message": note,
+        "wait_seconds": wait,
+        "inflight_turns": result.get("inflight_turns"),
+        "server_message": result.get("message", ""),
+    }
 
 
 def meta_toolkit_server_restart() -> dict:

@@ -117,10 +117,7 @@ def toolkit_parallel_subtasks(
     # 合并 easy + medium 任务用于并发执行
     parallel_tasks = easy_tasks + medium_tasks
 
-    logger.info(
-        f"任务分解: easy={len(easy_tasks)}, medium={len(medium_tasks)}, "
-        f"hard={len(hard_tasks)}, 并发执行={len(parallel_tasks)}"
-    )
+    logger.info(f"任务分解: easy={len(easy_tasks)}, medium={len(medium_tasks)}, hard={len(hard_tasks)}, 并发执行={len(parallel_tasks)}")
 
     results = []
     errors = []
@@ -129,16 +126,19 @@ def toolkit_parallel_subtasks(
     viz_id = None
     try:
         from tea_agent.workflow.dag_registry import SimpleDagRegistry
+
         dag_nodes = []
         for t in parallel_tasks:
-            dag_nodes.append({
-                "id": t.get("id", "unknown"),
-                "label": t.get("description", t.get("id", ""))[:50],
-                "state": "running",
-                "type": "task",
-                "duration": 0,
-                "error": None,
-            })
+            dag_nodes.append(
+                {
+                    "id": t.get("id", "unknown"),
+                    "label": t.get("description", t.get("id", ""))[:50],
+                    "state": "running",
+                    "type": "task",
+                    "duration": 0,
+                    "error": None,
+                }
+            )
         dag_edges = []
         # 自动添加边：创建虚拟 start 节点到各子任务
         dag_nodes.insert(0, {"id": "_start", "label": "并行启动", "state": "completed", "type": "task"})
@@ -155,10 +155,7 @@ def toolkit_parallel_subtasks(
     # 并发执行 easy + medium 任务
     if parallel_tasks:
         with ThreadPoolExecutor(max_workers=min(max_workers, len(parallel_tasks))) as executor:
-            future_to_task = {
-                executor.submit(_execute_single_subtask, task, timeout, enable_thinking): task
-                for task in parallel_tasks
-            }
+            future_to_task = {executor.submit(_execute_single_subtask, task, timeout, enable_thinking): task for task in parallel_tasks}
 
             for future in as_completed(future_to_task):
                 task = future_to_task[future]
@@ -172,22 +169,27 @@ def toolkit_parallel_subtasks(
                     if viz_id:
                         with contextlib.suppress(Exception):
                             SimpleDagRegistry.update_node(
-                                viz_id, task.get("id", "unknown"),
+                                viz_id,
+                                task.get("id", "unknown"),
                                 state="completed" if result["status"] == "success" else "failed",
                                 error=result.get("error"),
                                 duration=result.get("elapsed", 0),
                             )
                 except Exception as e:
-                    errors.append({
-                        "task_id": task.get("id", "unknown"),
-                        "status": "error",
-                        "error": str(e),
-                    })
+                    errors.append(
+                        {
+                            "task_id": task.get("id", "unknown"),
+                            "status": "error",
+                            "error": str(e),
+                        }
+                    )
                     if viz_id:
                         with contextlib.suppress(Exception):
                             SimpleDagRegistry.update_node(
-                                viz_id, task.get("id", "unknown"),
-                                state="failed", error=str(e),
+                                viz_id,
+                                task.get("id", "unknown"),
+                                state="failed",
+                                error=str(e),
                             )
 
     total_elapsed = time.time() - start_time
@@ -218,9 +220,48 @@ def toolkit_parallel_subtasks(
             "success": success_count,
             "failed": failed_count,
             "elapsed": round(total_elapsed, 2),
-        }
+        },
     }
 
 
 def meta_toolkit_parallel_subtasks() -> dict:
-    return {"type": "function", "function": {"name": "toolkit_parallel_subtasks", "description": "分治并发执行器：将复杂问题分解为子任务，简单任务用 lite agent 并发执行，复杂任务由主 agent 执行，最后整合结果。 适用场景： - 多文件代码分析 - 批量数据处理 - 多源信息收集 - 并行调研任务 返回：{summary, results, errors, stats}", "parameters": {"type": "object", "properties": {"subtasks": {"type": "array", "description": "子任务列表", "items": {"type": "object", "properties": {"id": {"type": "string", "description": "任务ID，如 'task_1'"}, "description": {"type": "string", "description": "任务描述"}, "difficulty": {"type": "string", "enum": ["easy", "medium", "hard"], "description": "难度评估：easy=lite并发, medium=可选, hard=主agent"}, "config_fname": {"type": "string", "description": "lite agent 配置文件名（可选）"}, "system_prompt": {"type": "string", "description": "lite agent 系统提示词（可选）"}}, "required": ["id", "description", "difficulty"]}, "minItems": 1}, "max_workers": {"type": "integer", "description": "最大并发数，默认 5", "default": 5}, "timeout": {"type": "integer", "description": "单个任务超时秒数，默认 60", "default": 60}, "enable_thinking": {"type": "boolean", "description": "是否启用推理（thinking）功能，默认 True。复杂分析任务建议开启，简单查询可关闭以提速", "default": True}}, "required": ["subtasks"]}}}
+    return {
+        "type": "function",
+        "function": {
+            "name": "toolkit_parallel_subtasks",
+            "description": "分治并发执行器：将复杂问题分解为子任务，简单任务用 lite agent 并发执行，复杂任务由主 agent 执行，最后整合结果。 适用场景： - 多文件代码分析 - 批量数据处理 - 多源信息收集 - 并行调研任务 返回：{summary, results, errors, stats}",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "subtasks": {
+                        "type": "array",
+                        "description": "子任务列表",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "id": {"type": "string", "description": "任务ID，如 'task_1'"},
+                                "description": {"type": "string", "description": "任务描述"},
+                                "difficulty": {
+                                    "type": "string",
+                                    "enum": ["easy", "medium", "hard"],
+                                    "description": "难度评估：easy=lite并发, medium=可选, hard=主agent",
+                                },
+                                "config_fname": {"type": "string", "description": "lite agent 配置文件名（可选）"},
+                                "system_prompt": {"type": "string", "description": "lite agent 系统提示词（可选）"},
+                            },
+                            "required": ["id", "description", "difficulty"],
+                        },
+                        "minItems": 1,
+                    },
+                    "max_workers": {"type": "integer", "description": "最大并发数，默认 5", "default": 5},
+                    "timeout": {"type": "integer", "description": "单个任务超时秒数，默认 60", "default": 60},
+                    "enable_thinking": {
+                        "type": "boolean",
+                        "description": "是否启用推理（thinking）功能，默认 True。复杂分析任务建议开启，简单查询可关闭以提速",
+                        "default": True,
+                    },
+                },
+                "required": ["subtasks"],
+            },
+        },
+    }

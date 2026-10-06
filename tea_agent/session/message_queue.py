@@ -36,19 +36,22 @@ logger = logging.getLogger("session.message_queue")
 
 class QueueMode(str, Enum):
     """消息投递模式。"""
+
     ONE_AT_A_TIME = "one-at-a-time"  # 逐条投递
-    ALL = "all"                      # 批量投递
+    ALL = "all"  # 批量投递
 
 
 class MessageType(str, Enum):
     """消息类型。"""
-    STEERING = "steering"   # 插入性消息（在工具批次间注入）
-    FOLLOWUP = "followup"   # 后续消息（在所有工作完成后投递）
+
+    STEERING = "steering"  # 插入性消息（在工具批次间注入）
+    FOLLOWUP = "followup"  # 后续消息（在所有工作完成后投递）
 
 
 @dataclass
 class QueuedMessage:
     """队列中的一条消息。"""
+
     id: str
     type: MessageType
     content: str
@@ -258,6 +261,7 @@ class MessageQueue:
 
 # ═══ Session 集成辅助 ═══════════════════════════════════
 
+
 def attach_steering_provider(session, drain, notify=None) -> None:
     """把"按 topic 消费插话"的能力挂到 session 上（provider / notify）。
 
@@ -297,11 +301,11 @@ def create_message_queue(session) -> MessageQueue:
     Returns:
         创建的 MessageQueue 实例
     """
-    if hasattr(session.context, 'message_queue'):
+    if hasattr(session.context, "message_queue"):
         return session.context.message_queue
 
     queue = MessageQueue(
-        mode=getattr(session.context, 'queue_mode', 'one-at-a-time'),
+        mode=getattr(session.context, "queue_mode", "one-at-a-time"),
     )
     session.context.message_queue = queue
     logger.info("📋 消息队列已挂载到 session.context")
@@ -320,7 +324,7 @@ def inject_queued_messages(messages: list, session) -> list:
     Returns:
         注入后的消息列表
     """
-    queue = getattr(session.context, 'message_queue', None)
+    queue = getattr(session.context, "message_queue", None)
     if not queue or not queue.has_steering:
         return messages
 
@@ -331,10 +335,12 @@ def inject_queued_messages(messages: list, session) -> list:
     # 在最后一条消息前插入 steering 消息
     inserted = list(messages)
     for msg in steering:
-        inserted.append({
-            "role": "user",
-            "content": f"[即时指令] {msg.content}",
-        })
+        inserted.append(
+            {
+                "role": "user",
+                "content": f"[即时指令] {msg.content}",
+            }
+        )
         logger.info(f"📨 注入 steering 消息: {msg.content[:80]}...")
 
     return inserted
@@ -382,12 +388,14 @@ def drain_followup_items(session) -> list[dict]:
     if queue is not None:
         try:
             for m in queue.get_followup():
-                items.append({
-                    "id": m.id,
-                    "message": m.content,
-                    "metadata": m.metadata,
-                    "source": "message_queue",
-                })
+                items.append(
+                    {
+                        "id": m.id,
+                        "message": m.content,
+                        "metadata": m.metadata,
+                        "source": "message_queue",
+                    }
+                )
         except Exception:
             logger.exception("message_queue followup drain failed")
 
@@ -472,13 +480,15 @@ def drain_steering_items(session) -> list[dict]:
     if queue is not None:
         try:
             for m in queue.get_steering():
-                items.append({
-                    "id": m.id,
-                    "message": m.content,
-                    "images": [],
-                    "metadata": m.metadata,
-                    "source": "message_queue",
-                })
+                items.append(
+                    {
+                        "id": m.id,
+                        "message": m.content,
+                        "images": [],
+                        "metadata": m.metadata,
+                        "source": "message_queue",
+                    }
+                )
         except Exception:
             logger.exception("message_queue steering drain failed")
 

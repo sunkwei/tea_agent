@@ -63,6 +63,8 @@ async def handle_reload_routes(request):
     """
     result = get_server().rebuild_routes()
     return JSONResponse(result)
+
+
 def _model_service():
     """获取 ProviderService 单例（绑定 server 当前配置路径）。"""
     from tea_agent.model_manager import get_provider_service
@@ -175,6 +177,7 @@ async def handle_provider_apply(request):
         if result.get("ok"):
             try:
                 from .modules.agent_module import AgentModule
+
                 AgentModule.invalidate_config_cache(get_server().get_config_path())
             except Exception as e:
                 logger.warning("invalidate config cache failed: %s", e)
@@ -186,13 +189,20 @@ async def handle_provider_apply(request):
                 from tea_agent.config import load_config
 
                 from .modules.agent_module import AgentModule
+
                 mc = load_config(get_server().get_config_path() or None).main_model
                 AgentModule.request_model_switch(
-                    mc.api_key, mc.api_url, mc.model_name,
-                    provider=mc.provider, ref_model=mc.ref_model,
-                    temperature=mc.temperature, max_tokens=mc.max_tokens,
-                    top_p=mc.top_p, max_context_tokens=mc.max_context_tokens,
-                    options=mc.options)
+                    mc.api_key,
+                    mc.api_url,
+                    mc.model_name,
+                    provider=mc.provider,
+                    ref_model=mc.ref_model,
+                    temperature=mc.temperature,
+                    max_tokens=mc.max_tokens,
+                    top_p=mc.top_p,
+                    max_context_tokens=mc.max_context_tokens,
+                    options=mc.options,
+                )
             except Exception as e:
                 logger.warning("hot-switch after apply failed (config saved): %s", e)
         return JSONResponse(result)

@@ -32,6 +32,7 @@ logger = logging.getLogger("toolkit")
 
 # ── 规则归一化与匹配 ─────────────────────────────────────────────
 
+
 def _normalize_rules(rules) -> list[dict]:
     """把三种规则格式归一化为 list[dict]：{pattern, match, description}。"""
     if rules is None:
@@ -42,11 +43,13 @@ def _normalize_rules(rules) -> list[dict]:
             if isinstance(r, str):
                 out.append({"pattern": r, "match": "regex", "description": rid})
             else:
-                out.append({
-                    "pattern": r.get("pattern", ""),
-                    "match": r.get("match", "regex"),
-                    "description": r.get("description", rid),
-                })
+                out.append(
+                    {
+                        "pattern": r.get("pattern", ""),
+                        "match": r.get("match", "regex"),
+                        "description": r.get("description", rid),
+                    }
+                )
         return out
     if isinstance(rules, str):
         out = []
@@ -65,11 +68,13 @@ def _normalize_rules(rules) -> list[dict]:
         if isinstance(r, str):
             out.append({"pattern": r, "match": "regex", "description": r})
         else:
-            out.append({
-                "pattern": r.get("pattern", ""),
-                "match": r.get("match", "regex"),
-                "description": r.get("description", r.get("pattern", "")),
-            })
+            out.append(
+                {
+                    "pattern": r.get("pattern", ""),
+                    "match": r.get("match", "regex"),
+                    "description": r.get("description", r.get("pattern", "")),
+                }
+            )
     return out
 
 
@@ -85,9 +90,9 @@ def _match_rule(text: str, rule: dict) -> bool:
         if match_type == "contains":
             return pattern in text
         if match_type == "line":
-            return any(l.strip() == pattern for l in text.splitlines() if l.strip())
+            return any(ln.strip() == pattern for ln in text.splitlines() if ln.strip())
         if match_type == "line_contains":
-            return any(pattern in l for l in text.splitlines())
+            return any(pattern in ln for ln in text.splitlines())
     except re.error:
         return False
     return False
@@ -99,17 +104,20 @@ def _score_once(text: str, rules: list[dict]) -> dict:
     score = 0
     for rule in rules:
         ok = _match_rule(text, rule)
-        detail.append({
-            "ok": ok,
-            "points": 1 if ok else 0,
-            "description": rule.get("description", ""),
-        })
+        detail.append(
+            {
+                "ok": ok,
+                "points": 1 if ok else 0,
+                "description": rule.get("description", ""),
+            }
+        )
         if ok:
             score += 1
     return {"score": score, "max_score": len(rules), "detail": detail}
 
 
 # ── 主入口 ───────────────────────────────────────────────────────
+
 
 def toolkit_eval_loop(
     action: str = "score",
@@ -142,12 +150,16 @@ def toolkit_eval_loop(
     if action == "template":
         return {
             "ok": True,
-            "template": json.dumps([
-                {"pattern": r"<!-- ACME -->", "match": "line", "description": "[convention] marker line"},
-                {"pattern": r"^# Report:", "match": "regex", "description": "[convention] title format"},
-                {"pattern": "Classification: INTERNAL", "match": "contains", "description": "[convention] metadata"},
-                {"pattern": "Reviewed-by: Aurora Team", "match": "line", "description": "[convention] sign-off"},
-            ], ensure_ascii=False, indent=2),
+            "template": json.dumps(
+                [
+                    {"pattern": r"<!-- ACME -->", "match": "line", "description": "[convention] marker line"},
+                    {"pattern": r"^# Report:", "match": "regex", "description": "[convention] title format"},
+                    {"pattern": "Classification: INTERNAL", "match": "contains", "description": "[convention] metadata"},
+                    {"pattern": "Reviewed-by: Aurora Team", "match": "line", "description": "[convention] sign-off"},
+                ],
+                ensure_ascii=False,
+                indent=2,
+            ),
             "note": "把规则换成你的任务约定；match 支持 regex/contains/line/line_contains",
         }
 
@@ -185,12 +197,14 @@ def toolkit_eval_loop(
         if detail:
             for idx, rule in enumerate(rules_n):
                 hits = sum(1 for p in per_run if p["detail"] and p["detail"][idx]["ok"])
-                rule_stats.append({
-                    "description": rule.get("description", ""),
-                    "hits": hits,
-                    "runs": len(per_run),
-                    "rate": round(hits / len(per_run), 4) if per_run else 0,
-                })
+                rule_stats.append(
+                    {
+                        "description": rule.get("description", ""),
+                        "hits": hits,
+                        "runs": len(per_run),
+                        "rate": round(hits / len(per_run), 4) if per_run else 0,
+                    }
+                )
         return {
             "ok": True,
             "mean_score": round(mean, 4),
@@ -202,6 +216,7 @@ def toolkit_eval_loop(
         }
 
     if action == "compare":
+
         def _extract(v):
             if isinstance(v, (int, float)):
                 return float(v)
@@ -269,9 +284,17 @@ def meta_toolkit_eval_loop() -> dict:
                     },
                     "rules": {
                         "type": "array",
-                        "items": {"type": "object", "properties": {"pattern": {"type": "string"}, "match": {"type": "string", "enum": ["regex", "contains", "line", "line_contains"]}, "description": {"type": "string"}}, "required": ["pattern", "match"]},
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "pattern": {"type": "string"},
+                                "match": {"type": "string", "enum": ["regex", "contains", "line", "line_contains"]},
+                                "description": {"type": "string"},
+                            },
+                            "required": ["pattern", "match"],
+                        },
                         "description": (
-                            "评分规则列表: [{\"pattern\": \"...\", \"match\": \"regex|contains|line|line_contains\", \"description\": \"...\"}]。"
+                            '评分规则列表: [{"pattern": "...", "match": "regex|contains|line|line_contains", "description": "..."}]。'
                             "（运行时也接受单个对象或 'pattern|match|description' 字符串行）"
                         ),
                     },

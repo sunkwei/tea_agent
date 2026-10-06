@@ -20,4 +20,3 @@ from tea_agent.server.server import __version__, create_app, get_server, main, r
 
 __all__ = ["create_app", "run_server", "get_server", "main"]
 __version__ = __version__
-

@@ -5,6 +5,7 @@ import logging
 
 logger = logging.getLogger("toolkit")
 
+
 def toolkit_build(action: str, directory: str = "."):
     """
     统一构建/修复工具。
@@ -34,7 +35,10 @@ def toolkit_build(action: str, directory: str = "."):
         try:
             result = subprocess.run(
                 ["python", "-m", "build"],
-                capture_output=True, text=True, cwd=cwd, timeout=120,
+                capture_output=True,
+                text=True,
+                cwd=cwd,
+                timeout=120,
             )
             return {
                 "exit_code": result.returncode,
@@ -64,11 +68,11 @@ def toolkit_build(action: str, directory: str = "."):
             raw = f.read()
 
         changes = []
-        if raw.startswith(b'\xef\xbb\xbf'):
-            content = raw.decode('utf-8-sig')
+        if raw.startswith(b"\xef\xbb\xbf"):
+            content = raw.decode("utf-8-sig")
             changes.append("Removed BOM")
         else:
-            content = raw.decode('utf-8')
+            content = raw.decode("utf-8")
 
         # Fix license table format
         pattern = r'license\s*=\s*\{\s*text\s*=\s*"([^"]+)"\s*\}'
@@ -77,7 +81,7 @@ def toolkit_build(action: str, directory: str = "."):
             changes.append("Fixed deprecated license format")
 
         # Remove deprecated license classifier
-        lines = content.split('\n')
+        lines = content.split("\n")
         new_lines = []
         removed = False
         for line in lines:
@@ -87,7 +91,7 @@ def toolkit_build(action: str, directory: str = "."):
             new_lines.append(line)
         if removed:
             changes.append("Removed deprecated license classifier")
-            content = '\n'.join(new_lines)
+            content = "\n".join(new_lines)
 
         # Check readme
         readme_match = re.search(r'readme\s*=\s*"([^"]+)"', content)
@@ -107,6 +111,7 @@ def toolkit_build(action: str, directory: str = "."):
 
     else:
         return f"❌ 未知 action: '{action}'，可选: package / fix"
+
 
 def meta_toolkit_build() -> dict:
     """Meta toolkit build."""

@@ -13,8 +13,8 @@ import uuid
 from datetime import datetime
 
 from ._component import Cursor
-from ._tool_usage import CREATE_SQL as _TOOL_USAGE_CREATE
 from ._sql_safety import safe_ddl, safe_ident, safe_sql_fragment
+from ._tool_usage import CREATE_SQL as _TOOL_USAGE_CREATE
 
 logger = logging.getLogger("Storage")
 
@@ -22,6 +22,7 @@ logger = logging.getLogger("Storage")
 # ═══════════════════════════════════════════════
 #  Table Initialization
 # ═══════════════════════════════════════════════
+
 
 def init_tables(db):
     """Initialize all database tables.
@@ -33,7 +34,7 @@ def init_tables(db):
 
     c.execute("CREATE TABLE IF NOT EXISTS _meta (key TEXT PRIMARY KEY, value TEXT)")
 
-    c.execute('''
+    c.execute("""
         CREATE TABLE IF NOT EXISTS images (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             conversation_id TEXT NOT NULL,
@@ -41,16 +42,16 @@ def init_tables(db):
             mime_type TEXT DEFAULT 'image/png',
             FOREIGN KEY (conversation_id) REFERENCES conversations(id) ON DELETE CASCADE
         )
-    ''')
+    """)
 
-    c.execute('''
+    c.execute("""
         CREATE TABLE IF NOT EXISTS topics (
             topic_id TEXT PRIMARY KEY,
             title TEXT NOT NULL,
             create_stamp TEXT DEFAULT (datetime('now', 'localtime')),
             last_update_stamp TEXT DEFAULT (datetime('now', 'localtime'))
         )
-    ''')
+    """)
     for col, col_def in [
         ("semantic_summary", "TEXT DEFAULT ''"),
         ("tool_chain_summary", "TEXT DEFAULT ''"),
@@ -62,7 +63,7 @@ def init_tables(db):
         with contextlib.suppress(Exception):
             c.execute(f"ALTER TABLE topics ADD COLUMN {safe_ident(col)} {safe_ddl(col_def)}")
 
-    c.execute('''
+    c.execute("""
         CREATE TABLE IF NOT EXISTS conversations (
             id TEXT PRIMARY KEY,
             topic_id TEXT NOT NULL,
@@ -73,9 +74,9 @@ def init_tables(db):
             stamp TIMESTAMP DEFAULT (datetime('now', 'localtime')),
             FOREIGN KEY (topic_id) REFERENCES topics(topic_id)
         )
-    ''')
+    """)
 
-    c.execute('''
+    c.execute("""
         CREATE TABLE IF NOT EXISTS agent_rounds (
             id TEXT PRIMARY KEY,
             conversation_id TEXT NOT NULL,
@@ -87,7 +88,7 @@ def init_tables(db):
             stamp TIMESTAMP DEFAULT (datetime('now', 'localtime')),
             FOREIGN KEY (conversation_id) REFERENCES conversations(id)
         )
-    ''')
+    """)
 
     # fork lineage：conversations 记录来源分支（session fork 支持）
     # status/deleted_at：回合生命周期 + 软删除（append-only 语义，见下）
@@ -127,7 +128,7 @@ def init_tables(db):
     #    旧回合为 NULL 表示"该回合未记录"，与新回合的"记录为空"可区分。
     # 3) 刻意只在**回合首次构建**时写（见 history_builder 接线）：工具循环内
     #    多轮请求复用同一版本，避免每轮重算 hash 与冗余写入。
-    c.execute('''
+    c.execute("""
         CREATE TABLE IF NOT EXISTS l0_snapshots (
             hash TEXT PRIMARY KEY,
             content TEXT NOT NULL,
@@ -136,7 +137,7 @@ def init_tables(db):
             first_conversation_id TEXT DEFAULT NULL,
             created_at TIMESTAMP DEFAULT (datetime('now', 'localtime'))
         )
-    ''')
+    """)
 
     # conversations.l0_hash：指向 l0_snapshots.hash 的指纹（可空=未记录）
     # l0_recorded：区分「本回合未尝试记录」与「尝试过但无 L0 可记」
@@ -161,7 +162,7 @@ def init_tables(db):
     #     实测占库 38.4%）。
     #   - L3 恰好相反：总量 4.7 KB / 平均 392 B，且只在摘要阈值触发时写入，
     #     版本化成本可忽略，而它承载的正是「长期结论/偏好」这类审计对象。
-    c.execute('''
+    c.execute("""
         CREATE TABLE IF NOT EXISTS history_versions (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             topic_id TEXT NOT NULL,
@@ -172,10 +173,9 @@ def init_tables(db):
             conversation_id TEXT DEFAULT NULL,
             created_at TIMESTAMP DEFAULT (datetime('now', 'localtime'))
         )
-    ''')
+    """)
     for ddl in [
-        "CREATE INDEX IF NOT EXISTS idx_history_versions_topic "
-        "ON history_versions(topic_id, kind, version)",
+        "CREATE INDEX IF NOT EXISTS idx_history_versions_topic ON history_versions(topic_id, kind, version)",
     ]:
         with contextlib.suppress(Exception):
             c.execute(ddl)
@@ -189,7 +189,7 @@ def init_tables(db):
             c.execute(f"ALTER TABLE {safe_ident(tbl)} ADD COLUMN {safe_ident(col)} {safe_ddl(col_def)}")
 
     # fork 元数据表：记录 fork 操作（源 topic → 目标 topic）
-    c.execute('''
+    c.execute("""
         CREATE TABLE IF NOT EXISTS forks (
             id TEXT PRIMARY KEY,
             source_topic_id TEXT NOT NULL,
@@ -199,12 +199,12 @@ def init_tables(db):
             FOREIGN KEY (source_topic_id) REFERENCES topics(topic_id),
             FOREIGN KEY (target_topic_id) REFERENCES topics(topic_id)
         )
-    ''')
+    """)
 
     # P2 事件溯源：append-only 会话事件日志（唯一事实源的渐进式改造）
     # 事件类型: turn/start, user/message, assistant/chunk, assistant/message,
     #           tool/call, tool/result, turn/end, compaction/*, session/fork
-    c.execute('''
+    c.execute("""
         CREATE TABLE IF NOT EXISTS session_events (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             topic_id TEXT NOT NULL,
@@ -215,15 +215,11 @@ def init_tables(db):
             created_at TIMESTAMP DEFAULT (datetime('now', 'localtime')),
             UNIQUE (topic_id, seq)
         )
-    ''')
-    c.execute(
-        "CREATE INDEX IF NOT EXISTS idx_session_events_topic ON session_events(topic_id, seq)"
-    )
-    c.execute(
-        "CREATE INDEX IF NOT EXISTS idx_session_events_type ON session_events(event_type)"
-    )
+    """)
+    c.execute("CREATE INDEX IF NOT EXISTS idx_session_events_topic ON session_events(topic_id, seq)")
+    c.execute("CREATE INDEX IF NOT EXISTS idx_session_events_type ON session_events(event_type)")
 
-    c.execute('''
+    c.execute("""
         CREATE TABLE IF NOT EXISTS topic_token_stats (
             topic_id TEXT PRIMARY KEY,
             total_tokens INTEGER DEFAULT 0,
@@ -233,9 +229,9 @@ def init_tables(db):
             last_update TIMESTAMP DEFAULT (datetime('now', 'localtime')),
             FOREIGN KEY (topic_id) REFERENCES topics(topic_id)
         )
-    ''')
+    """)
 
-    c.execute('''
+    c.execute("""
         CREATE TABLE IF NOT EXISTS t_conv_summary (
             topic_id TEXT PRIMARY KEY,
             summary TEXT NOT NULL,
@@ -243,9 +239,9 @@ def init_tables(db):
             last_update TIMESTAMP DEFAULT (datetime('now', 'localtime')),
             FOREIGN KEY (topic_id) REFERENCES topics(topic_id)
         )
-    ''')
+    """)
 
-    c.execute('''
+    c.execute("""
         CREATE TABLE IF NOT EXISTS memories (
             id TEXT PRIMARY KEY,
             content TEXT NOT NULL,
@@ -263,13 +259,12 @@ def init_tables(db):
             pinned INTEGER NOT NULL DEFAULT 0,
             FOREIGN KEY (source_topic_id) REFERENCES topics(topic_id)
         )
-    ''')
-    for col, col_def in [('pinned', 'INTEGER NOT NULL DEFAULT 0'),
-                           ('content_hash', "TEXT DEFAULT ''")]:
+    """)
+    for col, col_def in [("pinned", "INTEGER NOT NULL DEFAULT 0"), ("content_hash", "TEXT DEFAULT ''")]:
         with contextlib.suppress(Exception):
             c.execute(f"ALTER TABLE memories ADD COLUMN {safe_ident(col)} {safe_ddl(col_def)}")
 
-    c.execute('''
+    c.execute("""
         CREATE TABLE IF NOT EXISTS system_prompts (
             id TEXT PRIMARY KEY,
             version TEXT NOT NULL,
@@ -279,9 +274,9 @@ def init_tables(db):
             is_active INTEGER DEFAULT 1,
             created_at TIMESTAMP DEFAULT (datetime('now', 'localtime'))
         )
-    ''')
+    """)
 
-    c.execute('''
+    c.execute("""
         CREATE TABLE IF NOT EXISTS reflections (
             id TEXT PRIMARY KEY,
             topic_id TEXT,
@@ -293,9 +288,9 @@ def init_tables(db):
             created_at TIMESTAMP DEFAULT (datetime('now', 'localtime')),
             FOREIGN KEY (topic_id) REFERENCES topics(topic_id)
         )
-    ''')
+    """)
 
-    c.execute('''
+    c.execute("""
         CREATE TABLE IF NOT EXISTS config_history (
             id TEXT PRIMARY KEY,
             key TEXT NOT NULL,
@@ -305,9 +300,9 @@ def init_tables(db):
             source_reflection_id TEXT,
             created_at TIMESTAMP DEFAULT (datetime('now', 'localtime'))
         )
-    ''')
+    """)
 
-    c.execute('''
+    c.execute("""
         CREATE TABLE IF NOT EXISTS scheduled_tasks (
             id TEXT PRIMARY KEY,
             name TEXT NOT NULL,
@@ -321,13 +316,13 @@ def init_tables(db):
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
-    ''')
+    """)
 
     # ── 工具使用统计（tool_shield 的数据源）：一行一工具，只增计数 ──
     c.execute(_TOOL_USAGE_CREATE)
 
     # ── 打断知识闭环（M2）：打断事件持久化 ──
-    c.execute('''
+    c.execute("""
         CREATE TABLE IF NOT EXISTS interruption_events (
             id TEXT PRIMARY KEY,
             topic_id TEXT,
@@ -344,13 +339,9 @@ def init_tables(db):
             followup_user_msg TEXT,
             followup_ts TEXT
         )
-    ''')
-    c.execute(
-        "CREATE INDEX IF NOT EXISTS idx_interrupt_topic ON interruption_events(topic_id)"
-    )
-    c.execute(
-        "CREATE INDEX IF NOT EXISTS idx_interrupt_status ON interruption_events(status)"
-    )
+    """)
+    c.execute("CREATE INDEX IF NOT EXISTS idx_interrupt_topic ON interruption_events(topic_id)")
+    c.execute("CREATE INDEX IF NOT EXISTS idx_interrupt_status ON interruption_events(status)")
 
     c.connection.commit()
     c.close()
@@ -383,7 +374,7 @@ def backfill_rounds_from_json(c) -> int:
         try:
             rounds = json.loads(raw)
         except (json.JSONDecodeError, TypeError):
-            continue          # 损坏的 JSON：跳过，不影响其他对话
+            continue  # 损坏的 JSON：跳过，不影响其他对话
         if not isinstance(rounds, list):
             continue
         for i, r in enumerate(rounds):
@@ -396,26 +387,31 @@ def backfill_rounds_from_json(c) -> int:
                     "(id, conversation_id, round_num, role, content, tool_calls, "
                     " tool_call_id, reasoning_content, stamp) "
                     "VALUES (?, ?, ?, ?, ?, ?, ?, ?, datetime('now', 'localtime'))",
-                    (uuid.uuid4().hex, conv_id, i, r.get("role", "") or "",
-                     r.get("content", "") or "",
-                     json.dumps(tc, ensure_ascii=False) if tc else None,
-                     r.get("tool_call_id"),
-                     r.get("reasoning_content", "") or ""),
+                    (
+                        uuid.uuid4().hex,
+                        conv_id,
+                        i,
+                        r.get("role", "") or "",
+                        r.get("content", "") or "",
+                        json.dumps(tc, ensure_ascii=False) if tc else None,
+                        r.get("tool_call_id"),
+                        r.get("reasoning_content", "") or "",
+                    ),
                 )
                 total += 1
             except sqlite3.Error:
-                continue      # 单项失败隔离：不拖垮整次迁移
+                continue  # 单项失败隔离：不拖垮整次迁移
     if total:
         c.connection.commit()
         log = logging.getLogger("Store")
-        log.warning("已回填 %d 个轮次（%d 个对话）: rounds_json → agent_rounds",
-                    total, len(rows))
+        log.warning("已回填 %d 个轮次（%d 个对话）: rounds_json → agent_rounds", total, len(rows))
     return total
 
 
 # ═══════════════════════════════════════════════
 #  Migration
 # ═══════════════════════════════════════════════
+
 
 def migrate(db):
     """Execute database migrations.
@@ -426,8 +422,7 @@ def migrate(db):
     c = db.cursor()
     migrate_int_to_uuid(c)
 
-    for col in ["rounds_json TEXT", "is_summarized INTEGER DEFAULT 0",
-                "memory_extracted INTEGER DEFAULT 0"]:
+    for col in ["rounds_json TEXT", "is_summarized INTEGER DEFAULT 0", "memory_extracted INTEGER DEFAULT 0"]:
         try:
             c.execute(f"ALTER TABLE conversations ADD COLUMN {safe_ddl(col)}")
             c.connection.commit()
@@ -463,7 +458,7 @@ def migrate(db):
     except sqlite3.OperationalError:
         pass
 
-    c.execute('''CREATE TABLE IF NOT EXISTS todo_items (
+    c.execute("""CREATE TABLE IF NOT EXISTS todo_items (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         topic_id TEXT NOT NULL,
         idx INTEGER NOT NULL,
@@ -471,7 +466,7 @@ def migrate(db):
         done INTEGER NOT NULL DEFAULT 0,
         created_at TIMESTAMP DEFAULT (datetime('now', 'localtime')),
         FOREIGN KEY (topic_id) REFERENCES topics(topic_id)
-    )''')
+    )""")
     c.connection.commit()
 
     # ── 数据回填：rounds_json → agent_rounds ──
@@ -487,14 +482,10 @@ def migrate(db):
     # idx_l0_snapshots_conv 支撑「按会话反查其 L0 快照」；l0_snapshots 本身
     # 以 hash 为主键（内容寻址），该索引只服务 first_conversation_id 回查。
     for ddl in [
-        "CREATE INDEX IF NOT EXISTS idx_agent_rounds_conv "
-        "ON agent_rounds(conversation_id, deleted_at)",
-        "CREATE INDEX IF NOT EXISTS idx_conversations_topic "
-        "ON conversations(topic_id, deleted_at)",
-        "CREATE INDEX IF NOT EXISTS idx_l0_snapshots_conv "
-        "ON l0_snapshots(first_conversation_id)",
-        "CREATE INDEX IF NOT EXISTS idx_l0_snapshots_topic "
-        "ON l0_snapshots(first_topic_id)",
+        "CREATE INDEX IF NOT EXISTS idx_agent_rounds_conv ON agent_rounds(conversation_id, deleted_at)",
+        "CREATE INDEX IF NOT EXISTS idx_conversations_topic ON conversations(topic_id, deleted_at)",
+        "CREATE INDEX IF NOT EXISTS idx_l0_snapshots_conv ON l0_snapshots(first_conversation_id)",
+        "CREATE INDEX IF NOT EXISTS idx_l0_snapshots_topic ON l0_snapshots(first_topic_id)",
     ]:
         with contextlib.suppress(Exception):
             c.execute(ddl)
@@ -554,75 +545,151 @@ def migrate_int_to_uuid(c):
         log.info(f"  迁移表 {old_name}")
 
     try:
-        for leftover in ["topics_new","conversations_new","topic_token_stats_new",
-                         "t_conv_summary_new","memories_new","agent_rounds_new",
-                         "system_prompts_new","reflections_new",
-                         "config_history_new"]:
+        for leftover in [
+            "topics_new",
+            "conversations_new",
+            "topic_token_stats_new",
+            "t_conv_summary_new",
+            "memories_new",
+            "agent_rounds_new",
+            "system_prompts_new",
+            "reflections_new",
+            "config_history_new",
+        ]:
             try:
                 c.execute(f"DROP TABLE IF EXISTS {safe_ident(leftover)}")
             except Exception:
-                logger.exception('op_failed')
+                logger.exception("op_failed")
 
-        _migrate_table("topics", [
-            "topic_id TEXT PRIMARY KEY", "title TEXT NOT NULL",
-            "create_stamp TIMESTAMP DEFAULT (datetime('now','localtime'))",
-            "last_update_stamp TIMESTAMP DEFAULT (datetime('now','localtime'))",
-        ], cast_cols={"topic_id"})
+        _migrate_table(
+            "topics",
+            [
+                "topic_id TEXT PRIMARY KEY",
+                "title TEXT NOT NULL",
+                "create_stamp TIMESTAMP DEFAULT (datetime('now','localtime'))",
+                "last_update_stamp TIMESTAMP DEFAULT (datetime('now','localtime'))",
+            ],
+            cast_cols={"topic_id"},
+        )
 
-        _migrate_table("conversations", [
-            "id TEXT PRIMARY KEY", "topic_id TEXT NOT NULL",
-            "user_msg TEXT NOT NULL", "ai_msg TEXT NOT NULL",
-            "is_func_calling INTEGER DEFAULT 0", "is_summarized INTEGER DEFAULT 0",
-            "stamp TIMESTAMP DEFAULT (datetime('now','localtime'))", "rounds_json TEXT",
-        ], cast_cols={"id", "topic_id"})
+        _migrate_table(
+            "conversations",
+            [
+                "id TEXT PRIMARY KEY",
+                "topic_id TEXT NOT NULL",
+                "user_msg TEXT NOT NULL",
+                "ai_msg TEXT NOT NULL",
+                "is_func_calling INTEGER DEFAULT 0",
+                "is_summarized INTEGER DEFAULT 0",
+                "stamp TIMESTAMP DEFAULT (datetime('now','localtime'))",
+                "rounds_json TEXT",
+            ],
+            cast_cols={"id", "topic_id"},
+        )
 
-        _migrate_table("topic_token_stats", [
-            "topic_id TEXT PRIMARY KEY", "total_tokens INTEGER DEFAULT 0",
-            "total_prompt_tokens INTEGER DEFAULT 0", "total_completion_tokens INTEGER DEFAULT 0",
-            "conversation_count INTEGER DEFAULT 0", "last_update TIMESTAMP DEFAULT (datetime('now','localtime'))",
-            "total_cheap_tokens INTEGER DEFAULT 0", "total_cheap_prompt_tokens INTEGER DEFAULT 0",
-            "total_cheap_completion_tokens INTEGER DEFAULT 0",
-        ], cast_cols={"topic_id"})
+        _migrate_table(
+            "topic_token_stats",
+            [
+                "topic_id TEXT PRIMARY KEY",
+                "total_tokens INTEGER DEFAULT 0",
+                "total_prompt_tokens INTEGER DEFAULT 0",
+                "total_completion_tokens INTEGER DEFAULT 0",
+                "conversation_count INTEGER DEFAULT 0",
+                "last_update TIMESTAMP DEFAULT (datetime('now','localtime'))",
+                "total_cheap_tokens INTEGER DEFAULT 0",
+                "total_cheap_prompt_tokens INTEGER DEFAULT 0",
+                "total_cheap_completion_tokens INTEGER DEFAULT 0",
+            ],
+            cast_cols={"topic_id"},
+        )
 
-        _migrate_table("t_conv_summary", [
-            "topic_id TEXT PRIMARY KEY", "summary TEXT NOT NULL",
-            "last_summarized_id TEXT", "last_update TIMESTAMP DEFAULT (datetime('now','localtime'))",
-        ], cast_cols={"topic_id", "last_summarized_id"})
+        _migrate_table(
+            "t_conv_summary",
+            [
+                "topic_id TEXT PRIMARY KEY",
+                "summary TEXT NOT NULL",
+                "last_summarized_id TEXT",
+                "last_update TIMESTAMP DEFAULT (datetime('now','localtime'))",
+            ],
+            cast_cols={"topic_id", "last_summarized_id"},
+        )
 
-        _migrate_table("memories", [
-            "id TEXT PRIMARY KEY", "content TEXT NOT NULL",
-            "category TEXT NOT NULL DEFAULT 'general'", "priority INTEGER NOT NULL DEFAULT 2",
-            "importance INTEGER NOT NULL DEFAULT 3", "expires_at TEXT",
-            "is_active INTEGER NOT NULL DEFAULT 1", "tags TEXT DEFAULT ''",
-            "source_topic_id TEXT", "created_at TIMESTAMP DEFAULT (datetime('now','localtime'))",
-            "updated_at TIMESTAMP DEFAULT (datetime('now','localtime'))", "last_accessed_at TIMESTAMP",
-        ], cast_cols={"id", "source_topic_id"})
+        _migrate_table(
+            "memories",
+            [
+                "id TEXT PRIMARY KEY",
+                "content TEXT NOT NULL",
+                "category TEXT NOT NULL DEFAULT 'general'",
+                "priority INTEGER NOT NULL DEFAULT 2",
+                "importance INTEGER NOT NULL DEFAULT 3",
+                "expires_at TEXT",
+                "is_active INTEGER NOT NULL DEFAULT 1",
+                "tags TEXT DEFAULT ''",
+                "source_topic_id TEXT",
+                "created_at TIMESTAMP DEFAULT (datetime('now','localtime'))",
+                "updated_at TIMESTAMP DEFAULT (datetime('now','localtime'))",
+                "last_accessed_at TIMESTAMP",
+            ],
+            cast_cols={"id", "source_topic_id"},
+        )
 
-        _migrate_table("agent_rounds", [
-            "id TEXT PRIMARY KEY", "conversation_id TEXT NOT NULL",
-            "round_num INTEGER NOT NULL", "role TEXT NOT NULL",
-            "content TEXT", "tool_calls TEXT", "tool_call_id TEXT",
-            "stamp TIMESTAMP DEFAULT (datetime('now','localtime'))",
-        ], cast_cols={"id", "conversation_id"})
+        _migrate_table(
+            "agent_rounds",
+            [
+                "id TEXT PRIMARY KEY",
+                "conversation_id TEXT NOT NULL",
+                "round_num INTEGER NOT NULL",
+                "role TEXT NOT NULL",
+                "content TEXT",
+                "tool_calls TEXT",
+                "tool_call_id TEXT",
+                "stamp TIMESTAMP DEFAULT (datetime('now','localtime'))",
+            ],
+            cast_cols={"id", "conversation_id"},
+        )
 
-        _migrate_table("system_prompts", [
-            "id TEXT PRIMARY KEY", "version TEXT NOT NULL", "content TEXT NOT NULL",
-            "reason TEXT DEFAULT ''", "source_reflection_id TEXT",
-            "is_active INTEGER DEFAULT 1", "created_at TIMESTAMP DEFAULT (datetime('now','localtime'))",
-        ], cast_cols={"id", "source_reflection_id"})
+        _migrate_table(
+            "system_prompts",
+            [
+                "id TEXT PRIMARY KEY",
+                "version TEXT NOT NULL",
+                "content TEXT NOT NULL",
+                "reason TEXT DEFAULT ''",
+                "source_reflection_id TEXT",
+                "is_active INTEGER DEFAULT 1",
+                "created_at TIMESTAMP DEFAULT (datetime('now','localtime'))",
+            ],
+            cast_cols={"id", "source_reflection_id"},
+        )
 
-        _migrate_table("reflections", [
-            "id TEXT PRIMARY KEY", "topic_id TEXT", "summary TEXT NOT NULL",
-            "details TEXT DEFAULT ''", "tool_stats TEXT DEFAULT '{}'",
-            "suggestions TEXT DEFAULT '[]'", "is_applied INTEGER DEFAULT 0",
-            "created_at TIMESTAMP DEFAULT (datetime('now','localtime'))",
-        ], cast_cols={"id", "topic_id"})
+        _migrate_table(
+            "reflections",
+            [
+                "id TEXT PRIMARY KEY",
+                "topic_id TEXT",
+                "summary TEXT NOT NULL",
+                "details TEXT DEFAULT ''",
+                "tool_stats TEXT DEFAULT '{}'",
+                "suggestions TEXT DEFAULT '[]'",
+                "is_applied INTEGER DEFAULT 0",
+                "created_at TIMESTAMP DEFAULT (datetime('now','localtime'))",
+            ],
+            cast_cols={"id", "topic_id"},
+        )
 
-        _migrate_table("config_history", [
-            "id TEXT PRIMARY KEY", "key TEXT NOT NULL", "old_value TEXT",
-            "new_value TEXT NOT NULL", "reason TEXT DEFAULT ''",
-            "source_reflection_id TEXT", "created_at TIMESTAMP DEFAULT (datetime('now','localtime'))",
-        ], cast_cols={"id", "source_reflection_id"})
+        _migrate_table(
+            "config_history",
+            [
+                "id TEXT PRIMARY KEY",
+                "key TEXT NOT NULL",
+                "old_value TEXT",
+                "new_value TEXT NOT NULL",
+                "reason TEXT DEFAULT ''",
+                "source_reflection_id TEXT",
+                "created_at TIMESTAMP DEFAULT (datetime('now','localtime'))",
+            ],
+            cast_cols={"id", "source_reflection_id"},
+        )
 
         c.connection.commit()
         log.warning("INTEGER→TEXT UUID 主键迁移完成！")
@@ -638,6 +705,7 @@ def migrate_int_to_uuid(c):
 # ═══════════════════════════════════════════════
 #  Weekly Rotation
 # ═══════════════════════════════════════════════
+
 
 def get_week_key():
     """Get the ISO week key string."""
@@ -657,26 +725,20 @@ def maybe_rotate_db(db_path):
         db_week = row[0] if row else None
         tmp_conn.close()
     except sqlite3.OperationalError:
-        logger.exception('op_failed')
+        logger.exception("op_failed")
 
     current_week = get_week_key()
     if db_week == current_week:
         return
     db_dir = os.path.dirname(db_path) or "."
-    archive_name = os.path.join(
-        db_dir, f"chat_history_{datetime.now().strftime('%Y-%m-%d')}.db"
-    )
+    archive_name = os.path.join(db_dir, f"chat_history_{datetime.now().strftime('%Y-%m-%d')}.db")
     if os.path.exists(archive_name):
-        archive_name = os.path.join(
-            db_dir, f"chat_history_{datetime.now().strftime('%Y-%m-%d_%H%M%S')}.db"
-        )
+        archive_name = os.path.join(db_dir, f"chat_history_{datetime.now().strftime('%Y-%m-%d_%H%M%S')}.db")
     try:
         shutil.copy2(db_path, archive_name)
         logger.info(f"归档旧数据库: {db_path} -> {archive_name} (保留历史记录)")
     except OSError as e:
-        logger.warning(
-            f"无法归档旧数据库: {e}。将继续使用当前 db，下次启动时重试。"
-        )
+        logger.warning(f"无法归档旧数据库: {e}。将继续使用当前 db，下次启动时重试。")
 
 
 def write_week_key(db):
@@ -693,9 +755,11 @@ def write_week_key(db):
 #  Backup
 # ═══════════════════════════════════════════════
 
+
 def auto_backup(db_path):
     """Automatically backup the database (max once per hour)."""
     import time as _time
+
     try:
         now = _time.time()
         last = meta_get(db_path, "last_backup_ts")
@@ -704,11 +768,9 @@ def auto_backup(db_path):
                 if now - float(last) < 3600:
                     return
             except ValueError:
-                logger.exception('op_failed')
+                logger.exception("op_failed")
 
-        backup_dir = os.path.join(
-            os.path.dirname(os.path.abspath(db_path)), "backup"
-        )
+        backup_dir = os.path.join(os.path.dirname(os.path.abspath(db_path)), "backup")
         os.makedirs(backup_dir, exist_ok=True)
         ts = _time.strftime("%Y-%m-%d_%H%M%S")
         backup_path = os.path.join(backup_dir, f"chat_history_{ts}.db")
@@ -729,8 +791,7 @@ def cleanup_backups(backup_dir: str, keep: int = 7):
     """Remove old backup files, keeping only the most recent N."""
     try:
         files = sorted(
-            [f for f in os.listdir(backup_dir)
-             if f.startswith("chat_history_") and f.endswith(".db")],
+            [f for f in os.listdir(backup_dir) if f.startswith("chat_history_") and f.endswith(".db")],
             reverse=True,
         )
         for old in files[keep:]:
@@ -738,7 +799,7 @@ def cleanup_backups(backup_dir: str, keep: int = 7):
             os.remove(p)
             logger.debug(f"清理旧备份: {p}")
     except Exception:
-        logger.exception('op_failed')
+        logger.exception("op_failed")
 
 
 def backup_now(db_path):
@@ -750,6 +811,7 @@ def backup_now(db_path):
 # ═══════════════════════════════════════════════
 #  Metadata helpers
 # ═══════════════════════════════════════════════
+
 
 def meta_get(db_path, key: str):
     """Read a metadata value (short connection)."""
@@ -767,18 +829,17 @@ def meta_set(db_path, key: str, value: str):
     """Write a metadata value (short connection)."""
     try:
         conn = sqlite3.connect(db_path)
-        conn.execute(
-            "INSERT OR REPLACE INTO _meta (key, value) VALUES (?, ?)", (key, value)
-        )
+        conn.execute("INSERT OR REPLACE INTO _meta (key, value) VALUES (?, ?)", (key, value))
         conn.commit()
         conn.close()
     except Exception:
-        logger.exception('op_failed')
+        logger.exception("op_failed")
 
 
 # ═══════════════════════════════════════════════
 #  Protection
 # ═══════════════════════════════════════════════
+
 
 def protect_db(db_path):
     """Create a marker file to prevent accidental deletion."""
@@ -792,4 +853,4 @@ def protect_db(db_path):
                 f.write(f"# 数据库路径: {db_abs}\n")
                 f.write(f"# 创建时间: {datetime.now().isoformat()}\n")
     except Exception:
-        logger.exception('op_failed')
+        logger.exception("op_failed")

@@ -79,8 +79,7 @@ class InterruptionStore(StoreComponent):
         try:
             c = self.conn.cursor()
             c.execute(
-                f"UPDATE {self._TABLE} SET status='classified', classification=?, "
-                "similarity=?, followup_user_msg=?, followup_ts=? WHERE id=?",
+                f"UPDATE {self._TABLE} SET status='classified', classification=?, similarity=?, followup_user_msg=?, followup_ts=? WHERE id=?",
                 (classification, similarity, followup_msg, followup_ts, event_id),
             )
             c.connection.commit()
@@ -105,8 +104,8 @@ class InterruptionStore(StoreComponent):
             c = self.conn.cursor()
             marks = ",".join("?" * len(ids))
             c.execute(
-                f"UPDATE {self._TABLE} SET status='precipitated' "
-                f"WHERE id IN ({marks})", ids,
+                f"UPDATE {self._TABLE} SET status='precipitated' WHERE id IN ({marks})",
+                ids,
             )
             n = c.rowcount
             c.connection.commit()
@@ -120,9 +119,7 @@ class InterruptionStore(StoreComponent):
         """按 id 查询事件。"""
         try:
             c = self.conn.cursor()
-            c.execute(
-                f"SELECT * FROM {self._TABLE} WHERE id=?", (event_id,)
-            )
+            c.execute(f"SELECT * FROM {self._TABLE} WHERE id=?", (event_id,))
             row = c.fetchone()
             c.close()
             return dict(row) if row else None
@@ -174,10 +171,7 @@ class InterruptionStore(StoreComponent):
         Returns:
             [{tool_name, count, last_ts}]
         """
-        sql = (
-            f"SELECT tool_name, COUNT(*) AS count, MAX(timestamp) AS last_ts "
-            f"FROM {self._TABLE} WHERE tool_name IS NOT NULL AND tool_name != ''"
-        )
+        sql = f"SELECT tool_name, COUNT(*) AS count, MAX(timestamp) AS last_ts FROM {self._TABLE} WHERE tool_name IS NOT NULL AND tool_name != ''"
         params: list = []
         if since:
             sql += " AND timestamp>=?"
@@ -198,8 +192,7 @@ class InterruptionStore(StoreComponent):
         try:
             c = self.conn.cursor()
             c.execute(
-                f"DELETE FROM {self._TABLE} WHERE timestamp < "
-                "datetime('now', 'localtime', ?)",
+                f"DELETE FROM {self._TABLE} WHERE timestamp < datetime('now', 'localtime', ?)",
                 (f"-{int(keep_days)} days",),
             )
             deleted = c.rowcount

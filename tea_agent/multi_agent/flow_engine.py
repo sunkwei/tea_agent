@@ -46,6 +46,7 @@ logger = logging.getLogger(__name__)
 # Step 定义
 # ───────────────────────────────────────────────
 
+
 class StepStatus(Enum):
     PENDING = "pending"
     RUNNING = "running"
@@ -76,13 +77,15 @@ class FlowState:
         self._change_id += 1
         old = self._data.get(key)
         self._data[key] = value
-        self._history.append({
-            "change_id": self._change_id,
-            "key": key,
-            "old_value": old,
-            "new_value": value,
-            "timestamp": datetime.now().isoformat(),
-        })
+        self._history.append(
+            {
+                "change_id": self._change_id,
+                "key": key,
+                "old_value": old,
+                "new_value": value,
+                "timestamp": datetime.now().isoformat(),
+            }
+        )
 
     def __contains__(self, key: str) -> bool:
         return key in self._data
@@ -132,10 +135,12 @@ def flow_start():
 
     起始节点在 run() 时自动触发，无需等待其他事件。
     """
+
     def decorator(func: Callable):
         func.__flow_start__ = True
         func.__flow_listen__ = None
         return func
+
     return decorator
 
 
@@ -147,6 +152,7 @@ def flow_listen(*sources, condition: Callable | None = None):
         *sources: 监听的源（可以是函数引用或事件名称字符串）
         condition: 可选的条件函数 fn(state) → bool，决定是否执行
     """
+
     def decorator(func: Callable):
         func.__flow_start__ = False
         func.__flow_listen__ = {
@@ -154,6 +160,7 @@ def flow_listen(*sources, condition: Callable | None = None):
             "condition": condition,
         }
         return func
+
     return decorator
 
 
@@ -165,17 +172,20 @@ def flow_route(output_map: dict[str, str] | None = None):
         output_map: 输出值到事件名的映射，如 {"refactor": "deep_clean", "fix": "quick_fix"}
                      返回的字符串将被映射为事件触发
     """
+
     def decorator(func: Callable):
         func.__flow_start__ = False
         func.__flow_listen__ = None
         func.__flow_route__ = output_map or {}
         return func
+
     return decorator
 
 
 # ───────────────────────────────────────────────
 # 核心引擎
 # ───────────────────────────────────────────────
+
 
 class FlowEngine:
     """
@@ -459,11 +469,13 @@ class FlowEngine:
                 self._completed_events.add(target)
                 logger.info(f"    ↪ 路由: {result} → {target}")
 
-            self._execution_log.append({
-                "step": step_name,
-                "status": "completed",
-                "time_seconds": round(elapsed, 2),
-            })
+            self._execution_log.append(
+                {
+                    "step": step_name,
+                    "status": "completed",
+                    "time_seconds": round(elapsed, 2),
+                }
+            )
 
             result_preview = str(result)[:100] if result else ""
             logger.info(f"  ✅ [{step_name}] 完成 ({elapsed:.1f}s) {result_preview}")
@@ -473,12 +485,14 @@ class FlowEngine:
             self._statuses[step_name] = StepStatus.FAILED
             self._errors[step_name] = str(e)
             self._timings[step_name] = elapsed
-            self._execution_log.append({
-                "step": step_name,
-                "status": "failed",
-                "error": str(e),
-                "time_seconds": round(elapsed, 2),
-            })
+            self._execution_log.append(
+                {
+                    "step": step_name,
+                    "status": "failed",
+                    "error": str(e),
+                    "time_seconds": round(elapsed, 2),
+                }
+            )
             logger.error(f"  ❌ [{step_name}] 失败 ({elapsed:.1f}s): {e}")
 
     def _find_downstream_steps(self, completed_step: str) -> list[str]:

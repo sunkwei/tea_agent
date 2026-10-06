@@ -51,16 +51,20 @@ class ToolHookRegistry:
 
     def on_pre(self, tool_name: str | None = None):
         """装饰器：注册 pre-execute 钩子。"""
+
         def deco(fn: Callable) -> Callable:
             self.register_pre(tool_name, fn)
             return fn
+
         return deco
 
     def on_post(self, tool_name: str | None = None):
         """装饰器：注册 post-execute 钩子。"""
+
         def deco(fn: Callable) -> Callable:
             self.register_post(tool_name, fn)
             return fn
+
         return deco
 
     def register_pre(self, tool_name: str | None, fn: Callable) -> None:

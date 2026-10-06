@@ -11,6 +11,7 @@ from tea_agent.session.prompts import (
 
 logger = logging.getLogger("session")
 
+
 class SummarizerComponent(SessionComponent):
     """历史摘要组件 — 负责旧对话压缩、三级历史管理、语义摘要生成。"""
 
@@ -21,9 +22,7 @@ class SummarizerComponent(SessionComponent):
     def initialize(self) -> None:
         pass
 
-    def summarize_old_history(
-        self, api_component, get_summarize_client_fn, force: bool = False
-    ) -> None:
+    def summarize_old_history(self, api_component, get_summarize_client_fn, force: bool = False) -> None:
         """将旧对话历史压缩为摘要。
 
         Args:
@@ -78,9 +77,7 @@ class SummarizerComponent(SessionComponent):
         try:
             cli, mdl = get_summarize_client_fn()
             # 判断是否使用便宜模型
-            is_cheap = (
-                self.ctx.cheap_client is not None and cli is self.ctx.cheap_client
-            )
+            is_cheap = self.ctx.cheap_client is not None and cli is self.ctx.cheap_client
 
             cheap_params = get_cheap_params("summarizer")
             response = api_component.call_summarize_api(
@@ -90,9 +87,7 @@ class SummarizerComponent(SessionComponent):
                     {"role": "system", "content": HISTORY_SUMMARIZE_SYSTEM},
                     {
                         "role": "user",
-                        "content": HISTORY_SUMMARIZE_USER.format(
-                            existing=existing, old_text=old_text
-                        ),
+                        "content": HISTORY_SUMMARIZE_USER.format(existing=existing, old_text=old_text),
                     },
                 ],
                 temperature=cheap_params["temperature"],
@@ -108,9 +103,7 @@ class SummarizerComponent(SessionComponent):
 
                 # 4. 更新数据库
                 last_conv_id = convs_to_summarize[-1]["id"]
-                storage.update_topic_summary(
-                    topic_id, new_summary, last_summarized_id=last_conv_id
-                )
+                storage.update_topic_summary(topic_id, new_summary, last_summarized_id=last_conv_id)
                 for conv in convs_to_summarize:
                     storage.mark_as_summarized(conv["id"])
 
@@ -120,9 +113,7 @@ class SummarizerComponent(SessionComponent):
                 # 裁剪 messages，保持与数据库同步
                 boundary = self._find_recent_boundary()
                 if boundary > 1:
-                    self.ctx.messages = [self.ctx.messages[0]] + self.ctx.messages[
-                        boundary:
-                    ]
+                    self.ctx.messages = [self.ctx.messages[0]] + self.ctx.messages[boundary:]
 
                 if self.ctx.tool_log:
                     self.ctx.tool_log(f"📝 历史摘要更新：{new_summary}")
@@ -132,9 +123,7 @@ class SummarizerComponent(SessionComponent):
             if self.ctx.tool_log:
                 self.ctx.tool_log(f"⚠️ 摘要生成失败: {e}")
 
-    def _conversations_to_text(
-        self, conversations: list[dict], max_per_msg: int = 500
-    ) -> str:
+    def _conversations_to_text(self, conversations: list[dict], max_per_msg: int = 500) -> str:
         lines = []
         for conv in conversations:
             # 用户消息

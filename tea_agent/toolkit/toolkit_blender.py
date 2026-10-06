@@ -153,7 +153,7 @@ def _tail(text: str, n: int) -> str:
     """保留尾部 n 字符（错误信息通常在末尾），截断时加标记。"""
     if not text or len(text) <= n:
         return text or ""
-    return "...(truncated %d chars)...\n" % (len(text) - n) + text[-n:]
+    return f"...(truncated {len(text) - n} chars)..." + "\n" + text[-n:]
 
 
 def _spawn(cmd: list, timeout: int) -> dict:
@@ -179,7 +179,7 @@ def _spawn(cmd: list, timeout: int) -> dict:
             "secs": round(time.time() - t0, 1),
             "stdout": out or "",
             "stderr": str(e),
-            "error": "timeout after %ss" % timeout,
+            "error": f"timeout after {timeout}s",
         }
     except FileNotFoundError:
         return {
@@ -188,7 +188,7 @@ def _spawn(cmd: list, timeout: int) -> dict:
             "secs": round(time.time() - t0, 1),
             "stdout": "",
             "stderr": "",
-            "error": "executable not found: %s" % cmd[0],
+            "error": f"executable not found: {cmd[0]}",
         }
     except OSError as e:
         return {
@@ -197,7 +197,7 @@ def _spawn(cmd: list, timeout: int) -> dict:
             "secs": round(time.time() - t0, 1),
             "stdout": "",
             "stderr": "",
-            "error": "spawn failed: %s" % e,
+            "error": f"spawn failed: {e}",
         }
 
 
@@ -249,11 +249,11 @@ PROBE_PY = (
 """tea_agent toolkit_blender probe — 输出 Blender 能力清单。"""
 '''
     + _PARAMS_SNIPPET
-    + """
+    + f"""
 import bpy
 
-MARKER = "%s"
-info = {}
+MARKER = "{RESULT_MARKER}"
+info = {{}}
 info["version"] = bpy.app.version_string
 info["version_tuple"] = list(bpy.app.version)
 info["python"] = _sys.version.split()[0]
@@ -274,7 +274,7 @@ except Exception as e:
 try:
     cprefs = bpy.context.preferences.addons["cycles"].preferences
     info["compute_device_type"] = str(cprefs.compute_device_type)
-    info["compute_devices"] = [{"name": d.name, "type": d.type} for d in cprefs.devices]
+    info["compute_devices"] = [{{"name": d.name, "type": d.type}} for d in cprefs.devices]
 except Exception:
     info["compute_devices"] = []
 exporters = (("glb", "export_scene.gltf"), ("obj", "wm.obj_export"),
@@ -292,7 +292,6 @@ for fmt, dotted in exporters:
 info["export_formats"] = ok_fmts
 print(MARKER + " " + _json.dumps(info))
 """
-    % RESULT_MARKER
 )
 
 SCENE_PY = (
@@ -300,24 +299,24 @@ SCENE_PY = (
 """tea_agent toolkit_blender scene — 只读检视 .blend 场景。"""
 '''
     + _PARAMS_SNIPPET
-    + """
+    + f"""
 import bpy
 
-MARKER = "%s"
+MARKER = "{RESULT_MARKER}"
 p = _argv_params()
 limit = int(p.get("limit", 400))
 meshes = [o for o in bpy.data.objects if o.type == "MESH"]
 objs = []
 for o in list(bpy.data.objects)[:limit]:
-    d = {"name": o.name, "type": o.type,
+    d = {{"name": o.name, "type": o.type,
          "loc": [round(float(v), 3) for v in o.location],
-         "dim": [round(float(v), 3) for v in o.dimensions]}
+         "dim": [round(float(v), 3) for v in o.dimensions]}}
     if o.type == "MESH":
         d["verts"] = len(o.data.vertices)
         d["faces"] = len(o.data.polygons)
         d["materials"] = [m.name for m in o.data.materials if m]
     objs.append(d)
-info = {
+info = {{
     "scene": bpy.context.scene.name,
     "object_count": len(bpy.data.objects),
     "mesh_count": len(meshes),
@@ -327,10 +326,9 @@ info = {
     "materials": [m.name for m in bpy.data.materials],
     "collections": [c.name for c in bpy.data.collections],
     "objects": objs,
-}
+}}
 print(MARKER + " " + _json.dumps(info))
 """
-    % RESULT_MARKER
 )
 
 EXPORT_PY = (
@@ -338,15 +336,15 @@ EXPORT_PY = (
 """tea_agent toolkit_blender export — 导出当前 .blend 为通用 3D 格式。"""
 '''
     + _PARAMS_SNIPPET
-    + """
+    + f"""
 import bpy
 import os
 
-MARKER = "%s"
+MARKER = "{RESULT_MARKER}"
 p = _argv_params()
 fmt = str(p.get("format", "glb")).lower()
 out = str(p.get("output", ""))
-info = {"format": fmt, "output": out, "ok": False}
+info = {{"format": fmt, "output": out, "ok": False}}
 
 
 def _has(dotted):
@@ -382,7 +380,7 @@ try:
     elif fmt == "usd":
         bpy.ops.wm.usd_export(filepath=out)
     else:
-        raise ValueError("unsupported format: %%r" %% fmt)
+        raise ValueError("unsupported format: %r" % fmt)
     # glTF_SEPARATE 会产出目录 + 多个文件，其余为单文件
     if os.path.isdir(out):
         total = sum(os.path.getsize(os.path.join(dp, f))
@@ -391,13 +389,12 @@ try:
     elif os.path.exists(out):
         info["size"] = os.path.getsize(out)
     else:
-        raise FileNotFoundError("export produced no file: %%s" %% out)
+        raise FileNotFoundError("export produced no file: %s" % out)
     info["ok"] = True
 except Exception as e:
-    info["error"] = "%%s: %%s" %% (type(e).__name__, e)
+    info["error"] = "%s: %s" % (type(e).__name__, e)
 print(MARKER + " " + _json.dumps(info))
 """
-    % RESULT_MARKER
 )
 
 # ══════════════════════ 各 action 实现 ══════════════════════
@@ -434,9 +431,7 @@ def _action_probe(blender: str, timeout: int) -> dict:
         _safe_remove(path)
 
 
-def _action_run(
-    blender: str, code: str, script_path: str, blend_file: str, factory: bool, script_args: list | None, timeout: int
-) -> dict:
+def _action_run(blender: str, code: str, script_path: str, blend_file: str, factory: bool, script_args: list | None, timeout: int) -> dict:
     if not code and not script_path:
         return {"ok": False, "error": "run 需要 code 或 script_path 参数"}
     tmp = None
@@ -447,7 +442,7 @@ def _action_run(
         else:
             script = osp.abspath(script_path)
             if not osp.isfile(script):
-                return {"ok": False, "error": "script not found: %s" % script_path}
+                return {"ok": False, "error": f"script not found: {script_path}"}
         return _run_script(blender, script, blend=blend_file, factory=factory, script_args=script_args, timeout=timeout)
     finally:
         if tmp:
@@ -457,19 +452,15 @@ def _action_run(
 def _action_scene(blender: str, blend_file: str, factory: bool, timeout: int) -> dict:
     path = _write_temp_script(SCENE_PY, "tea_blender_scene_")
     try:
-        return _run_script(
-            blender, path, blend=blend_file, factory=factory, script_args=[json.dumps({"limit": 400})], timeout=timeout
-        )
+        return _run_script(blender, path, blend=blend_file, factory=factory, script_args=[json.dumps({"limit": 400})], timeout=timeout)
     finally:
         _safe_remove(path)
 
 
-def _action_export(
-    blender: str, blend_file: str, fmt: str, output_dir: str, output_path: str, factory: bool, timeout: int
-) -> dict:
+def _action_export(blender: str, blend_file: str, fmt: str, output_dir: str, output_path: str, factory: bool, timeout: int) -> dict:
     fmt = (fmt or "glb").lower()
     if fmt not in EXPORT_EXTS:
-        return {"ok": False, "error": "unsupported format: %s" % fmt, "supported": sorted(EXPORT_EXTS)}
+        return {"ok": False, "error": f"unsupported format: {fmt}", "supported": sorted(EXPORT_EXTS)}
     if output_path:
         out = osp.abspath(output_path)
     else:
@@ -488,11 +479,7 @@ def _action_export(
         res = _extract_result(r.get("stdout", ""))
         if res and res.get("ok") and osp.exists(out):
             r["artifact"] = out
-            r["artifact_size"] = (
-                sum(osp.getsize(osp.join(dp, f)) for dp, _, fns in os.walk(out) for f in fns)
-                if osp.isdir(out)
-                else osp.getsize(out)
-            )
+            r["artifact_size"] = sum(osp.getsize(osp.join(dp, f)) for dp, _, fns in os.walk(out) for f in fns) if osp.isdir(out) else osp.getsize(out)
         elif res and res.get("error"):
             r["ok"] = False
             r["error"] = res["error"]
@@ -517,19 +504,19 @@ def _action_render(
     if fmt not in ("PNG", "JPEG", "WEBP", "OPEN_EXR"):
         return {
             "ok": False,
-            "error": "unsupported render format: %s" % fmt,
+            "error": f"unsupported render format: {fmt}",
             "supported": ["PNG", "JPEG", "WEBP", "OPEN_EXR"],
         }
     outdir = _ensure_dir(output_dir)
     exprs = []
     if camera:
-        exprs.append("import bpy;bpy.context.scene.camera=bpy.data.objects[%r]" % camera)
+        exprs.append(f"import bpy;bpy.context.scene.camera=bpy.data.objects[{camera!r}]")
     if width:
-        exprs.append("bpy.context.scene.render.resolution_x=%d" % int(width))
+        exprs.append(f"bpy.context.scene.render.resolution_x={int(width)}")
     if height:
-        exprs.append("bpy.context.scene.render.resolution_y=%d" % int(height))
+        exprs.append(f"bpy.context.scene.render.resolution_y={int(height)}")
     if samples:
-        exprs.append("bpy.context.scene.cycles.samples=%d" % int(samples))
+        exprs.append(f"bpy.context.scene.cycles.samples={int(samples)}")
     extra = ["-o", osp.join(outdir, "frame_"), "-F", fmt, "-x", "1"]
     if exprs:
         extra.extend(["--python-expr", ";".join(exprs)])
@@ -626,16 +613,16 @@ def toolkit_blender(
         return {
             "ok": False,
             "action": action,
-            "error": "unknown action: %s" % action,
+            "error": f"unknown action: {action}",
             "supported": ["probe", "run", "render", "scene", "export"],
         }
 
     # 输入预检（无需启动 Blender 即可判定的错误）
     if action in ("render", "scene", "export"):
         if not blend_file:
-            return {"ok": False, "action": action, "error": "%s 需要 blend_file 参数" % action}
+            return {"ok": False, "action": action, "error": f"{action} 需要 blend_file 参数"}
         if not osp.isfile(blend_file):
-            return {"ok": False, "action": action, "error": "blend file not found: %s" % blend_file}
+            return {"ok": False, "action": action, "error": f"blend file not found: {blend_file}"}
 
     blender = _find_blender(blender_path)
     if not blender:

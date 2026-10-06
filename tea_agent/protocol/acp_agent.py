@@ -18,7 +18,6 @@ import contextlib
 import json
 import logging
 import os
-import shutil
 import threading
 import time
 import uuid
@@ -152,14 +151,10 @@ class AcpAgent:
         try:
             from tea_agent.config import load_config as _load_config
             from tea_agent.store import Storage as _Storage
+
             _acp_cfg = _load_config(self._config_path)
-            self._acp_storage = _Storage(
-                db_path=_acp_cfg.paths.db_path_abs
-            )
-            logger.info(
-                f"ACP storage initialized: "
-                f"{_acp_cfg.paths.db_path_abs}"
-            )
+            self._acp_storage = _Storage(db_path=_acp_cfg.paths.db_path_abs)
+            logger.info(f"ACP storage initialized: {_acp_cfg.paths.db_path_abs}")
         except Exception as e:
             logger.warning(f"ACP storage init failed (will use lazy init): {e}")
             self._acp_storage = None
@@ -213,18 +208,14 @@ class AcpAgent:
         # 身份三元组/运行时参数统一来自 provider.yaml；ACP 只需独立会话库，
         # 用 TEA_DB_PATH 环境变量隔离（见 PathsConfig.resolve）。
         home_dir = Path.home()
-        os.environ.setdefault(
-            "TEA_DB_PATH", str(home_dir / ".tea_agent" / "chat_acp.db"))
+        os.environ.setdefault("TEA_DB_PATH", str(home_dir / ".tea_agent" / "chat_acp.db"))
         return None
 
     # ── public API ─────────────────────────────────────────────────────────
 
     def run(self):
         """Start the agent: register handlers and begin reading stdin."""
-        logger.info(
-            f"ACP Agent {self._agent_name} v{self._agent_version} "
-            f"starting (JSON-RPC 2.0 / stdio)"
-        )
+        logger.info(f"ACP Agent {self._agent_name} v{self._agent_version} starting (JSON-RPC 2.0 / stdio)")
 
         try:
             self._transport.start()
@@ -273,21 +264,11 @@ class AcpAgent:
         )
 
         # Document events (notifications)
-        t.on_notification(
-            "document/didOpen", self._handle_document_did_open
-        )
-        t.on_notification(
-            "document/didChange", self._handle_document_did_change
-        )
-        t.on_notification(
-            "document/didClose", self._handle_document_did_close
-        )
-        t.on_notification(
-            "document/didSave", self._handle_document_did_save
-        )
-        t.on_notification(
-            "document/didFocus", self._handle_document_did_focus
-        )
+        t.on_notification("document/didOpen", self._handle_document_did_open)
+        t.on_notification("document/didChange", self._handle_document_did_change)
+        t.on_notification("document/didClose", self._handle_document_did_close)
+        t.on_notification("document/didSave", self._handle_document_did_save)
+        t.on_notification("document/didFocus", self._handle_document_did_focus)
 
         # NES (Inline Edit Suggestions)
         t.on_request("nes/start", self._handle_nes_start)
@@ -307,18 +288,12 @@ class AcpAgent:
     # HANDLERS — Lifecycle
     # ══════════════════════════════════════════════════════════════════════
 
-    def _handle_initialize(
-        self, params: Any, msg_id: RequestId
-    ) -> dict:
+    def _handle_initialize(self, params: Any, msg_id: RequestId) -> dict:
         """Handle ``initialize`` — exchange capabilities with the client.
 
         Receives ClientCapabilities, responds with AgentCapabilities.
         """
-        logger.info(
-            f"initialize: client={params.get('clientInfo', {})}"
-            if params
-            else "initialize"
-        )
+        logger.info(f"initialize: client={params.get('clientInfo', {})}" if params else "initialize")
 
         # Build agent capabilities
         # These define what the agent can do
@@ -342,9 +317,7 @@ class AcpAgent:
             "agentCapabilities": agent_capabilities,
         }
 
-    def _handle_authenticate(
-        self, params: Any, msg_id: RequestId
-    ) -> dict:
+    def _handle_authenticate(self, params: Any, msg_id: RequestId) -> dict:
         """Handle ``authenticate`` — authenticate the agent.
 
         Checks ``apiKey`` or ``token`` from params against the configured
@@ -369,9 +342,7 @@ class AcpAgent:
             "Authentication failed: invalid API key",
         )
 
-    def _handle_logout(
-        self, params: Any, msg_id: RequestId
-    ) -> dict:
+    def _handle_logout(self, params: Any, msg_id: RequestId) -> dict:
         """Handle ``logout`` — log out the current user."""
         logger.info("logout")
         return {"logged_out": True}
@@ -380,9 +351,7 @@ class AcpAgent:
     # HANDLERS — Provider/Model Management
     # ══════════════════════════════════════════════════════════════════════
 
-    def _handle_providers_list(
-        self, params: Any, msg_id: RequestId
-    ) -> dict:
+    def _handle_providers_list(self, params: Any, msg_id: RequestId) -> dict:
         """Handle ``providers/list`` — list available models."""
         try:
             from tea_agent.config import get_config
@@ -394,17 +363,18 @@ class AcpAgent:
             for key in ["main_model", "cheap_model"]:
                 model_name = getattr(config, key, None)
                 if model_name:
-                    providers.append({
-                        "id": key,
-                        "name": key.replace("_", " ").title(),
-                        "model": model_name,
-                        "active": key == "main_model",
-                    })
+                    providers.append(
+                        {
+                            "id": key,
+                            "name": key.replace("_", " ").title(),
+                            "model": model_name,
+                            "active": key == "main_model",
+                        }
+                    )
 
             if not providers:
                 providers = [
-                    {"id": "default", "name": "Default Model",
-                     "model": "auto", "active": True},
+                    {"id": "default", "name": "Default Model", "model": "auto", "active": True},
                 ]
 
             return {"object": "list", "data": providers}
@@ -412,19 +382,14 @@ class AcpAgent:
             logger.exception("providers/list failed")
             return {"object": "list", "data": [], "error": str(e)}
 
-    def _handle_providers_set(
-        self, params: Any, msg_id: RequestId
-    ) -> dict:
+    def _handle_providers_set(self, params: Any, msg_id: RequestId) -> dict:
         """Handle ``providers/set`` — set the active provider/model."""
         logger.info(f"providers/set: {params}")
         provider_id = (params or {}).get("provider_id", "")
         model = (params or {}).get("model", "")
-        return {"success": True, "provider_id": provider_id,
-                "model": model}
+        return {"success": True, "provider_id": provider_id, "model": model}
 
-    def _handle_providers_disable(
-        self, params: Any, msg_id: RequestId
-    ) -> dict:
+    def _handle_providers_disable(self, params: Any, msg_id: RequestId) -> dict:
         """Handle ``providers/disable`` — disable a provider."""
         provider_id = (params or {}).get("provider_id", "")
         logger.info(f"providers/disable: {provider_id}")
@@ -434,18 +399,14 @@ class AcpAgent:
     # HANDLERS — Session Lifecycle
     # ══════════════════════════════════════════════════════════════════════
 
-    def _handle_session_new(
-        self, params: Any, msg_id: RequestId
-    ) -> dict:
+    def _handle_session_new(self, params: Any, msg_id: RequestId) -> dict:
         """Handle ``session/new`` — create a new session.
 
         Accepts: cwd, additionalDirectories, mcpServers, mode, model,
                  configOptions, tools, context.
         """
         cwd = (params or {}).get("cwd", os.getcwd())
-        additional_dirs = (params or {}).get(
-            "additionalDirectories", []
-        )
+        additional_dirs = (params or {}).get("additionalDirectories", [])
         mode = (params or {}).get("mode")
         model = (params or {}).get("model")
 
@@ -464,10 +425,7 @@ class AcpAgent:
         with self._sessions_lock:
             self._sessions[session_id] = session
 
-        logger.info(
-            f"session/new: {session_id} cwd={cwd} "
-            f"mode={mode} model={model}"
-        )
+        logger.info(f"session/new: {session_id} cwd={cwd} mode={mode} model={model}")
 
         # Build available commands and config options for the client
         available_commands = self._get_available_commands()
@@ -502,9 +460,7 @@ class AcpAgent:
             "configOptions": config_options,
         }
 
-    def _handle_session_load(
-        self, params: Any, msg_id: RequestId
-    ) -> dict:
+    def _handle_session_load(self, params: Any, msg_id: RequestId) -> dict:
         """Handle ``session/load`` — load an existing session.
 
         After loading, replays conversation history to the client
@@ -523,15 +479,11 @@ class AcpAgent:
                 storage = self._acp_storage
                 topic = storage.get_topic(session_id)
                 if topic:
-                    time.strftime(
-                        "%Y-%m-%dT%H:%M:%SZ", time.gmtime()
-                    )
+                    time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
                     session = SessionState(
                         session_id=session_id,
                         cwd=os.getcwd(),
-                        created_at=str(
-                            topic.get("create_stamp", "")
-                        )[:19],
+                        created_at=str(topic.get("create_stamp", ""))[:19],
                         title=topic.get("title", ""),
                     )
                     with self._sessions_lock:
@@ -580,21 +532,21 @@ class AcpAgent:
             },
         }
 
-    def _handle_session_list(
-        self, params: Any, msg_id: RequestId
-    ) -> dict:
+    def _handle_session_list(self, params: Any, msg_id: RequestId) -> dict:
         """Handle ``session/list`` — list available sessions."""
         limit = (params or {}).get("limit", 50)
         sessions = []
 
         with self._sessions_lock:
             for sid, s in list(self._sessions.items())[:limit]:
-                sessions.append({
-                    "sessionId": sid,
-                    "title": s.title or sid[:8],
-                    "createdAt": s.created_at,
-                    "cwd": s.cwd,
-                })
+                sessions.append(
+                    {
+                        "sessionId": sid,
+                        "title": s.title or sid[:8],
+                        "createdAt": s.created_at,
+                        "cwd": s.cwd,
+                    }
+                )
 
         # Also try storage
         try:
@@ -602,22 +554,19 @@ class AcpAgent:
             for t in storage.list_topics()[:limit]:
                 tid = t["topic_id"]
                 if tid not in self._sessions:
-                    sessions.append({
-                        "sessionId": tid,
-                        "title": t.get("title", "") or tid[:8],
-                        "createdAt": str(
-                            t.get("create_stamp", "")
-                        )[:19],
-                    })
+                    sessions.append(
+                        {
+                            "sessionId": tid,
+                            "title": t.get("title", "") or tid[:8],
+                            "createdAt": str(t.get("create_stamp", ""))[:19],
+                        }
+                    )
         except Exception:
             pass
 
-        return {"object": "list", "data": sessions,
-                "total": len(sessions)}
+        return {"object": "list", "data": sessions, "total": len(sessions)}
 
-    def _handle_session_delete(
-        self, params: Any, msg_id: RequestId
-    ) -> dict:
+    def _handle_session_delete(self, params: Any, msg_id: RequestId) -> dict:
         """Handle ``session/delete`` — delete a session."""
         session_id = (params or {}).get("sessionId", "")
         logger.info(f"session/delete: {session_id}")
@@ -630,9 +579,7 @@ class AcpAgent:
 
         return {"success": True, "sessionId": session_id}
 
-    def _handle_session_fork(
-        self, params: Any, msg_id: RequestId
-    ) -> dict:
+    def _handle_session_fork(self, params: Any, msg_id: RequestId) -> dict:
         """Handle ``session/fork`` — fork an existing session."""
         session_id = (params or {}).get("sessionId", "")
         logger.info(f"session/fork: {session_id}")
@@ -659,9 +606,7 @@ class AcpAgent:
             "forkedFrom": session_id,
         }
 
-    def _handle_session_resume(
-        self, params: Any, msg_id: RequestId
-    ) -> dict:
+    def _handle_session_resume(self, params: Any, msg_id: RequestId) -> dict:
         """Handle ``session/resume`` — resume a session.
 
         Like ``session/load`` but also replays conversation history
@@ -679,15 +624,11 @@ class AcpAgent:
                 storage = self._acp_storage
                 topic = storage.get_topic(session_id)
                 if topic:
-                    time.strftime(
-                        "%Y-%m-%dT%H:%M:%SZ", time.gmtime()
-                    )
+                    time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
                     session = SessionState(
                         session_id=session_id,
                         cwd=os.getcwd(),
-                        created_at=str(
-                            topic.get("create_stamp", "")
-                        )[:19],
+                        created_at=str(topic.get("create_stamp", ""))[:19],
                         title=topic.get("title", ""),
                     )
                     with self._sessions_lock:
@@ -720,9 +661,7 @@ class AcpAgent:
             "configOptions": self._get_config_options(),
         }
 
-    def _handle_session_close(
-        self, params: Any, msg_id: RequestId
-    ) -> dict:
+    def _handle_session_close(self, params: Any, msg_id: RequestId) -> dict:
         """Handle ``session/close`` — close a session."""
         session_id = (params or {}).get("sessionId", "")
         logger.info(f"session/close: {session_id}")
@@ -736,9 +675,7 @@ class AcpAgent:
     # HANDLER — session/prompt (the core)
     # ══════════════════════════════════════════════════════════════════════
 
-    def _handle_session_prompt(
-        self, params: Any, msg_id: RequestId
-    ) -> dict:
+    def _handle_session_prompt(self, params: Any, msg_id: RequestId) -> dict:
         """Handle ``session/prompt`` — send a prompt to the agent.
 
         This is the main chat endpoint. It receives a list of messages
@@ -788,10 +725,7 @@ class AcpAgent:
                 "messages is required",
             )
 
-        logger.info(
-            f"session/prompt: session={session_id[:8] if session_id else 'new'} "
-            f"messages={len(messages)}"
-        )
+        logger.info(f"session/prompt: session={session_id[:8] if session_id else 'new'} messages={len(messages)}")
 
         # Signal that this turn is active (for cancellation)
         cancel_event = threading.Event()
@@ -817,15 +751,14 @@ class AcpAgent:
             if session_id and not history:
                 try:
                     storage = self._acp_storage
-                    past_convs = storage.get_conversations(
-                        session_id, limit=10, include_rounds=False
-                    )
+                    past_convs = storage.get_conversations(session_id, limit=10, include_rounds=False)
                     for pc in past_convs:
                         u = pc.get("user_msg", "") or ""
                         a = pc.get("ai_msg", "") or ""
                         if isinstance(u, str):
                             try:
                                 import json as _json
+
                                 p = _json.loads(u)
                                 if isinstance(p, dict):
                                     u = p.get("text", u)
@@ -834,28 +767,16 @@ class AcpAgent:
                         if u:
                             history.append({"role": "user", "content": str(u)})
                         if a:
-                            history.append(
-                                {"role": "assistant", "content": str(a)}
-                            )
+                            history.append({"role": "assistant", "content": str(a)})
                     if past_convs:
-                        logger.info(
-                            f"session/prompt: injected {len(past_convs)} "
-                            f"past conversations from DB for "
-                            f"session {session_id[:8]}"
-                        )
+                        logger.info(f"session/prompt: injected {len(past_convs)} past conversations from DB for session {session_id[:8]}")
                 except Exception as e:
                     logger.warning(f"Failed to inject DB history: {e}")
 
             # Build the full prompt with context
             prompt_parts = []
             if history:
-                prompt_parts.append(
-                    "Previous conversation:\n"
-                    + "\n".join(
-                        f"{m['role']}: {m['content']}"
-                        for m in history
-                    )
-                )
+                prompt_parts.append("Previous conversation:\n" + "\n".join(f"{m['role']}: {m['content']}" for m in history))
             prompt_parts.append(user_content)
             full_prompt = "\n\n".join(prompt_parts)
 
@@ -868,9 +789,7 @@ class AcpAgent:
                             "content": [
                                 {
                                     "type": "text",
-                                    "text": (
-                                        "The request was cancelled."
-                                    ),
+                                    "text": ("The request was cancelled."),
                                 }
                             ],
                         }
@@ -922,13 +841,12 @@ class AcpAgent:
                 except Exception as e:
                     stream_failures += 1
                     if stream_failures <= 3:
-                        logger.warning(
-                            f"send_update(content_block) failed "
-                            f"({stream_failures}/3): {e}"
-                        )
+                        logger.warning(f"send_update(content_block) failed ({stream_failures}/3): {e}")
 
             ai_text, tool_calls = self._process_prompt(
-                session_id, full_prompt, cancel_event,
+                session_id,
+                full_prompt,
+                cancel_event,
                 stream_callback=stream_callback,
             )
 
@@ -941,9 +859,7 @@ class AcpAgent:
                             "content": [
                                 {
                                     "type": "text",
-                                    "text": (
-                                        "The request was cancelled."
-                                    ),
+                                    "text": ("The request was cancelled."),
                                 }
                             ],
                         }
@@ -956,14 +872,14 @@ class AcpAgent:
 
             # Add tool call results if any
             for tc in tool_calls:
-                content_blocks.append({
-                    "type": "tool_use",
-                    "name": tc.get("name", "unknown"),
-                    "input": tc.get("input", {}),
-                    "tool_use_id": tc.get(
-                        "id", f"tu_{uuid.uuid4().hex[:12]}"
-                    ),
-                })
+                content_blocks.append(
+                    {
+                        "type": "tool_use",
+                        "name": tc.get("name", "unknown"),
+                        "input": tc.get("input", {}),
+                        "tool_use_id": tc.get("id", f"tu_{uuid.uuid4().hex[:12]}"),
+                    }
+                )
 
             # Send final update to signal completion
             try:
@@ -983,8 +899,7 @@ class AcpAgent:
                         "content": content_blocks,
                     }
                 ],
-                "stopReason": "end_turn" if not tool_calls
-                else "tool_use",
+                "stopReason": "end_turn" if not tool_calls else "tool_use",
                 "toolsUsed": tool_calls or [],
             }
 
@@ -993,14 +908,12 @@ class AcpAgent:
             raise JsonRpcError(
                 JsonRpcError.INTERNAL_ERROR,
                 f"Prompt processing failed: {e}",
-            )
+            ) from e
         finally:
             with self._active_turns_lock:
                 self._active_turns.pop(session_id, None)
 
-    def _handle_session_cancel(
-        self, params: Any, msg_id: RequestId
-    ) -> dict:
+    def _handle_session_cancel(self, params: Any, msg_id: RequestId) -> dict:
         """Handle ``session/cancel`` — cancel the current turn."""
         session_id = (params or {}).get("sessionId", "")
         logger.info(f"session/cancel: {session_id}")
@@ -1013,9 +926,7 @@ class AcpAgent:
             return {"success": True, "cancelled": True}
         return {"success": True, "cancelled": False}
 
-    def _handle_session_set_mode(
-        self, params: Any, msg_id: RequestId
-    ) -> dict:
+    def _handle_session_set_mode(self, params: Any, msg_id: RequestId) -> dict:
         """Handle ``session/set_mode`` — set the session mode."""
         session_id = (params or {}).get("sessionId", "")
         mode = (params or {}).get("mode", "")
@@ -1028,23 +939,16 @@ class AcpAgent:
         logger.info(f"session/set_mode: {session_id} -> {mode}")
         return {"success": True, "mode": mode}
 
-    def _handle_session_set_config_option(
-        self, params: Any, msg_id: RequestId
-    ) -> dict:
+    def _handle_session_set_config_option(self, params: Any, msg_id: RequestId) -> dict:
         """Handle ``session/set_config_option`` — set config."""
         session_id = (params or {}).get("sessionId", "")
         option = (params or {}).get("option", "")
         value = (params or {}).get("value")
 
-        logger.info(
-            f"session/set_config_option: "
-            f"{session_id} {option}={value}"
-        )
+        logger.info(f"session/set_config_option: {session_id} {option}={value}")
         return {"success": True}
 
-    def _handle_session_get_messages(
-        self, params: Any, msg_id: RequestId
-    ) -> dict:
+    def _handle_session_get_messages(self, params: Any, msg_id: RequestId) -> dict:
         """Handle ``session/get_messages`` — retrieve conversation history.
 
         Returns messages for a session, supporting pagination via
@@ -1055,26 +959,18 @@ class AcpAgent:
         limit = (params or {}).get("limit", 100)
         before = (params or {}).get("before")  # cursor for pagination
 
-        logger.info(
-            f"session/get_messages: {session_id} "
-            f"limit={limit} before={before}"
-        )
+        logger.info(f"session/get_messages: {session_id} limit={limit} before={before}")
 
         messages: list[dict] = []
         try:
             storage = self._acp_storage
             # Fetch all conversations; limit=0 means no limit
-            convs = storage.get_conversations(
-                session_id, limit=0, include_rounds=True
-            )
+            convs = storage.get_conversations(session_id, limit=0, include_rounds=True)
 
             # Apply pagination cursor if provided
             if before:
                 # Filter to messages before the cursor timestamp
-                convs = [
-                    c for c in convs
-                    if str(c.get("stamp", "")) < str(before)
-                ]
+                convs = [c for c in convs if str(c.get("stamp", "")) < str(before)]
 
             # Apply limit
             if limit > 0 and len(convs) > limit:
@@ -1087,23 +983,28 @@ class AcpAgent:
                 if isinstance(user_content, str):
                     try:
                         import json as _json
+
                         parsed = _json.loads(user_content)
                         if isinstance(parsed, dict):
                             user_content = parsed.get("text", user_content)
                     except Exception:
                         pass
-                messages.append({
-                    "role": "user",
-                    "content": [{"type": "text", "text": str(user_content)}],
-                    "timestamp": stamp,
-                })
+                messages.append(
+                    {
+                        "role": "user",
+                        "content": [{"type": "text", "text": str(user_content)}],
+                        "timestamp": stamp,
+                    }
+                )
                 # Assistant message
                 ai_content = c.get("ai_msg", "") or ""
-                messages.append({
-                    "role": "assistant",
-                    "content": [{"type": "text", "text": str(ai_content)}],
-                    "timestamp": stamp,
-                })
+                messages.append(
+                    {
+                        "role": "assistant",
+                        "content": [{"type": "text", "text": str(ai_content)}],
+                        "timestamp": stamp,
+                    }
+                )
         except Exception as e:
             logger.exception("session/get_messages failed")
             return {
@@ -1168,9 +1069,7 @@ class AcpAgent:
     # HANDLERS — NES (Inline Edit Suggestions)
     # ══════════════════════════════════════════════════════════════════════
 
-    def _handle_nes_start(
-        self, params: Any, msg_id: RequestId
-    ) -> dict:
+    def _handle_nes_start(self, params: Any, msg_id: RequestId) -> dict:
         """Handle ``nes/start`` — start an inline edit session."""
         session_id = (params or {}).get("sessionId", "")
         file_path = (params or {}).get("filePath", "")
@@ -1184,9 +1083,7 @@ class AcpAgent:
             "status": "ready",
         }
 
-    def _handle_nes_suggest(
-        self, params: Any, msg_id: RequestId
-    ) -> dict:
+    def _handle_nes_suggest(self, params: Any, msg_id: RequestId) -> dict:
         """Handle ``nes/suggest`` — suggest an inline edit.
 
         Uses an existing session agent if available (fast), otherwise
@@ -1211,9 +1108,7 @@ class AcpAgent:
             ctx += f"Selected code:\n{selection}\n\n"
 
         full_prompt = (
-            f"You are a code editor assistant. Generate a concise code "
-            f"suggestion based on the user's request.\n\n"
-            f"{ctx}User request: {prompt}"
+            f"You are a code editor assistant. Generate a concise code suggestion based on the user's request.\n\n{ctx}User request: {prompt}"
         )
 
         ai_text = ""
@@ -1237,11 +1132,7 @@ class AcpAgent:
             logger.warning(f"nes/suggest: agent call failed: {e}")
 
         if not ai_text:
-            ai_text = (
-                f"# Suggested edit for "
-                f"{os.path.basename(file_path) if file_path else 'file'}\n"
-                f"# Based on: {prompt}\n"
-            )
+            ai_text = f"# Suggested edit for {os.path.basename(file_path) if file_path else 'file'}\n# Based on: {prompt}\n"
 
         return {
             "nesId": nes_id,
@@ -1255,9 +1146,7 @@ class AcpAgent:
             "status": "suggested",
         }
 
-    def _handle_nes_accept(
-        self, params: Any, msg_id: RequestId
-    ) -> dict:
+    def _handle_nes_accept(self, params: Any, msg_id: RequestId) -> dict:
         """Handle ``nes/accept`` — accept a suggestion."""
         nes_id = (params or {}).get("nesId", "")
         suggestion_id = (params or {}).get("suggestionId", "")
@@ -1268,9 +1157,7 @@ class AcpAgent:
             "status": "accepted",
         }
 
-    def _handle_nes_reject(
-        self, params: Any, msg_id: RequestId
-    ) -> dict:
+    def _handle_nes_reject(self, params: Any, msg_id: RequestId) -> dict:
         """Handle ``nes/reject`` — reject a suggestion."""
         nes_id = (params or {}).get("nesId", "")
         suggestion_id = (params or {}).get("suggestionId", "")
@@ -1281,9 +1168,7 @@ class AcpAgent:
             "status": "rejected",
         }
 
-    def _handle_nes_close(
-        self, params: Any, msg_id: RequestId
-    ) -> dict:
+    def _handle_nes_close(self, params: Any, msg_id: RequestId) -> dict:
         """Handle ``nes/close`` — close an inline edit session."""
         nes_id = (params or {}).get("nesId", "")
         logger.info(f"nes/close: {nes_id}")
@@ -1293,9 +1178,7 @@ class AcpAgent:
     # HANDLERS — Extension Points
     # ══════════════════════════════════════════════════════════════════════
 
-    def _handle_ext_request(
-        self, params: Any, msg_id: RequestId
-    ) -> dict:
+    def _handle_ext_request(self, params: Any, msg_id: RequestId) -> dict:
         """Handle ``ext/request`` — custom extension request.
 
         Allows external tools to call arbitrary Tea Agent capabilities.
@@ -1326,10 +1209,12 @@ class AcpAgent:
             tools = []
             for name, meta in agent.toolkit.meta_map.items():
                 fn = meta.get("function", {})
-                tools.append({
-                    "name": fn.get("name", name),
-                    "description": fn.get("description", ""),
-                })
+                tools.append(
+                    {
+                        "name": fn.get("name", name),
+                        "description": fn.get("description", ""),
+                    }
+                )
             return {"object": "list", "data": tools, "total": len(tools)}
         except Exception as e:
             return {"error": str(e)}
@@ -1350,6 +1235,7 @@ class AcpAgent:
         key = params.get("key", "")
         try:
             from tea_agent.config import get_config
+
             config = get_config(self._config_path)
             return {"key": key, "value": getattr(config, key, None)}
         except Exception as e:
@@ -1361,6 +1247,7 @@ class AcpAgent:
         value = params.get("value")
         try:
             from tea_agent.config import get_config
+
             config = get_config(self._config_path)
             setattr(config, key, value)
             config.save()
@@ -1424,13 +1311,9 @@ class AcpAgent:
         """
         try:
             storage = self._acp_storage
-            convs = storage.get_conversations(
-                session_id, limit=0, include_rounds=False
-            )
+            convs = storage.get_conversations(session_id, limit=0, include_rounds=False)
             if not convs:
-                logger.debug(
-                    f"_replay_history: no history for {session_id[:8]}"
-                )
+                logger.debug(f"_replay_history: no history for {session_id[:8]}")
                 return
 
             total = len(convs)
@@ -1438,15 +1321,9 @@ class AcpAgent:
             # messages to keep the client responsive.
             if total > max_messages:
                 convs = convs[-max_messages:]
-                logger.info(
-                    f"_replay_history: truncating {total} → "
-                    f"{max_messages} for {session_id[:8]}"
-                )
+                logger.info(f"_replay_history: truncating {total} → {max_messages} for {session_id[:8]}")
 
-            logger.info(
-                f"_replay_history: replaying {len(convs)} messages "
-                f"for session {session_id[:8]}"
-            )
+            logger.info(f"_replay_history: replaying {len(convs)} messages for session {session_id[:8]}")
 
             # Small delay so the client has time to process the
             # session/load response before receiving updates
@@ -1458,6 +1335,7 @@ class AcpAgent:
                 if isinstance(user_text, str):
                     try:
                         import json as _json
+
                         parsed = _json.loads(user_text)
                         if isinstance(parsed, dict):
                             user_text = parsed.get("text", user_text)
@@ -1467,9 +1345,7 @@ class AcpAgent:
                     self.client.send_update(
                         session_id,
                         "user_message",
-                        content_blocks=[
-                            {"type": "text", "text": str(user_text)}
-                        ],
+                        content_blocks=[{"type": "text", "text": str(user_text)}],
                     )
 
                 # Assistant message
@@ -1478,9 +1354,7 @@ class AcpAgent:
                     self.client.send_update(
                         session_id,
                         "content_block",
-                        content_blocks=[
-                            {"type": "text", "text": str(ai_text)}
-                        ],
+                        content_blocks=[{"type": "text", "text": str(ai_text)}],
                     )
 
             # Signal completion of history replay
@@ -1500,9 +1374,7 @@ class AcpAgent:
             except Exception:
                 pass
 
-            logger.info(
-                f"_replay_history: done for {session_id[:8]}"
-            )
+            logger.info(f"_replay_history: done for {session_id[:8]}")
         except Exception as e:
             logger.exception(f"_replay_history failed: {e}")
 
@@ -1525,9 +1397,7 @@ class AcpAgent:
         storage = self._acp_storage
         try:
             if not storage.get_topic(session_id):
-                storage.create_topic(
-                    f"ACP-{session_id[:8]}", topic_id=session_id
-                )
+                storage.create_topic(f"ACP-{session_id[:8]}", topic_id=session_id)
         except Exception:
             pass
 
@@ -1548,9 +1418,7 @@ class AcpAgent:
                 return self._global_agent
             from tea_agent.agent import Agent as _Agent
 
-            self._global_agent = _Agent(
-                mode="lightweight", config_path=self._config_path
-            )
+            self._global_agent = _Agent(mode="lightweight", config_path=self._config_path)
             return self._global_agent
 
     def _extract_text_content(self, message: dict) -> str:
@@ -1565,9 +1433,7 @@ class AcpAgent:
                     if block.get("type") == "text":
                         texts.append(block.get("text", ""))
                     elif block.get("type") == "tool_result":
-                        texts.append(
-                            str(block.get("content", ""))
-                        )
+                        texts.append(str(block.get("content", "")))
                     elif block.get("type") == "image":
                         texts.append("[Image]")
             return "\n".join(texts)
@@ -1626,11 +1492,7 @@ class AcpAgent:
                     except Exception:
                         stream_failures += 1
                         if stream_failures <= 3:
-                            logger.warning(
-                                f"stream callback error "
-                                f"({stream_failures}/3):",
-                                exc_info=True
-                            )
+                            logger.warning(f"stream callback error ({stream_failures}/3):", exc_info=True)
 
             # Run the chat
             ai_msg, used = agent.sess.chat_stream(
@@ -1662,9 +1524,7 @@ class AcpAgent:
         except ImportError as e:
             logger.error(f"Failed to import Agent: {e}")
             return (
-                "I'm running in ACP protocol mode but the full Tea Agent "
-                "engine is not available. Please ensure the package is "
-                "properly installed.",
+                "I'm running in ACP protocol mode but the full Tea Agent engine is not available. Please ensure the package is properly installed.",
                 [],
             )
         except Exception as e:

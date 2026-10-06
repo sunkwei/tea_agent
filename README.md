@@ -280,16 +280,13 @@ Layer 3  pytest 测试验证 → 失败按快照恢复目标文件（不再 git 
 
 ```python
 # ① 注册设备
-toolkit_remote_agent(action="register", device_id="bm1688-1",
-    host="172.16.1.49", port=8282, working_path="/app/zkfs/")
+toolkit_remote_agent(action="register", device_id="bm1688-1", host="172.16.1.49", port=8282, working_path="/app/zkfs/")
 
 # ② 下发任务（不传 session_id → 自动新建远程主题）
-r = toolkit_remote_agent(action="exec", device_id="terminal-49",
-    goal="分析 /record/dbs/log/ 今日日志")
+r = toolkit_remote_agent(action="exec", device_id="terminal-49", goal="分析 /record/dbs/log/ 今日日志")
 
 # ③ 同一 session_id → 追加上下文继续对话
-r2 = toolkit_remote_agent(action="exec", device_id="terminal-49",
-    goal="继续排查网络问题", session_id=r["session_id"])
+r2 = toolkit_remote_agent(action="exec", device_id="terminal-49", goal="继续排查网络问题", session_id=r["session_id"])
 
 # ④ 任务完成 → 断开
 toolkit_remote_agent(action="unregister", device_id="terminal-49")

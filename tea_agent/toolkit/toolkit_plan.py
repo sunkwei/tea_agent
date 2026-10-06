@@ -22,12 +22,15 @@ PLANS_DIR = ".tea_agent_run/plans"
 
 # ── 数据结构 ────────────────────────────────────────────
 
+
 def _ensure_plans_dir():
     """Internal: ensure plans dir."""
     os.makedirs(PLANS_DIR, exist_ok=True)
 
+
 def _plan_path(plan_id: str) -> str:
     return os.path.join(PLANS_DIR, f"{plan_id}.json")
+
 
 def _load_plan(plan_id: str) -> dict | None:
     path = _plan_path(plan_id)
@@ -36,25 +39,30 @@ def _load_plan(plan_id: str) -> dict | None:
     with open(path, encoding="utf-8") as f:
         return json.load(f)
 
+
 def _save_plan(plan: dict):
     _ensure_plans_dir()
     plan["updated_at"] = datetime.now().isoformat()
     with open(_plan_path(plan["id"]), "w", encoding="utf-8") as f:
         json.dump(plan, f, indent=2, ensure_ascii=False)
 
+
 _KNOWN_STEP_META = {"id", "desc", "action", "depends_on", "verify", "params", "doc_type", "doc_module", "doc_content"}
+
 
 def _get_topic_id() -> str | None:
     """获取当前 topic_id"""
     try:
         from tea_agent.session_ref import get_agent
+
         agent = get_agent()
         if agent is not None:
-            return getattr(agent, 'current_topic_id', None)
+            return getattr(agent, "current_topic_id", None)
     except Exception:
-        logger.exception('op_failed')
+        logger.exception("op_failed")
 
     return None
+
 
 def _new_plan(goal: str, steps: list[dict]) -> dict:
     now = datetime.now().isoformat()
@@ -63,21 +71,23 @@ def _new_plan(goal: str, steps: list[dict]) -> dict:
         _KNOWN_STEP_META & set(s.keys())
         # 显式 params 优先，否则所有非 meta 键自动归入 params
         params = {**s["params"]} if "params" in s else {k: v for k, v in s.items() if k not in _KNOWN_STEP_META}
-        normalized.append({
-            "id": s.get("id", str(i + 1)),
-            "desc": s["desc"],
-            "action": s.get("action", "self_evolve"),
-            "params": params,
-            "depends_on": s.get("depends_on", []),
-            "verify": s.get("verify", "py_compile"),
-            "doc_type": s.get("doc_type", ""),
-            "doc_module": s.get("doc_module", ""),
-            "doc_content": s.get("doc_content", ""),
-            "status": "pending",
-            "result": None,
-            "started_at": None,
-            "finished_at": None,
-        })
+        normalized.append(
+            {
+                "id": s.get("id", str(i + 1)),
+                "desc": s["desc"],
+                "action": s.get("action", "self_evolve"),
+                "params": params,
+                "depends_on": s.get("depends_on", []),
+                "verify": s.get("verify", "py_compile"),
+                "doc_type": s.get("doc_type", ""),
+                "doc_module": s.get("doc_module", ""),
+                "doc_content": s.get("doc_content", ""),
+                "status": "pending",
+                "result": None,
+                "started_at": None,
+                "finished_at": None,
+            }
+        )
     return {
         "id": uuid.uuid4().hex[:8],
         "topic_id": _get_topic_id() or "",
@@ -89,7 +99,9 @@ def _new_plan(goal: str, steps: list[dict]) -> dict:
         "steps": normalized,
     }
 
+
 # ── 核心逻辑 ────────────────────────────────────────────
+
 
 def _deps_satisfied(step: dict, all_steps: list[dict]) -> bool:
     for dep_id in step.get("depends_on", []):
@@ -98,16 +110,20 @@ def _deps_satisfied(step: dict, all_steps: list[dict]) -> bool:
             return False
     return True
 
+
 def _next_pending(plan: dict) -> dict | None:
     for step in plan["steps"]:
         if step["status"] == "pending" and _deps_satisfied(step, plan["steps"]):
             return step
     return None
 
+
 def _count_status(plan: dict, status: str) -> int:
     return sum(1 for s in plan["steps"] if s["status"] == status)
 
+
 # ── 工具入口 ────────────────────────────────────────────
+
 
 def toolkit_plan(
     action: str,
@@ -119,6 +135,7 @@ def toolkit_plan(
 ) -> dict:
     """Plandex 风格 Plan→Execute→Verify 工作流。"""
     import os as _os
+
     cwd = cwd or _os.getcwd()
 
     try:
@@ -128,7 +145,9 @@ def toolkit_plan(
             plan = _new_plan(goal, steps)
             _save_plan(plan)
             return {
-                "ok": True, "plan_id": plan["id"], "goal": goal,
+                "ok": True,
+                "plan_id": plan["id"],
+                "goal": goal,
                 "total_steps": len(plan["steps"]),
                 "hint": f"action='run' plan_id='{plan['id']}' 执行全部",
             }
@@ -140,7 +159,8 @@ def toolkit_plan(
             if not plan:
                 return {"ok": False, "error": f"计划不存在: {plan_id}"}
             return {
-                "ok": True, "plan": plan,
+                "ok": True,
+                "plan": plan,
                 "progress": f"{_count_status(plan, 'done')}/{len(plan['steps'])} done",
             }
 
@@ -186,7 +206,7 @@ def toolkit_plan(
             review_sections.append("graph LR")
             for s in plan["steps"]:
                 node_id = s["id"].replace(" ", "_")
-                review_sections.append(f"  {node_id}[\"{s['id']}: {s['desc'][:30]}\"]")
+                review_sections.append(f'  {node_id}["{s["id"]}: {s["desc"][:30]}"]')
                 for dep in s.get("depends_on", []):
                     review_sections.append(f"  {dep.replace(' ', '_')} --> {node_id}")
             review_sections.append("```")
@@ -232,17 +252,25 @@ def toolkit_plan(
             """画布模式 — 创建一个空白画布计划用于 brainstorming"""
             if not goal:
                 return {"ok": False, "error": "canvas 需要 goal 参数"}
-            plan = _new_plan(goal, steps or [{
-                "id": "draft",
-                "desc": f"设计实现: {goal[:50]}",
-                "action": "verify_only",
-                "params": {},
-                "verify": "manual",
-            }])
+            plan = _new_plan(
+                goal,
+                steps
+                or [
+                    {
+                        "id": "draft",
+                        "desc": f"设计实现: {goal[:50]}",
+                        "action": "verify_only",
+                        "params": {},
+                        "verify": "manual",
+                    }
+                ],
+            )
             plan["status"] = "draft"
             _save_plan(plan)
             return {
-                "ok": True, "plan_id": plan["id"], "goal": goal,
+                "ok": True,
+                "plan_id": plan["id"],
+                "goal": goal,
                 "mode": "canvas",
                 "hint": f"画布已创建 (plan_id='{plan['id']}')。使用 action='review' 查看，action='insert' 添加步骤，确认后 action='run' 执行。",
             }
@@ -252,12 +280,17 @@ def toolkit_plan(
             plans = []
             for fname in sorted(os.listdir(PLANS_DIR), reverse=True):
                 if fname.endswith(".json"):
-                    p = json.load(open(os.path.join(PLANS_DIR, fname), encoding="utf-8"))
-                    plans.append({
-                        "id": p["id"], "goal": p["goal"][:80], "status": p["status"],
-                        "progress": f"{_count_status(p, 'done')}/{len(p['steps'])}",
-                        "updated": p.get("updated_at", "")[:19],
-                    })
+                    with open(os.path.join(PLANS_DIR, fname), encoding="utf-8") as _fh:
+                        p = json.load(_fh)
+                    plans.append(
+                        {
+                            "id": p["id"],
+                            "goal": p["goal"][:80],
+                            "status": p["status"],
+                            "progress": f"{_count_status(p, 'done')}/{len(p['steps'])}",
+                            "updated": p.get("updated_at", "")[:19],
+                        }
+                    )
             return {"ok": True, "plans": plans}
         if action == "delete":
             if not plan_id:
@@ -292,7 +325,9 @@ def toolkit_plan(
         logger.exception(f"toolkit_plan: {e}")
         return {"ok": False, "error": str(e)[:300]}
 
+
 # ── Action 实现 ──────────────────────────────────────────
+
 
 def _do_step(plan_id, step_id, cwd):
     if not plan_id:
@@ -311,13 +346,13 @@ def _do_step(plan_id, step_id, cwd):
             all_done = all(s["status"] in ("done", "skipped") for s in plan["steps"])
             plan["status"] = "done" if all_done else "failed"
             _save_plan(plan)
-            return {"ok": True, "done": all_done, "plan_status": plan["status"],
-                    "summary": _step_summary(plan)}
+            return {"ok": True, "done": all_done, "plan_status": plan["status"], "summary": _step_summary(plan)}
 
     if not _deps_satisfied(step, plan["steps"]):
         return {"ok": False, "error": f"步骤 {step['id']} 依赖未满足: {step['depends_on']}"}
 
     return _execute_step(plan, step, cwd)
+
 
 def _do_verify(plan_id, step_id, cwd):
     if not plan_id:
@@ -332,6 +367,7 @@ def _do_verify(plan_id, step_id, cwd):
         return _verify_step(step, cwd)
     results = [_verify_step(s, cwd) for s in plan["steps"] if s["status"] == "done"]
     return {"ok": True, "verified": len(results), "results": results}
+
 
 def _do_run(plan_id, cwd):
     if not plan_id:
@@ -351,11 +387,11 @@ def _do_run(plan_id, cwd):
         if not result.get("ok"):
             plan["status"] = "failed"
             _save_plan(plan)
-            return {"ok": False, "error": f"步骤 {step['id']} 失败: {result.get('error','')}",
-                    "executed": executed, "plan_id": plan_id}
+            return {"ok": False, "error": f"步骤 {step['id']} 失败: {result.get('error', '')}", "executed": executed, "plan_id": plan_id}
     plan["status"] = "done"
     _save_plan(plan)
     return {"ok": True, "executed": executed, "plan_id": plan_id, "summary": _step_summary(plan)}
+
 
 def _do_resume(plan_id, cwd):
     if not plan_id:
@@ -370,11 +406,14 @@ def _do_resume(plan_id, cwd):
     _save_plan(plan)
     return _do_run(plan_id, cwd)
 
+
 # ── 内部辅助 ────────────────────────────────────────────
+
 
 def _step_summary(plan: dict) -> str:
     icons = {"done": "✓", "failed": "✗", "running": "▶", "pending": "○", "skipped": "−"}
-    return "\n".join(f"  {icons.get(s['status'],'?')} [{s['id']}] {s['desc']}" for s in plan["steps"])
+    return "\n".join(f"  {icons.get(s['status'], '?')} [{s['id']}] {s['desc']}" for s in plan["steps"])
+
 
 def _execute_step(plan: dict, step: dict, cwd: str) -> dict:
     step["status"] = "running"
@@ -389,6 +428,7 @@ def _execute_step(plan: dict, step: dict, cwd: str) -> dict:
 
         if action == "self_evolve":
             from tea_agent.toolkit.toolkit_self_evolve import toolkit_self_evolve
+
             result = toolkit_self_evolve(
                 file_path=params["file_path"],
                 description=step["desc"],
@@ -412,8 +452,8 @@ def _execute_step(plan: dict, step: dict, cwd: str) -> dict:
 
         elif action == "exec":
             import subprocess
-            r = subprocess.run(params.get("cmd", []), capture_output=True,
-                               text=True, timeout=120, cwd=cwd)
+
+            r = subprocess.run(params.get("cmd", []), capture_output=True, text=True, timeout=120, cwd=cwd)
             result = {"ok": r.returncode == 0, "stdout": r.stdout, "stderr": r.stderr}
         elif action == "verify_only":
             result = _verify_step(step, cwd)
@@ -440,9 +480,14 @@ def _execute_step(plan: dict, step: dict, cwd: str) -> dict:
 
     _save_plan(plan)
 
-    return {"ok": result.get("ok", False), "step_id": step["id"],
-            "desc": step["desc"], "result": result,
-            "plan_progress": f"{_count_status(plan, 'done')}/{len(plan['steps'])}"}
+    return {
+        "ok": result.get("ok", False),
+        "step_id": step["id"],
+        "desc": step["desc"],
+        "result": result,
+        "plan_progress": f"{_count_status(plan, 'done')}/{len(plan['steps'])}",
+    }
+
 
 def _verify_step(step: dict, cwd: str) -> dict:
     verify_type = step.get("verify", "py_compile")
@@ -450,6 +495,7 @@ def _verify_step(step: dict, cwd: str) -> dict:
     try:
         import py_compile
         import subprocess as sp
+
         params = step.get("params", {})
         fp = params.get("file_path", "")
 
@@ -461,14 +507,12 @@ def _verify_step(step: dict, cwd: str) -> dict:
                 results["compile"] = f"FAIL: {e}"
 
         if any(k in verify_type for k in ("lint", "ruff")) and fp:
-            r = sp.run(["ruff", "check", "--output-format", "json", os.path.join(cwd, fp)],
-                       capture_output=True, text=True, timeout=15, cwd=cwd)
+            r = sp.run(["ruff", "check", "--output-format", "json", os.path.join(cwd, fp)], capture_output=True, text=True, timeout=15, cwd=cwd)
             diags = json.loads(r.stdout) if r.stdout.strip() else []
             results["lint"] = "ok" if not diags else f"{len(diags)} issues"
 
         if any(k in verify_type for k in ("test", "pytest")):
-            r = sp.run([os.sys.executable, "-m", "pytest", "test_*.py", "-q", "--tb=short"],
-                       capture_output=True, text=True, timeout=60, cwd=cwd)
+            r = sp.run([os.sys.executable, "-m", "pytest", "test_*.py", "-q", "--tb=short"], capture_output=True, text=True, timeout=60, cwd=cwd)
             results["test"] = (r.stdout + r.stderr)[-300:]
 
     except Exception as e:
@@ -477,7 +521,9 @@ def _verify_step(step: dict, cwd: str) -> dict:
     all_ok = all(not str(v).startswith("FAIL") for v in results.values())
     return {"ok": all_ok, "step_id": step.get("id"), "verify": results}
 
+
 # ── 自动落盘（借鉴 best-skills/dev-workflow）────────────────
+
 
 def _detect_doc_type(step: dict) -> str | None:
     """从步骤描述自动检测落盘文档类型。
@@ -591,6 +637,7 @@ def _update_module_index(cwd: str, module: str, doc_type: str, doc_path: str):
     """
     try:
         import os as _os
+
         index_path = _os.path.join(cwd, "docs", "模块索引.md")
         entry = f"- **{module}** → [{doc_type}]({_os.path.relpath(doc_path, _os.path.dirname(index_path))})"
         existing = ""
@@ -605,6 +652,7 @@ def _update_module_index(cwd: str, module: str, doc_type: str, doc_path: str):
 
 
 # ── 自动技能结晶 ──────────────────────────────────────────
+
 
 def _extract_step_tools(step: dict) -> list:
     """从步骤中提取使用的工具列表。"""
@@ -633,8 +681,8 @@ def _extract_step_tools(step: dict) -> list:
     return tools or ["toolkit_plan"]
 
 
-
 # ── 智能分解 ────────────────────────────────────────────
+
 
 def _decompose_goal(goal: str, cwd: str) -> dict:
     """智能分解目标为可执行步骤。
@@ -676,242 +724,239 @@ def _decompose_goal(goal: str, cwd: str) -> dict:
     step_id = 1
 
     # 通用步骤：分析和规划
-    steps.append({
-        "id": str(step_id),
-        "desc": "分析需求，理解目标",
-        "action": "analyze",
-        "params": {"goal": goal},
-        "depends_on": [],
-        "verify": "manual"
-    })
+    steps.append(
+        {"id": str(step_id), "desc": "分析需求，理解目标", "action": "analyze", "params": {"goal": goal}, "depends_on": [], "verify": "manual"}
+    )
     step_id += 1
 
     # 根据任务类型添加特定步骤
     if "bugfix" in task_types:
-        steps.append({
-            "id": str(step_id),
-            "desc": "定位问题根源",
-            "action": "investigate",
-            "params": {"goal": goal},
-            "depends_on": ["1"],
-            "verify": "manual"
-        })
+        steps.append(
+            {"id": str(step_id), "desc": "定位问题根源", "action": "investigate", "params": {"goal": goal}, "depends_on": ["1"], "verify": "manual"}
+        )
         step_id += 1
 
-        steps.append({
-            "id": str(step_id),
-            "desc": "实现修复方案",
-            "action": "self_evolve",
-            "params": {"goal": goal},
-            "depends_on": [str(step_id - 1)],
-            "verify": "py_compile"
-        })
+        steps.append(
+            {
+                "id": str(step_id),
+                "desc": "实现修复方案",
+                "action": "self_evolve",
+                "params": {"goal": goal},
+                "depends_on": [str(step_id - 1)],
+                "verify": "py_compile",
+            }
+        )
         step_id += 1
 
-        steps.append({
-            "id": str(step_id),
-            "desc": "验证修复效果",
-            "action": "verify",
-            "params": {"goal": goal},
-            "depends_on": [str(step_id - 1)],
-            "verify": "test"
-        })
+        steps.append(
+            {
+                "id": str(step_id),
+                "desc": "验证修复效果",
+                "action": "verify",
+                "params": {"goal": goal},
+                "depends_on": [str(step_id - 1)],
+                "verify": "test",
+            }
+        )
         step_id += 1
 
     elif "feature" in task_types:
-        steps.append({
-            "id": str(step_id),
-            "desc": "设计实现方案",
-            "action": "design",
-            "params": {"goal": goal},
-            "depends_on": ["1"],
-            "verify": "manual"
-        })
+        steps.append(
+            {"id": str(step_id), "desc": "设计实现方案", "action": "design", "params": {"goal": goal}, "depends_on": ["1"], "verify": "manual"}
+        )
         step_id += 1
 
-        steps.append({
-            "id": str(step_id),
-            "desc": "实现核心功能",
-            "action": "self_evolve",
-            "params": {"goal": goal},
-            "depends_on": [str(step_id - 1)],
-            "verify": "py_compile"
-        })
+        steps.append(
+            {
+                "id": str(step_id),
+                "desc": "实现核心功能",
+                "action": "self_evolve",
+                "params": {"goal": goal},
+                "depends_on": [str(step_id - 1)],
+                "verify": "py_compile",
+            }
+        )
         step_id += 1
 
-        steps.append({
-            "id": str(step_id),
-            "desc": "添加测试用例",
-            "action": "self_evolve",
-            "params": {"goal": f"为 {goal} 添加测试"},
-            "depends_on": [str(step_id - 1)],
-            "verify": "test"
-        })
+        steps.append(
+            {
+                "id": str(step_id),
+                "desc": "添加测试用例",
+                "action": "self_evolve",
+                "params": {"goal": f"为 {goal} 添加测试"},
+                "depends_on": [str(step_id - 1)],
+                "verify": "test",
+            }
+        )
         step_id += 1
 
-        steps.append({
-            "id": str(step_id),
-            "desc": "更新文档",
-            "action": "self_evolve",
-            "params": {"goal": f"更新文档：{goal}"},
-            "depends_on": [str(step_id - 2)],
-            "verify": "manual"
-        })
+        steps.append(
+            {
+                "id": str(step_id),
+                "desc": "更新文档",
+                "action": "self_evolve",
+                "params": {"goal": f"更新文档：{goal}"},
+                "depends_on": [str(step_id - 2)],
+                "verify": "manual",
+            }
+        )
         step_id += 1
 
     elif "refactor" in task_types:
-        steps.append({
-            "id": str(step_id),
-            "desc": "分析现有代码结构",
-            "action": "analyze",
-            "params": {"goal": f"分析代码结构：{goal}"},
-            "depends_on": ["1"],
-            "verify": "manual"
-        })
+        steps.append(
+            {
+                "id": str(step_id),
+                "desc": "分析现有代码结构",
+                "action": "analyze",
+                "params": {"goal": f"分析代码结构：{goal}"},
+                "depends_on": ["1"],
+                "verify": "manual",
+            }
+        )
         step_id += 1
 
-        steps.append({
-            "id": str(step_id),
-            "desc": "制定重构计划",
-            "action": "design",
-            "params": {"goal": goal},
-            "depends_on": [str(step_id - 1)],
-            "verify": "manual"
-        })
+        steps.append(
+            {
+                "id": str(step_id),
+                "desc": "制定重构计划",
+                "action": "design",
+                "params": {"goal": goal},
+                "depends_on": [str(step_id - 1)],
+                "verify": "manual",
+            }
+        )
         step_id += 1
 
-        steps.append({
-            "id": str(step_id),
-            "desc": "执行重构",
-            "action": "self_evolve",
-            "params": {"goal": goal},
-            "depends_on": [str(step_id - 1)],
-            "verify": "py_compile"
-        })
+        steps.append(
+            {
+                "id": str(step_id),
+                "desc": "执行重构",
+                "action": "self_evolve",
+                "params": {"goal": goal},
+                "depends_on": [str(step_id - 1)],
+                "verify": "py_compile",
+            }
+        )
         step_id += 1
 
-        steps.append({
-            "id": str(step_id),
-            "desc": "运行测试验证",
-            "action": "verify",
-            "params": {"goal": "验证重构后功能正常"},
-            "depends_on": [str(step_id - 1)],
-            "verify": "test"
-        })
+        steps.append(
+            {
+                "id": str(step_id),
+                "desc": "运行测试验证",
+                "action": "verify",
+                "params": {"goal": "验证重构后功能正常"},
+                "depends_on": [str(step_id - 1)],
+                "verify": "test",
+            }
+        )
         step_id += 1
 
     elif "test" in task_types:
-        steps.append({
-            "id": str(step_id),
-            "desc": "分析测试需求",
-            "action": "analyze",
-            "params": {"goal": goal},
-            "depends_on": ["1"],
-            "verify": "manual"
-        })
+        steps.append(
+            {"id": str(step_id), "desc": "分析测试需求", "action": "analyze", "params": {"goal": goal}, "depends_on": ["1"], "verify": "manual"}
+        )
         step_id += 1
 
-        steps.append({
-            "id": str(step_id),
-            "desc": "编写测试用例",
-            "action": "self_evolve",
-            "params": {"goal": goal},
-            "depends_on": [str(step_id - 1)],
-            "verify": "py_compile"
-        })
+        steps.append(
+            {
+                "id": str(step_id),
+                "desc": "编写测试用例",
+                "action": "self_evolve",
+                "params": {"goal": goal},
+                "depends_on": [str(step_id - 1)],
+                "verify": "py_compile",
+            }
+        )
         step_id += 1
 
-        steps.append({
-            "id": str(step_id),
-            "desc": "运行测试验证",
-            "action": "verify",
-            "params": {"goal": "运行测试"},
-            "depends_on": [str(step_id - 1)],
-            "verify": "test"
-        })
+        steps.append(
+            {
+                "id": str(step_id),
+                "desc": "运行测试验证",
+                "action": "verify",
+                "params": {"goal": "运行测试"},
+                "depends_on": [str(step_id - 1)],
+                "verify": "test",
+            }
+        )
         step_id += 1
 
     elif "docs" in task_types:
-        steps.append({
-            "id": str(step_id),
-            "desc": "分析文档需求",
-            "action": "analyze",
-            "params": {"goal": goal},
-            "depends_on": ["1"],
-            "verify": "manual"
-        })
+        steps.append(
+            {"id": str(step_id), "desc": "分析文档需求", "action": "analyze", "params": {"goal": goal}, "depends_on": ["1"], "verify": "manual"}
+        )
         step_id += 1
 
-        steps.append({
-            "id": str(step_id),
-            "desc": "编写文档",
-            "action": "self_evolve",
-            "params": {"goal": goal},
-            "depends_on": [str(step_id - 1)],
-            "verify": "manual"
-        })
+        steps.append(
+            {
+                "id": str(step_id),
+                "desc": "编写文档",
+                "action": "self_evolve",
+                "params": {"goal": goal},
+                "depends_on": [str(step_id - 1)],
+                "verify": "manual",
+            }
+        )
         step_id += 1
 
     elif "config" in task_types:
-        steps.append({
-            "id": str(step_id),
-            "desc": "分析配置需求",
-            "action": "analyze",
-            "params": {"goal": goal},
-            "depends_on": ["1"],
-            "verify": "manual"
-        })
+        steps.append(
+            {"id": str(step_id), "desc": "分析配置需求", "action": "analyze", "params": {"goal": goal}, "depends_on": ["1"], "verify": "manual"}
+        )
         step_id += 1
 
-        steps.append({
-            "id": str(step_id),
-            "desc": "修改配置",
-            "action": "self_evolve",
-            "params": {"goal": goal},
-            "depends_on": [str(step_id - 1)],
-            "verify": "py_compile"
-        })
+        steps.append(
+            {
+                "id": str(step_id),
+                "desc": "修改配置",
+                "action": "self_evolve",
+                "params": {"goal": goal},
+                "depends_on": [str(step_id - 1)],
+                "verify": "py_compile",
+            }
+        )
         step_id += 1
 
-        steps.append({
-            "id": str(step_id),
-            "desc": "验证配置生效",
-            "action": "verify",
-            "params": {"goal": "验证配置"},
-            "depends_on": [str(step_id - 1)],
-            "verify": "test"
-        })
+        steps.append(
+            {
+                "id": str(step_id),
+                "desc": "验证配置生效",
+                "action": "verify",
+                "params": {"goal": "验证配置"},
+                "depends_on": [str(step_id - 1)],
+                "verify": "test",
+            }
+        )
         step_id += 1
 
     else:  # general
-        steps.append({
-            "id": str(step_id),
-            "desc": "制定实现方案",
-            "action": "design",
-            "params": {"goal": goal},
-            "depends_on": ["1"],
-            "verify": "manual"
-        })
+        steps.append(
+            {"id": str(step_id), "desc": "制定实现方案", "action": "design", "params": {"goal": goal}, "depends_on": ["1"], "verify": "manual"}
+        )
         step_id += 1
 
-        steps.append({
-            "id": str(step_id),
-            "desc": "执行实现",
-            "action": "self_evolve",
-            "params": {"goal": goal},
-            "depends_on": [str(step_id - 1)],
-            "verify": "py_compile"
-        })
+        steps.append(
+            {
+                "id": str(step_id),
+                "desc": "执行实现",
+                "action": "self_evolve",
+                "params": {"goal": goal},
+                "depends_on": [str(step_id - 1)],
+                "verify": "py_compile",
+            }
+        )
         step_id += 1
 
-        steps.append({
-            "id": str(step_id),
-            "desc": "验证结果",
-            "action": "verify",
-            "params": {"goal": "验证实现"},
-            "depends_on": [str(step_id - 1)],
-            "verify": "test"
-        })
+        steps.append(
+            {
+                "id": str(step_id),
+                "desc": "验证结果",
+                "action": "verify",
+                "params": {"goal": "验证实现"},
+                "depends_on": [str(step_id - 1)],
+                "verify": "test",
+            }
+        )
         step_id += 1
 
     # 创建计划
@@ -928,7 +973,9 @@ def _decompose_goal(goal: str, cwd: str) -> dict:
         "hint": f"已创建计划，使用 action='run' plan_id='{plan['id']}' 执行全部步骤",
     }
 
+
 # ── Meta ────────────────────────────────────────────────
+
 
 def meta_toolkit_plan():
     """Meta toolkit plan."""
@@ -940,10 +987,37 @@ def meta_toolkit_plan():
             "parameters": {
                 "type": "object",
                 "properties": {
-                    "action": {"type": "string", "enum": ["create", "decompose", "show", "review", "canvas", "step", "verify", "run", "resume", "list", "delete", "insert", "replace", "delete_step", "replan"], "description": "create=创建计划(需 goal+steps); decompose=把目标拆分为步骤; show=查看计划详情; review=画布审阅(不修改文件); canvas=创建空白画布; step=执行指定一步; verify=验证指定步; run=全量执行计划; resume=继续未完成计划; list=计划列表; delete=删除计划; insert=在 step_id 后插入步骤(需 steps); replace=替换 step_id 步骤(需 steps); delete_step=删除 step_id; replan=重新规划计划"},
+                    "action": {
+                        "type": "string",
+                        "enum": [
+                            "create",
+                            "decompose",
+                            "show",
+                            "review",
+                            "canvas",
+                            "step",
+                            "verify",
+                            "run",
+                            "resume",
+                            "list",
+                            "delete",
+                            "insert",
+                            "replace",
+                            "delete_step",
+                            "replan",
+                        ],
+                        "description": "create=创建计划(需 goal+steps); decompose=把目标拆分为步骤; show=查看计划详情; review=画布审阅(不修改文件); canvas=创建空白画布; step=执行指定一步; verify=验证指定步; run=全量执行计划; resume=继续未完成计划; list=计划列表; delete=删除计划; insert=在 step_id 后插入步骤(需 steps); replace=替换 step_id 步骤(需 steps); delete_step=删除 step_id; replan=重新规划计划",
+                    },
                     "goal": {"type": "string", "description": "计划目标（create/decompose/canvas 必需）"},
-                    "steps": {"type": "array", "items": {"type": "object"}, "description": "步骤列表: [{'id': str, 'desc': str, 'action': 'self_evolve|create_file|exec|verify_only', 'params': {...}, 'depends_on': [id...], 'verify': str}]"},
-                    "plan_id": {"type": "string", "description": "计划 ID（show/step/verify/run/resume/review/delete/insert/replace/delete_step/replan 必需）"},
+                    "steps": {
+                        "type": "array",
+                        "items": {"type": "object"},
+                        "description": "步骤列表: [{'id': str, 'desc': str, 'action': 'self_evolve|create_file|exec|verify_only', 'params': {...}, 'depends_on': [id...], 'verify': str}]",
+                    },
+                    "plan_id": {
+                        "type": "string",
+                        "description": "计划 ID（show/step/verify/run/resume/review/delete/insert/replace/delete_step/replan 必需）",
+                    },
                     "step_id": {"type": "string", "description": "步骤 ID（step/verify/insert/replace/delete_step 使用）"},
                 },
                 "required": ["action"],
@@ -953,6 +1027,7 @@ def meta_toolkit_plan():
 
 
 # ── 动态规划操作 ──────────────────────────────────────────
+
 
 def _insert_step(plan_id: str, after_step_id: str, new_steps: list) -> dict:
     """在指定步骤后插入新步骤。
@@ -1079,7 +1154,7 @@ def _replace_step(plan_id: str, step_id: str, new_steps: list) -> dict:
         next_id += 1
 
     # 替换
-    plan["steps"] = plan["steps"][:replace_idx] + normalized + plan["steps"][replace_idx+1:]
+    plan["steps"] = plan["steps"][:replace_idx] + normalized + plan["steps"][replace_idx + 1 :]
 
     # 更新依赖：将其他步骤对旧步骤的依赖改为新步骤
     new_ids = [s["id"] for s in normalized]

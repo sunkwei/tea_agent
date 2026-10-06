@@ -19,6 +19,8 @@ logger = server_logger
 
 # ── 共享状态（来自 modules.state） ──
 # ── AgentModule 方法（通过 get_registry 间接获取，确保热重载后仍有效） ──
+import contextlib
+
 from .module import get_registry as _get_registry
 from .modules.state import (
     active_sessions as _active_sessions,
@@ -65,12 +67,9 @@ def _call_agent_module(method_name: str, *args, **kwargs):
     return method(*args, **kwargs)
 
 
-def _chat_stream_sse_wrapper(session, storage, msg,
-                              queue: asyncio.Queue, topic_id: str = "",
-                              event_loop=None):
+def _chat_stream_sse_wrapper(session, storage, msg, queue: asyncio.Queue, topic_id: str = "", event_loop=None):
     """转发到 AgentModule.chat_stream_sse。"""
-    return _call_agent_module("chat_stream_sse", session, storage, msg,
-                               queue, topic_id=topic_id, event_loop=event_loop)
+    return _call_agent_module("chat_stream_sse", session, storage, msg, queue, topic_id=topic_id, event_loop=event_loop)
 
 
 def _schedule_buffer_cleanup(topic_id: str, delay: float = 30.0) -> None:
@@ -116,8 +115,7 @@ def _seed_buffer_from_snapshot(topic_id: str) -> int:
         return 0
 
 
-async def _background_buffer_reader(topic_id: str, queue: asyncio.Queue,
-                                      event_loop=None):
+async def _background_buffer_reader(topic_id: str, queue: asyncio.Queue, event_loop=None):
     """从 queue 消费事件并写入后台缓冲区供前端轮询。"""
     create_background_buffer(topic_id)
     # 接管前台已开始的回合：保留已累积内容（不清空），序号由快照自动递增
@@ -156,10 +154,8 @@ async def _background_buffer_reader(topic_id: str, queue: asyncio.Queue,
         with _background_sessions_lock:
             _background_sessions.pop(topic_id, None)
         # ⭐ 后台回合结束：尝试应用挂起的模型切换（会话续用切换）
-        try:
+        with contextlib.suppress(Exception):
             _call_agent_module("try_apply_pending_switch")
-        except Exception:
-            pass
 
 
 # ── 带下划前缀的别名（route_handlers.py 历史引用） ──

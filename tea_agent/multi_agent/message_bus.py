@@ -155,10 +155,7 @@ class MessageBus:
     def subscriptions(self, agent_id: str) -> list[str]:
         """获取某 Agent 订阅的所有主题。"""
         with self._lock:
-            return [
-                topic for topic, subscribers in self._subscriptions.items()
-                if agent_id in subscribers
-            ]
+            return [topic for topic, subscribers in self._subscriptions.items() if agent_id in subscribers]
 
     # ── 发布 ────────────────────────────────────────
 
@@ -189,7 +186,7 @@ class MessageBus:
             # 加入历史
             self._history.append(msg)
             if len(self._history) > self._max_history:
-                self._history = self._history[-self._max_history:]
+                self._history = self._history[-self._max_history :]
 
             # 分发给订阅者
             recipients = list(self._subscriptions.get(topic, set()))

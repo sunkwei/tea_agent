@@ -87,8 +87,13 @@ def _run_picker(output_path: str) -> dict:
 
     # 半透明遮罩
     mask = canvas.create_rectangle(
-        0, 0, logical_w, logical_h,
-        fill="black", stipple="gray25", outline="",
+        0,
+        0,
+        logical_w,
+        logical_h,
+        fill="black",
+        stipple="gray25",
+        outline="",
     )
 
     # 状态
@@ -101,8 +106,13 @@ def _run_picker(output_path: str) -> dict:
         if rect_id[0]:
             canvas.delete(rect_id[0])
         rect_id[0] = canvas.create_rectangle(
-            e.x, e.y, e.x, e.y,
-            outline="#00ff88", width=3, dash=(8, 4),
+            e.x,
+            e.y,
+            e.x,
+            e.y,
+            outline="#00ff88",
+            width=3,
+            dash=(8, 4),
         )
         # 移除遮罩
         canvas.delete(mask)

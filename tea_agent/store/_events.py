@@ -23,8 +23,14 @@ logger = logging.getLogger("Storage.Events")
 
 # 合法事件类型（扩展点：插件可追加，但核心类型固定）
 EVENT_TYPES = {
-    "turn/start", "user/message", "assistant/chunk", "assistant/message",
-    "tool/call", "tool/result", "turn/end", "session/fork",
+    "turn/start",
+    "user/message",
+    "assistant/chunk",
+    "assistant/message",
+    "tool/call",
+    "tool/result",
+    "turn/end",
+    "session/fork",
     "step/request",
 }
 
@@ -34,8 +40,7 @@ class SessionEventStore(StoreComponent):
 
     # ── 写入（append-only，无修改/删除） ──
 
-    def append_event(self, topic_id: str, event_type: str, payload: dict,
-                     conversation_id: str = "") -> int:
+    def append_event(self, topic_id: str, event_type: str, payload: dict, conversation_id: str = "") -> int:
         """追加一条事件日志（append-only）。
 
         Args:
@@ -62,15 +67,13 @@ class SessionEventStore(StoreComponent):
                 "INSERT INTO session_events "
                 "(topic_id, conversation_id, event_type, payload_json, seq, created_at) "
                 "VALUES (?, ?, ?, ?, ?, datetime('now', 'localtime'))",
-                (topic_id, conversation_id or None, event_type,
-                 payload_json, seq),
+                (topic_id, conversation_id or None, event_type, payload_json, seq),
             )
         return seq
 
     # ── 查询 / 重放（派生） ──
 
-    def query_events(self, topic_id: str, event_type: str = "",
-                     start_seq: int = 0, limit: int = 0) -> list[dict]:
+    def query_events(self, topic_id: str, event_type: str = "", start_seq: int = 0, limit: int = 0) -> list[dict]:
         """按序查询事件流（重放基础）。
 
         Args:
@@ -85,14 +88,12 @@ class SessionEventStore(StoreComponent):
         c = self.conn.cursor()
         if event_type:
             c.execute(
-                "SELECT * FROM session_events WHERE topic_id = ? AND event_type = ? "
-                "AND seq > ? ORDER BY seq ASC" + (" LIMIT ?" if limit > 0 else ""),
+                "SELECT * FROM session_events WHERE topic_id = ? AND event_type = ? AND seq > ? ORDER BY seq ASC" + (" LIMIT ?" if limit > 0 else ""),
                 (topic_id, event_type, start_seq) + ((limit,) if limit > 0 else ()),
             )
         else:
             c.execute(
-                "SELECT * FROM session_events WHERE topic_id = ? AND seq > ? "
-                "ORDER BY seq ASC" + (" LIMIT ?" if limit > 0 else ""),
+                "SELECT * FROM session_events WHERE topic_id = ? AND seq > ? ORDER BY seq ASC" + (" LIMIT ?" if limit > 0 else ""),
                 (topic_id, start_seq) + ((limit,) if limit > 0 else ()),
             )
         rows = c.fetchall()
@@ -130,11 +131,9 @@ class SessionEventStore(StoreComponent):
             et = ev["event_type"]
             payload = ev["payload"]
             if et == "user/message":
-                messages.append({"role": "user", "content": payload.get("content", ""),
-                                 "seq": ev["seq"]})
+                messages.append({"role": "user", "content": payload.get("content", ""), "seq": ev["seq"]})
             elif et == "assistant/message":
-                messages.append({"role": "assistant", "content": payload.get("content", ""),
-                                 "seq": ev["seq"]})
+                messages.append({"role": "assistant", "content": payload.get("content", ""), "seq": ev["seq"]})
         return messages
 
     def stats(self, topic_id: str = "") -> dict:
@@ -168,8 +167,7 @@ class SessionEventStore(StoreComponent):
             with self._get_connection() as conn:
                 c = conn.cursor()
                 c.execute(
-                    "DELETE FROM session_events WHERE created_at < "
-                    "datetime('now', 'localtime', ?)",
+                    "DELETE FROM session_events WHERE created_at < datetime('now', 'localtime', ?)",
                     (f"-{int(keep_days)} days",),
                 )
                 deleted = c.rowcount
@@ -180,8 +178,7 @@ class SessionEventStore(StoreComponent):
             logger.exception("cleanup session_events failed")
             return 0
 
-    def fork_events(self, source_topic_id: str, target_topic_id: str,
-                    boundary_conv_id: str = "") -> int:
+    def fork_events(self, source_topic_id: str, target_topic_id: str, boundary_conv_id: str = "") -> int:
         """fork 时复制事件流到目标 topic（保留审计血统）。
 
         message fork 语义（借鉴 DeepSeek Harness）：
@@ -201,9 +198,7 @@ class SessionEventStore(StoreComponent):
         cutoff_seq = None
         if boundary_conv_id:
             # 定位 boundary 会话的"最后一条事件 seq"（含该轮全部事件）
-            boundary_seqs = [
-                ev["seq"] for ev in events if ev.get("conversation_id") == boundary_conv_id
-            ]
+            boundary_seqs = [ev["seq"] for ev in events if ev.get("conversation_id") == boundary_conv_id]
             if boundary_seqs:
                 cutoff_seq = max(boundary_seqs)
 
@@ -222,9 +217,7 @@ class SessionEventStore(StoreComponent):
                     "INSERT INTO session_events "
                     "(topic_id, conversation_id, event_type, payload_json, seq, created_at) "
                     "VALUES (?, ?, ?, ?, ?, datetime('now', 'localtime'))",
-                    (target_topic_id, ev.get("conversation_id"),
-                     ev["event_type"], json.dumps(payload, ensure_ascii=False, default=str),
-                     i),
+                    (target_topic_id, ev.get("conversation_id"), ev["event_type"], json.dumps(payload, ensure_ascii=False, default=str), i),
                 )
                 copied += 1
         return copied

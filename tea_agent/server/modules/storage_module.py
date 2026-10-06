@@ -41,7 +41,7 @@ class StorageModule(HotReloadModule):
         import sys as _sys
 
         # 重载 tea_agent.store（仅 __init__.py），使 get_storage() 变更生效
-        _store_mod = _sys.modules.get('tea_agent.store')
+        _store_mod = _sys.modules.get("tea_agent.store")
         if _store_mod is not None:
             try:
                 importlib.reload(_store_mod)
@@ -81,13 +81,15 @@ class StorageModule(HotReloadModule):
         for t in topics[:limit]:
             tid = t["topic_id"]
             tokens = storage.get_topic_tokens(tid)
-            result.append({
-                "id": tid,
-                "title": t.get("title", "") or tid[:8],
-                "created": str(t.get("create_stamp", ""))[:19],
-                "updated": str(t.get("last_update_stamp", ""))[:19],
-                "total_tokens": (tokens or {}).get("total_tokens", 0),
-            })
+            result.append(
+                {
+                    "id": tid,
+                    "title": t.get("title", "") or tid[:8],
+                    "created": str(t.get("create_stamp", ""))[:19],
+                    "updated": str(t.get("last_update_stamp", ""))[:19],
+                    "total_tokens": (tokens or {}).get("total_tokens", 0),
+                }
+            )
         return result
 
     @classmethod
@@ -116,11 +118,7 @@ class StorageModule(HotReloadModule):
             "created": str(topic.get("create_stamp", "")),
             "updated": str(topic.get("last_update_stamp", "")),
             "total_tokens": (tokens or {}).get("total_tokens", 0),
-            "conversations": [
-                {"id": c["id"], "user": c["user_msg"],
-                 "assistant": c["ai_msg"], "stamp": c["stamp"]}
-                for c in convs
-            ],
+            "conversations": [{"id": c["id"], "user": c["user_msg"], "assistant": c["ai_msg"], "stamp": c["stamp"]} for c in convs],
         }
 
     @classmethod
@@ -156,14 +154,16 @@ class StorageModule(HotReloadModule):
         convs = storage.get_conversations(topic_id, limit=limit, include_rounds=True)
         result = []
         for c in convs:
-            result.append({
-                "id": c["id"],
-                "topic_id": c["topic_id"],
-                "user_msg": c["user_msg"],
-                "ai_msg": c["ai_msg"],
-                "is_func_calling": c.get("is_func_calling", 0),
-                "stamp": str(c.get("stamp", "")),
-            })
+            result.append(
+                {
+                    "id": c["id"],
+                    "topic_id": c["topic_id"],
+                    "user_msg": c["user_msg"],
+                    "ai_msg": c["ai_msg"],
+                    "is_func_calling": c.get("is_func_calling", 0),
+                    "stamp": str(c.get("stamp", "")),
+                }
+            )
         return result
 
     @classmethod
@@ -208,10 +208,7 @@ class StorageModule(HotReloadModule):
             convs = storage.get_conversations(topic_id, limit=0, include_rounds=True)
             for cv in convs:
                 rounds = cv.get("rounds_json_parsed") or []
-                thinks = [
-                    r.get("reasoning_content", "")
-                    for r in rounds if r.get("reasoning_content")
-                ]
+                thinks = [r.get("reasoning_content", "") for r in rounds if r.get("reasoning_content")]
                 if thinks:
                     thinking_by_conv[cv["id"]] = thinks
         except Exception:
@@ -224,40 +221,61 @@ class StorageModule(HotReloadModule):
             seq = ev["seq"]
             created = str(ev.get("created_at", ""))
             if et == "user/message":
-                timeline.append({
-                    "seq": seq, "type": "user", "created_at": created,
-                    "content": payload.get("content", ""),
-                })
+                timeline.append(
+                    {
+                        "seq": seq,
+                        "type": "user",
+                        "created_at": created,
+                        "content": payload.get("content", ""),
+                    }
+                )
             elif et == "tool/call":
-                timeline.append({
-                    "seq": seq, "type": "tool_call", "created_at": created,
-                    "name": payload.get("name", ""),
-                    "call_id": payload.get("call_id", ""),
-                    "args": payload.get("args", ""),
-                })
+                timeline.append(
+                    {
+                        "seq": seq,
+                        "type": "tool_call",
+                        "created_at": created,
+                        "name": payload.get("name", ""),
+                        "call_id": payload.get("call_id", ""),
+                        "args": payload.get("args", ""),
+                    }
+                )
             elif et == "tool/result":
-                timeline.append({
-                    "seq": seq, "type": "tool_result", "created_at": created,
-                    "name": payload.get("name", ""),
-                    "call_id": payload.get("call_id", ""),
-                    "success": payload.get("success", True),
-                    "error": payload.get("error"),
-                    "result": payload.get("result", ""),
-                    "duration_ms": payload.get("duration_ms", 0),
-                })
+                timeline.append(
+                    {
+                        "seq": seq,
+                        "type": "tool_result",
+                        "created_at": created,
+                        "name": payload.get("name", ""),
+                        "call_id": payload.get("call_id", ""),
+                        "success": payload.get("success", True),
+                        "error": payload.get("error"),
+                        "result": payload.get("result", ""),
+                        "duration_ms": payload.get("duration_ms", 0),
+                    }
+                )
             elif et == "assistant/message":
                 cv_id = ev.get("conversation_id") or ""
                 # 思考链插入到 AI 回复之前（同一 seq 上下文，index 区分顺序）
                 for i, t in enumerate(thinking_by_conv.get(cv_id, [])):
-                    timeline.append({
-                        "seq": seq, "type": "thinking", "index": i,
-                        "created_at": created, "content": t,
-                    })
-                timeline.append({
-                    "seq": seq, "type": "assistant", "created_at": created,
-                    "content": payload.get("content", ""),
-                    "tool_calls": payload.get("tool_calls"),
-                })
+                    timeline.append(
+                        {
+                            "seq": seq,
+                            "type": "thinking",
+                            "index": i,
+                            "created_at": created,
+                            "content": t,
+                        }
+                    )
+                timeline.append(
+                    {
+                        "seq": seq,
+                        "type": "assistant",
+                        "created_at": created,
+                        "content": payload.get("content", ""),
+                        "tool_calls": payload.get("tool_calls"),
+                    }
+                )
             # turn/start、turn/end 为结构性标记，轨迹视图不展示（保持时间线紧凑）
 
         if limit > 0 and len(timeline) > limit:
@@ -292,16 +310,22 @@ class StorageModule(HotReloadModule):
         convs = storage.get_conversations(topic_id, limit=limit, include_rounds=True)
         result = []
         for c in convs:
-            result.append({
-                "id": c["id"], "role": "user",
-                "content": c["user_msg"],
-                "stamp": str(c.get("stamp", ""))[:26],
-            })
-            result.append({
-                "id": c["id"], "role": "assistant",
-                "content": c["ai_msg"],
-                "stamp": str(c.get("stamp", ""))[:26],
-            })
+            result.append(
+                {
+                    "id": c["id"],
+                    "role": "user",
+                    "content": c["user_msg"],
+                    "stamp": str(c.get("stamp", ""))[:26],
+                }
+            )
+            result.append(
+                {
+                    "id": c["id"],
+                    "role": "assistant",
+                    "content": c["ai_msg"],
+                    "stamp": str(c.get("stamp", ""))[:26],
+                }
+            )
         return result
 
     # ── 记忆管理 ──
@@ -315,15 +339,17 @@ class StorageModule(HotReloadModule):
         return _sanitize(storage.get_active_memories(limit=limit))
 
     @classmethod
-    def create_memory(cls, content: str, category: str = "general",
-                      priority: int = 2) -> dict:
+    def create_memory(cls, content: str, category: str = "general", priority: int = 2) -> dict:
         """创建记忆。"""
         storage = cls._instance
         if storage is None:
             return {"error": "Storage not loaded"}
         mem_id = storage.add_memory(
-            content, category=category, priority=priority,
-            tags="", importance=3,
+            content,
+            category=category,
+            priority=priority,
+            tags="",
+            importance=3,
         )
         return {"id": mem_id, "content": content, "category": category}
 
@@ -354,10 +380,7 @@ class StorageModule(HotReloadModule):
 def _sanitize(obj):
     """移除不可 JSON 序列化的字段（如 bytes）。"""
     if isinstance(obj, dict):
-        return {
-            k: _sanitize(v) for k, v in obj.items()
-            if not isinstance(v, bytes | bytearray)
-        }
+        return {k: _sanitize(v) for k, v in obj.items() if not isinstance(v, bytes | bytearray)}
     if isinstance(obj, list):
         return [_sanitize(item) for item in obj]
     return obj

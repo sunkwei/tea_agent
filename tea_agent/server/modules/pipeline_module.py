@@ -50,13 +50,10 @@ class PipelineModule(HotReloadModule):
         cls._l2_to_l3_summary = None
 
     @classmethod
-    def run_async_summaries(cls, agent_proxy: Any, topic_id: str,
-                            overflow_items: list | None = None,
-                            should_summarize: bool = False) -> None:
+    def run_async_summaries(cls, agent_proxy: Any, topic_id: str, overflow_items: list | None = None, should_summarize: bool = False) -> None:
         """运行异步摘要（后台线程调用）。"""
         if cls._do_async_summaries:
-            cls._do_async_summaries(agent_proxy, topic_id,
-                                     overflow_items, should_summarize)
+            cls._do_async_summaries(agent_proxy, topic_id, overflow_items, should_summarize)
 
     @classmethod
     def run_auto_summary(cls, agent: Any, topic_id: str) -> tuple:

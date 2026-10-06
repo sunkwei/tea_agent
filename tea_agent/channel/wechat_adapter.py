@@ -59,6 +59,7 @@ SESSIONS_FILE = os.path.join(CRED_DIR, "wechat_sessions.json")
 #  工具函数
 # ════════════════════════════════════════════════════════════════
 
+
 def _generate_uin() -> str:
     """生成 X-WECHAT-UIN 头：随机 4 字节 → uint32 → 十进制字符串 → base64。"""
     rand_uint32 = struct.unpack("<I", os.urandom(4))[0]
@@ -106,6 +107,7 @@ def _save_json(path: str, data: dict):
 # ════════════════════════════════════════════════════════════════
 #  WeChatAdapter
 # ════════════════════════════════════════════════════════════════
+
 
 class WeChatAdapter:
     """微信 iLink Bot 适配器。
@@ -350,6 +352,7 @@ class WeChatAdapter:
         # 尝试使用 qrterminal
         try:
             import qrterm
+
             qrterm.generate(url, small=True)
         except ImportError:
             pass
@@ -639,7 +642,7 @@ class WeChatAdapter:
             segments = [text]
         else:
             for i in range(0, len(text), max_len):
-                chunk = text[i:i + max_len]
+                chunk = text[i : i + max_len]
                 if i > 0:
                     chunk = f"📎 (续 {i // max_len + 1})\n\n{chunk}"
                 segments.append(chunk)
@@ -654,9 +657,7 @@ class WeChatAdapter:
                         "message_type": 2,
                         "message_state": 2,
                         "context_token": context_token,
-                        "item_list": [
-                            {"type": 1, "text_item": {"text": segment}}
-                        ],
+                        "item_list": [{"type": 1, "text_item": {"text": segment}}],
                     },
                     **_base_info(),
                 }
@@ -778,23 +779,14 @@ class WeChatAdapter:
             detail = e.response.text[:200]
             logger.error(f"API 请求失败 (HTTP {status}): {detail}")
             if status == 503:
-                return (
-                    "⚠️ tea_agent 服务未就绪\n\n"
-                    "请确认 tea_agent server 正在运行且模型已配置。\n"
-                    "启动方式: `tea_agent`"
-                )
+                return "⚠️ tea_agent 服务未就绪\n\n请确认 tea_agent server 正在运行且模型已配置。\n启动方式: `tea_agent`"
             return f"❌ 服务器错误 (HTTP {status})"
         except httpx.TimeoutException:
             logger.error("API 请求超时")
             return "⏳ 请求超时，tea_agent 处理时间过长，请稍后重试。"
         except httpx.RequestError as e:
             logger.error(f"无法连接到 tea_agent API: {e}")
-            return (
-                "🔌 无法连接到 tea_agent\n\n"
-                f"请确认服务器已启动。\n"
-                f"当前 API: {self._api_base}\n"
-                f"启动方式: `tea_agent`"
-            )
+            return f"🔌 无法连接到 tea_agent\n\n请确认服务器已启动。\n当前 API: {self._api_base}\n启动方式: `tea_agent`"
         except Exception as e:
             logger.exception(f"调用 API 异常: {e}")
             return f"❌ 内部错误: {type(e).__name__}"
@@ -861,9 +853,7 @@ class WeChatAdapter:
                     print("\n🔄 Token 已失效，尝试重新登录...")
                     if self.login(force=True):
                         # 重新启动轮询
-                        self._poll_thread = threading.Thread(
-                            target=self._poll_loop, daemon=True
-                        )
+                        self._poll_thread = threading.Thread(target=self._poll_loop, daemon=True)
                         self._poll_thread.start()
                     else:
                         print("❌ 重新登录失败")
@@ -892,6 +882,7 @@ class WeChatAdapter:
 # ════════════════════════════════════════════════════════════════
 #  CLI 入口
 # ════════════════════════════════════════════════════════════════
+
 
 def run_wechat_bot():
     """CLI 入口：启动微信 Bot 适配器。"""

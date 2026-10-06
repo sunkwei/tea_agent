@@ -25,6 +25,7 @@ __all__ = [
     "ProjectMemoryManager",
 ]
 
+
 class ProjectMemoryManager:
     """项目记忆：纯 FIFO，最多 30 条。"""
 
@@ -94,7 +95,7 @@ class ProjectMemoryManager:
         # FIFO 淘汰
         while len(data) > self.MAX_ENTRIES:
             removed = data.pop(0)
-            logger.info(f"项目记忆 FIFO 淘汰: #{removed['id']} \"{removed['content'][:50]}...\"")
+            logger.info(f'项目记忆 FIFO 淘汰: #{removed["id"]} "{removed["content"][:50]}..."')
 
         self._write(data)
         logger.info(f"项目记忆新增 #{entry['id']}, 总数={len(data)}")

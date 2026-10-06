@@ -89,10 +89,7 @@ def set_agent(agent: Any, setter: str = "") -> None:
     with _session_ref_lock:
         _current_agent = agent
     if agent is not None:
-        logger.debug(
-            f"Agent 已设置 | setter={setter or 'unknown'} | "
-            f"mode={getattr(agent, 'mode', '?')}"
-        )
+        logger.debug(f"Agent 已设置 | setter={setter or 'unknown'} | mode={getattr(agent, 'mode', '?')}")
     else:
         logger.debug("Agent 已清除")
 
@@ -129,8 +126,5 @@ def get_session_info() -> dict[str, Any]:
         "has_session": current_session is not None,
         "has_agent": current_agent is not None,
         "agent_mode": getattr(current_agent, "mode", None) if current_agent else None,
-        "session_model": (
-            getattr(getattr(current_session, "context", None), "model", None)
-            if current_session else None
-        ),
+        "session_model": (getattr(getattr(current_session, "context", None), "model", None) if current_session else None),
     }

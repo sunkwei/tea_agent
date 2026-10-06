@@ -14,9 +14,9 @@ logger = logging.getLogger("agent.background")
 
 # M3: 打断模式分析默认配置（可由 provider.yaml settings.interruption.* 覆盖）
 _INTERRUPT_ANALYZE_INTERVAL_H = 1.0  # 分析周期（小时）
-_INTERRUPT_ANALYZE_MIN_COUNT = 2     # 同一工具打断 ≥ 2 次才沉淀
-_INTERRUPT_SKILL_MIN_COUNT = 3       # 同一工具打断 ≥ 3 次才生成行为指导 skill
-_INTERRUPT_KEEP_DAYS = 30            # 事件保留天数（超期清理）
+_INTERRUPT_ANALYZE_MIN_COUNT = 2  # 同一工具打断 ≥ 2 次才沉淀
+_INTERRUPT_SKILL_MIN_COUNT = 3  # 同一工具打断 ≥ 3 次才生成行为指导 skill
+_INTERRUPT_KEEP_DAYS = 30  # 事件保留天数（超期清理）
 
 
 def _get_icfg() -> dict:
@@ -37,6 +37,7 @@ def start_scheduler() -> bool:
     """
     try:
         from tea_agent.toolkit.toolkit_scheduler import toolkit_scheduler
+
         toolkit_scheduler("start")
         # M3/M4: 同时启动打断模式后台分析（daemon 线程，不阻塞）
         start_interruption_analyzer()
@@ -55,6 +56,7 @@ def _skill_name_for_tool(tool: str) -> str:
 def _default_skills_dir() -> str:
     """用户级 skills 目录（与 toolkit_skills 存储一致）。"""
     import os
+
     return os.path.join(os.path.expanduser("~"), ".tea_agent", "skills")
 
 
@@ -77,10 +79,7 @@ def _ensure_interruption_skill(skills_dir: str, tool: str, count: int) -> str | 
     if os.path.isfile(skill_file):
         return None  # 幂等：已存在
 
-    description = (
-        f"用户在使用 {tool} 时曾多次被打断（{count} 次，打断知识闭环统计）。"
-        f"执行涉及 {tool} 的任务前先输出计划摘要并确认方向。"
-    )
+    description = f"用户在使用 {tool} 时曾多次被打断（{count} 次，打断知识闭环统计）。执行涉及 {tool} 的任务前先输出计划摘要并确认方向。"
     front = (
         "---\n"
         f"name: {name}\n"
@@ -142,6 +141,7 @@ def analyze_interruptions(
     """
     try:
         from tea_agent.store import get_storage
+
         if storage is None:
             storage = get_storage()
         if skill_min_count is None:
@@ -165,9 +165,7 @@ def analyze_interruptions(
             if cnt < min_count:
                 continue
             # M3: 幂等去重——已有该工具的打断偏好记忆则跳过
-            existing = storage.memories.search_memories(
-                category="preference", tags=[f"tool:{tool}"], limit=5
-            )
+            existing = storage.memories.search_memories(category="preference", tags=[f"tool:{tool}"], limit=5)
             if not existing:
                 content = (
                     f"[打断模式] 用户在使用工具 {tool} 时被打断 {cnt} 次（近 {days} 天）。"
@@ -189,8 +187,7 @@ def analyze_interruptions(
             # 删除永不生效，且每轮注入白烧 token（实测连续 20+ 轮仍被注入）。
             marked = storage.mark_interruptions_precipitated(ev_ids)
             if marked:
-                logger.debug(
-                    f"[InterruptionKnowledge] 标记 {marked} 条事件已沉淀: tool={tool}")
+                logger.debug(f"[InterruptionKnowledge] 标记 {marked} 条事件已沉淀: tool={tool}")
 
             # M5: 持续高频（≥ skill 阈值）→ 主动生成行为指导 skill
             if cnt >= skill_min_count:

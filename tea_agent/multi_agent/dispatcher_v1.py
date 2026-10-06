@@ -27,6 +27,7 @@ class TaskStatus(Enum):
 @dataclass
 class SubTask:
     """子任务定义"""
+
     id: str
     name: str
     description: str
@@ -151,12 +152,14 @@ class Dispatcher:
         for i, (name, desc) in enumerate(steps):
             task_id = f"step_{i + 1}"
             dependencies = [f"step_{i}"] if i > 0 else []
-            tasks.append(SubTask(
-                id=task_id,
-                name=name,
-                description=f"{goal} — {desc}",
-                dependencies=dependencies,
-            ))
+            tasks.append(
+                SubTask(
+                    id=task_id,
+                    name=name,
+                    description=f"{goal} — {desc}",
+                    dependencies=dependencies,
+                )
+            )
         return tasks
 
     # ───────────────────────────────────────────────
@@ -209,12 +212,7 @@ class Dispatcher:
             else:
                 # 多任务并行
                 with ThreadPoolExecutor(max_workers=min(self.max_workers, len(layer))) as pool:
-                    future_map = {
-                        pool.submit(
-                            self._execute_single_task, task, accumulated_context, context
-                        ): task
-                        for task in layer
-                    }
+                    future_map = {pool.submit(self._execute_single_task, task, accumulated_context, context): task for task in layer}
                     for future in as_completed(future_map):
                         task = future_map[future]
                         try:
@@ -283,14 +281,16 @@ class Dispatcher:
 
         task_summaries = []
         for t in tasks:
-            task_summaries.append({
-                "step": t.name,
-                "description": t.description,
-                "status": t.status.value,
-                "result": t.result[:500] if t.result else None,
-                "error": t.error,
-                "time_seconds": round(t.time_seconds, 1),
-            })
+            task_summaries.append(
+                {
+                    "step": t.name,
+                    "description": t.description,
+                    "status": t.status.value,
+                    "result": t.result[:500] if t.result else None,
+                    "error": t.error,
+                    "time_seconds": round(t.time_seconds, 1),
+                }
+            )
 
         return {
             "goal": goal,

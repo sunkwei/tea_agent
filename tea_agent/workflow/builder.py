@@ -40,12 +40,13 @@ logger = logging.getLogger(__name__)
 @dataclass
 class Step:
     """工作流步骤"""
+
     id: str
     name: str
     description: str
     tools: list[str]
-    inputs: list[str] = field(default_factory=list)   # 输入依赖
-    outputs: list[str] = field(default_factory=list)   # 输出产物
+    inputs: list[str] = field(default_factory=list)  # 输入依赖
+    outputs: list[str] = field(default_factory=list)  # 输出产物
     estimated_tokens: int = 0
     estimated_time: float = 0
 
@@ -53,6 +54,7 @@ class Step:
 @dataclass
 class Workflow:
     """工作流定义"""
+
     id: str
     goal: str
     steps: list[Step]
@@ -97,7 +99,7 @@ class WorkflowBuilder:
                 ("design", "设计重构方案", []),
                 ("execute", "执行重构", ["toolkit_edit", "toolkit_diff"]),
                 ("verify", "验证重构", ["toolkit_run_tests"]),
-            ]
+            ],
         },
         "type_annotation": {
             "name": "添加类型注解",
@@ -107,7 +109,7 @@ class WorkflowBuilder:
                 ("annotate", "添加类型注解", ["toolkit_edit"]),
                 ("check", "类型检查", ["toolkit_exec"]),
                 ("test", "运行测试", ["toolkit_run_tests"]),
-            ]
+            ],
         },
         "test": {
             "name": "编写测试",
@@ -117,7 +119,7 @@ class WorkflowBuilder:
                 ("write", "编写测试代码", ["toolkit_edit"]),
                 ("run", "运行测试", ["toolkit_run_tests"]),
                 ("fix", "修复失败测试", ["toolkit_edit"]),
-            ]
+            ],
         },
         "fix": {
             "name": "修复问题",
@@ -126,7 +128,7 @@ class WorkflowBuilder:
                 ("analyze", "分析原因", ["toolkit_file"]),
                 ("fix", "修复代码", ["toolkit_edit"]),
                 ("test", "验证修复", ["toolkit_run_tests"]),
-            ]
+            ],
         },
         "doc": {
             "name": "生成文档",
@@ -135,7 +137,7 @@ class WorkflowBuilder:
                 ("draft", "草拟文档", []),
                 ("write", "编写文档", ["toolkit_file"]),
                 ("format", "格式化文档", ["toolkit_format_code"]),
-            ]
+            ],
         },
         "feature": {
             "name": "新功能开发",
@@ -145,7 +147,7 @@ class WorkflowBuilder:
                 ("implement", "实现功能", ["toolkit_edit"]),
                 ("test", "编写测试", ["toolkit_run_tests"]),
                 ("doc", "编写文档", ["toolkit_file"]),
-            ]
+            ],
         },
         "search": {
             "name": "代码搜索",
@@ -153,7 +155,7 @@ class WorkflowBuilder:
                 ("search", "搜索代码", ["toolkit_search"]),
                 ("analyze", "分析结果", ["toolkit_file"]),
                 ("report", "生成报告", []),
-            ]
+            ],
         },
         "default": {
             "name": "通用任务",
@@ -161,7 +163,7 @@ class WorkflowBuilder:
                 ("analyze", "分析任务", []),
                 ("execute", "执行操作", ["toolkit_file"]),
                 ("verify", "验证结果", []),
-            ]
+            ],
         },
     }
 
@@ -228,7 +230,7 @@ class WorkflowBuilder:
 
         # 检查文件类型
         if files:
-            py_files = [f for f in files if f.endswith('.py')]
+            py_files = [f for f in files if f.endswith(".py")]
             if py_files and any(kw in goal_lower for kw in ["类型", "type"]):
                 return "type_annotation"
 
@@ -252,7 +254,7 @@ class WorkflowBuilder:
         steps = []
         for i, (step_id, step_name, tools) in enumerate(pattern_def["steps"]):
             step = Step(
-                id=f"step_{i+1}",
+                id=f"step_{i + 1}",
                 name=step_name,
                 description=f"{goal} - {step_name}",
                 tools=tools,

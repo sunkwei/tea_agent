@@ -80,10 +80,7 @@ def toolkit_approve(action: str = "status", tool: str = "", note: str = "") -> d
         st = approval_status()
         st["ok"] = True
         st["risk_levels"] = RISK_LEVELS
-        st["hint"] = (
-            "mode=off 仅审计高风险动作；mode=advisory 打标不阻断；"
-            "mode=enforce 高风险动作缺失授权即拒绝"
-        )
+        st["hint"] = "mode=off 仅审计高风险动作；mode=advisory 打标不阻断；mode=enforce 高风险动作缺失授权即拒绝"
         return st
 
     if act == "list":
@@ -95,10 +92,7 @@ def toolkit_approve(action: str = "status", tool: str = "", note: str = "") -> d
             return {"ok": False, "error": f"action={act} 需要提供 tool 参数"}
         result = grant(tool, note=note) if act == "grant" else revoke(tool)
         if result.get("ok"):
-            result["hint"] = (
-                f"已{('授权' if act == 'grant' else '撤销')} {tool}；"
-                "授权名单存于 .tea_agent_run/approval_allow.json"
-            )
+            result["hint"] = f"已{('授权' if act == 'grant' else '撤销')} {tool}；授权名单存于 .tea_agent_run/approval_allow.json"
         return result
 
     return {"ok": False, "error": f"未知 action: {action!r}（可选 status/grant/revoke/list）"}

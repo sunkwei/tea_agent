@@ -5,6 +5,7 @@ logger = logging.getLogger("toolkit")
 
 """toolkit_input — 操作能力：鼠标移动/点击/拖拽 + 键盘输入/快捷键"""
 
+
 def toolkit_input(
     action: str,
     x: int = 0,
@@ -38,11 +39,14 @@ def toolkit_input(
     Returns:
         操作结果描述
     """
-    logger.info(f"toolkit_input called: action={action!r}, x={x!r}, y={y!r}, text={repr(text)[:80]}, button={button!r}, duration={duration!r}, dx={dx!r}, dy={dy!r}, keys={keys!r}, amount={amount!r}")
+    logger.info(
+        f"toolkit_input called: action={action!r}, x={x!r}, y={y!r}, text={repr(text)[:80]}, button={button!r}, duration={duration!r}, dx={dx!r}, dy={dy!r}, keys={keys!r}, amount={amount!r}"
+    )
 
     import json
 
     import pyautogui as pg
+
     pg.FAILSAFE = True
     pg.PAUSE = 0.05
 
@@ -71,22 +75,20 @@ def toolkit_input(
             pg.moveTo(x, y, duration=duration * 0.5)
             pg.drag(dx, dy, duration=duration, button=button)
             end_x, end_y = x + dx, y + dy
-            return json.dumps({
-                "action": "drag",
-                "from": [x, y],
-                "to": [end_x, end_y],
-                "ok": True
-            }, ensure_ascii=False)
+            return json.dumps({"action": "drag", "from": [x, y], "to": [end_x, end_y], "ok": True}, ensure_ascii=False)
 
         if action == "position":
             pos = pg.position()
             screen = pg.size()
-            return json.dumps({
-                "action": "position",
-                "x": pos.x,
-                "y": pos.y,
-                "screen": f"{screen.width}x{screen.height}",
-            }, ensure_ascii=False)
+            return json.dumps(
+                {
+                    "action": "position",
+                    "x": pos.x,
+                    "y": pos.y,
+                    "screen": f"{screen.width}x{screen.height}",
+                },
+                ensure_ascii=False,
+            )
 
         if action == "scroll":
             pg.scroll(amount, x=x if x else None, y=y if y else None)
@@ -97,12 +99,15 @@ def toolkit_input(
             if not text:
                 return "❌ type 需要提供 text 参数"
             pg.typewrite(text, interval=0.02)
-            return json.dumps({
-                "action": "type",
-                "text": text[:80] + ("..." if len(text) > 80 else ""),
-                "length": len(text),
-                "ok": True,
-            }, ensure_ascii=False)
+            return json.dumps(
+                {
+                    "action": "type",
+                    "text": text[:80] + ("..." if len(text) > 80 else ""),
+                    "length": len(text),
+                    "ok": True,
+                },
+                ensure_ascii=False,
+            )
 
         if action == "press":
             if not keys:
@@ -129,64 +134,45 @@ def toolkit_input(
     except Exception as e:
         return f"❌ 操作失败: {e}"
 
+
 def meta_toolkit_input() -> dict:
     """Meta toolkit input."""
     return {
         "type": "function",
         "function": {
             "name": "toolkit_input",
-            "description": "模拟鼠标和键盘操作 — Agent 的'手'。可移动鼠标、点击、拖拽、滚动、输入文本、按快捷键。配合 toolkit_screenshot 可实现「看→分析→操作」闭环。",            "parameters": {
+            "description": "模拟鼠标和键盘操作 — Agent 的'手'。可移动鼠标、点击、拖拽、滚动、输入文本、按快捷键。配合 toolkit_screenshot 可实现「看→分析→操作」闭环。",
+            "parameters": {
                 "type": "object",
                 "properties": {
                     "action": {
                         "type": "string",
                         "enum": [
-                            "move", "click", "double_click", "right_click", "drag",
-                            "position", "scroll",
-                            "type", "press", "hotkey",
-                            "screen_size"
+                            "move",
+                            "click",
+                            "double_click",
+                            "right_click",
+                            "drag",
+                            "position",
+                            "scroll",
+                            "type",
+                            "press",
+                            "hotkey",
+                            "screen_size",
                         ],
-                        "description": "操作类型。鼠标: move/click/double_click/right_click/drag/position/scroll。键盘: type/press/hotkey。信息: screen_size"
+                        "description": "操作类型。鼠标: move/click/double_click/right_click/drag/position/scroll。键盘: type/press/hotkey。信息: screen_size",
                     },
-                    "x": {
-                        "type": "integer",
-                        "description": "目标 X 坐标（move/click/drag 时使用）"
-                    },
-                    "y": {
-                        "type": "integer",
-                        "description": "目标 Y 坐标（move/click/drag 时使用）"
-                    },
-                    "text": {
-                        "type": "string",
-                        "description": "要输入的文本"
-                    },
-                    "button": {
-                        "type": "string",
-                        "enum": ["left", "right", "middle"],
-                        "description": "鼠标按键，默认 left"
-                    },
-                    "duration": {
-                        "type": "number",
-                        "description": "移动耗时秒数，默认 0.3"
-                    },
-                    "dx": {
-                        "type": "integer",
-                        "description": "X 偏移量"
-                    },
-                    "dy": {
-                        "type": "integer",
-                        "description": "Y 偏移量"
-                    },
-                    "keys": {
-                        "type": "string",
-                        "description": "按键或组合键（如 'enter'、'ctrl+c'）"
-                    },
-                    "amount": {
-                        "type": "integer",
-                        "description": "滚动量，正=上滚 负=下滚"
-                    }
+                    "x": {"type": "integer", "description": "目标 X 坐标（move/click/drag 时使用）"},
+                    "y": {"type": "integer", "description": "目标 Y 坐标（move/click/drag 时使用）"},
+                    "text": {"type": "string", "description": "要输入的文本"},
+                    "button": {"type": "string", "enum": ["left", "right", "middle"], "description": "鼠标按键，默认 left"},
+                    "duration": {"type": "number", "description": "移动耗时秒数，默认 0.3"},
+                    "dx": {"type": "integer", "description": "X 偏移量"},
+                    "dy": {"type": "integer", "description": "Y 偏移量"},
+                    "keys": {"type": "string", "description": "按键或组合键（如 'enter'、'ctrl+c'）"},
+                    "amount": {"type": "integer", "description": "滚动量，正=上滚 负=下滚"},
                 },
-                "required": ["action"]
-            }
-        }
+                "required": ["action"],
+            },
+        },
     }

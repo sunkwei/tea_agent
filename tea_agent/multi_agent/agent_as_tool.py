@@ -105,19 +105,19 @@ class AgentTool:
 
             # 执行 agent（兼容 RoleAgent.execute 和 LiteAgent.execute_sync）
             if context:
-                if hasattr(self.agent, 'execute_with_context'):
+                if hasattr(self.agent, "execute_with_context"):
                     raw = self.agent.execute_with_context(task, context)
-                elif hasattr(self.agent, 'execute'):
+                elif hasattr(self.agent, "execute"):
                     raw = self.agent.execute(task, context=context)
                 else:
                     raw = self.agent.execute_sync(task)
             else:
-                raw = self.agent.execute(task) if hasattr(self.agent, 'execute') else self.agent.execute_sync(task)
+                raw = self.agent.execute(task) if hasattr(self.agent, "execute") else self.agent.execute_sync(task)
 
             # 统一提取文本结果
-            if isinstance(raw, dict) and 'output' in raw:
-                result = raw['output']
-            elif hasattr(raw, 'output'):
+            if isinstance(raw, dict) and "output" in raw:
+                result = raw["output"]
+            elif hasattr(raw, "output"):
                 result = raw.output
             elif isinstance(raw, str):
                 result = raw
@@ -137,7 +137,7 @@ class AgentTool:
             with self._lock:
                 self._call_history.append(entry)
                 if len(self._call_history) > self._max_history:
-                    self._call_history = self._call_history[-self._max_history:]
+                    self._call_history = self._call_history[-self._max_history :]
 
             return {
                 "result": result,
@@ -162,7 +162,7 @@ class AgentTool:
             with self._lock:
                 self._call_history.append(entry)
                 if len(self._call_history) > self._max_history:
-                    self._call_history = self._call_history[-self._max_history:]
+                    self._call_history = self._call_history[-self._max_history :]
 
             return {
                 "error": str(e),

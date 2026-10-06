@@ -16,17 +16,21 @@ from dataclasses import dataclass, field
 
 logger = logging.getLogger("ReflectionManager")
 
+
 @dataclass
 class ToolCallRecord:
     """单次工具调用记录"""
+
     name: str
     success: bool
     error: str = ""
     duration_ms: float = 0.0
 
+
 @dataclass
 class SessionTrace:
     """一次会话的完整追踪"""
+
     topic_id: str = ""
     user_msg: str = ""
     tool_calls: list[ToolCallRecord] = field(default_factory=list)
@@ -49,6 +53,7 @@ class SessionTrace:
     def duration_seconds(self) -> float:
         """Duration seconds."""
         return self.end_time - self.start_time if self.end_time > 0 else 0
+
 
 class ReflectionManager:
     """反思管理器"""
@@ -100,15 +105,18 @@ class ReflectionManager:
 
     def record_tool_call(self, trace: SessionTrace, name: str, success: bool, error: str = "", duration_ms: float = 0.0):
         """记录一次工具调用"""
-        trace.tool_calls.append(ToolCallRecord(
-            name=name,
-            success=success,
-            error=error,
-            duration_ms=duration_ms,
-        ))
+        trace.tool_calls.append(
+            ToolCallRecord(
+                name=name,
+                success=success,
+                error=error,
+                duration_ms=duration_ms,
+            )
+        )
 
-    def finish_trace(self, trace: SessionTrace, total_iterations: int = 0, used_tools: bool = False,
-                     interrupted: bool = False, error: str | None = None):
+    def finish_trace(
+        self, trace: SessionTrace, total_iterations: int = 0, used_tools: bool = False, interrupted: bool = False, error: str | None = None
+    ):
         """结束追踪"""
         trace.end_time = time.time()
         trace.total_iterations = total_iterations
@@ -145,6 +153,7 @@ class ReflectionManager:
                 last_time = last_reflections[0].get("created_at", "")
                 if last_time:
                     import datetime as _dt
+
                     last_dt = _dt.datetime.fromisoformat(str(last_time).replace("Z", "+00:00"))
                     if last_dt.tzinfo is not None:
                         last_dt = last_dt.replace(tzinfo=None)
@@ -152,7 +161,6 @@ class ReflectionManager:
                         return False
         except Exception as e:
             logger.warning(f"反思时间检查失败: {e}")
-
 
         return False
 
@@ -163,7 +171,7 @@ class ReflectionManager:
 
         lines = []
         for i, trace in enumerate(self._pending_traces):
-            lines.append(f"### 会话 {i+1} (topic_id={trace.topic_id})")
+            lines.append(f"### 会话 {i + 1} (topic_id={trace.topic_id})")
             lines.append(f"用户消息: {trace.user_msg[:200]}")
             lines.append(f"总迭代: {trace.total_iterations}, 使用工具: {trace.used_tools}, 打断: {trace.interrupted}")
             lines.append(f"耗时: {trace.duration_seconds:.1f}s")
@@ -180,7 +188,7 @@ class ReflectionManager:
 
         messages = [
             {"role": "system", "content": self.REFLECTION_SYSTEM_PROMPT},
-            {"role": "user", "content": f"分析以下会话追踪数据并生成反思报告：\n\n{prompt_text}"}
+            {"role": "user", "content": f"分析以下会话追踪数据并生成反思报告：\n\n{prompt_text}"},
         ]
 
         return prompt_text, messages
@@ -264,8 +272,7 @@ class ReflectionManager:
                             importance=mem.get("importance", 3),
                         )
                     except Exception:
-                        logger.exception('op_failed')
-
+                        logger.exception("op_failed")
 
             # 返回 prompt_adjustment 供 SystemPromptManager 使用
             prompt_adjustment = parsed.get("prompt_adjustment")
@@ -303,7 +310,7 @@ class ReflectionManager:
     @property
     def last_prompt_suggestion(self) -> str | None:
         """获取最近一次反思生成的提示词建议"""
-        return getattr(self, '_last_prompt_suggestion', None)
+        return getattr(self, "_last_prompt_suggestion", None)
 
     def get_stats(self) -> dict:
         """获取反思统计"""

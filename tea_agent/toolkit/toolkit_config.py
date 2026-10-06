@@ -28,7 +28,7 @@ def toolkit_config(action: str = "list", key: str = "", value: str = "") -> str:
 
     cfg = _get_config()
     session = _get_session()
-    storage = getattr(session, 'storage', None) if session else None
+    storage = getattr(session, "storage", None) if session else None
 
     if action == "list":
         data = cfg.to_dict()
@@ -72,8 +72,7 @@ def toolkit_config(action: str = "list", key: str = "", value: str = "") -> str:
             try:
                 setattr(session, key, cfg.get(key))
             except Exception:
-                logger.exception('op_failed')
-
+                logger.exception("op_failed")
 
         return f"✅ {key}: {old_val} → {new_val}"
 
@@ -85,15 +84,13 @@ def toolkit_config(action: str = "list", key: str = "", value: str = "") -> str:
             return "📝 暂无配置变更记录"
         lines = ["📋 配置变更历史:"]
         for ch in changes:
-            lines.append(
-                f"  #{ch['id']} [{ch['created_at']}] {ch['key']}: "
-                f"{ch.get('old_value', '(无)')} → {ch['new_value']}"
-            )
+            lines.append(f"  #{ch['id']} [{ch['created_at']}] {ch['key']}: {ch.get('old_value', '(无)')} → {ch['new_value']}")
             if ch.get("reason"):
                 lines.append(f"    原因: {ch['reason']}")
         return "\n".join(lines)
 
     return f"❌ 未知操作: {action}。支持: list, get, set, history"
+
 
 def meta_toolkit_config() -> dict:
     """Meta toolkit config."""
@@ -108,18 +105,12 @@ def meta_toolkit_config() -> dict:
                     "action": {
                         "type": "string",
                         "enum": ["list", "get", "set", "history"],
-                        "description": "操作: list=全部配置, get=读取单个, set=修改, history=变更历史"
+                        "description": "操作: list=全部配置, get=读取单个, set=修改, history=变更历史",
                     },
-                    "key": {
-                        "type": "string",
-                        "description": "配置键名（get/set 时必需）"
-                    },
-                    "value": {
-                        "type": "string",
-                        "description": "新值"
-                    }
+                    "key": {"type": "string", "description": "配置键名（get/set 时必需）"},
+                    "value": {"type": "string", "description": "新值"},
                 },
-                "required": ["action"]
-            }
-        }
+                "required": ["action"],
+            },
+        },
     }

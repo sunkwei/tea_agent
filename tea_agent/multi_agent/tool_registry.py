@@ -128,6 +128,7 @@ class ToolRegistry:
         @registry.register(name="my_tool", tags=["utility"])
         def my_tool(x): ...
         """
+
         def decorator(func: Callable) -> Callable:
             tool_name = name or func.__name__
             tool_desc = description or (func.__doc__ or "").strip() or f"工具 {tool_name}"
@@ -142,6 +143,7 @@ class ToolRegistry:
             )
             self._add_entry(entry)
             return func
+
         return decorator
 
     def register_tool(

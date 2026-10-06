@@ -1,5 +1,5 @@
-"""
-"""
+""" """
+
 import logging
 from datetime import datetime, timedelta
 
@@ -10,6 +10,7 @@ logger = logging.getLogger("Storage.ScheduledTasks")
 
 # cron 表达式解析 (简易: 分 时 日 月 周)
 _CRON_MAP_WEEKDAY = {"mon": 0, "tue": 1, "wed": 2, "thu": 3, "fri": 4, "sat": 5, "sun": 6}
+
 
 class ScheduledTaskStore(StoreComponent):
     """定时任务管理：增删改查、下次执行时间计算。"""
@@ -89,9 +90,7 @@ class ScheduledTaskStore(StoreComponent):
 
     # ── CRUD ──
 
-    def add_task(
-        self, name: str, command: str, schedule: str, enabled: bool = True
-    ) -> str:
+    def add_task(self, name: str, command: str, schedule: str, enabled: bool = True) -> str:
         """新增定时任务，返回 task_id。"""
         tid = self._new_id()
         next_run = self.parse_schedule(schedule)
@@ -100,9 +99,7 @@ class ScheduledTaskStore(StoreComponent):
             """INSERT INTO scheduled_tasks
                (id, name, command, schedule, enabled, next_run, created_at, updated_at)
                VALUES (?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)""",
-            (tid, name.strip(), command.strip(), schedule.strip(),
-             1 if enabled else 0,
-             next_run.isoformat() if next_run else None),
+            (tid, name.strip(), command.strip(), schedule.strip(), 1 if enabled else 0, next_run.isoformat() if next_run else None),
         )
         self.conn.commit()
         logger.info(f"新增定时任务: {name} (schedule={schedule}, next={next_run})")
@@ -110,8 +107,7 @@ class ScheduledTaskStore(StoreComponent):
 
     def update_task(self, task_id: str, **kwargs) -> bool:
         """更新任务字段: name, command, schedule, enabled, last_run, last_result, last_exit_code, next_run."""
-        allowed = {"name", "command", "schedule", "enabled", "last_run",
-                   "last_result", "last_exit_code", "next_run"}
+        allowed = {"name", "command", "schedule", "enabled", "last_run", "last_result", "last_exit_code", "next_run"}
         updates = {k: v for k, v in kwargs.items() if k in allowed}
         if not updates:
             return False
@@ -123,9 +119,7 @@ class ScheduledTaskStore(StoreComponent):
         _ALLOWED_COLUMNS = {"name", "command", "schedule", "enabled", "updated_at"}  # noqa: N806
         for k in updates:
             assert k in _ALLOWED_COLUMNS, f"invalid column: {k}"
-        set_clause = safe_set_clause(
-            updates.keys(), raw={"updated_at": "CURRENT_TIMESTAMP"}
-        )
+        set_clause = safe_set_clause(updates.keys(), raw={"updated_at": "CURRENT_TIMESTAMP"})
         values = [v for k, v in updates.items() if k != "updated_at"]
         values.append(task_id)
         c = self.conn.cursor()
@@ -178,6 +172,7 @@ class ScheduledTaskStore(StoreComponent):
         )
         self.conn.commit()
 
+
 def _cron_wd_to_py(pattern: str) -> str:
     """标准 cron 周字段 (0/7=周日,1=周一..6=周六) → Python weekday (0=周一..6=周日)。"""
     if pattern == "*":
@@ -210,16 +205,19 @@ def _parse_cron(expr: str, now: datetime) -> datetime | None:
         # 检查未来 7 天每分钟 (简单暴力但可靠)
         dt = now.replace(second=0, microsecond=0) + timedelta(minutes=1)
         for _ in range(7 * 24 * 60):
-            if (_match_cron_field(minute, dt.minute)
-                    and _match_cron_field(hour, dt.hour)
-                    and _match_cron_field(day, dt.day)
-                    and _match_cron_field(month, dt.month)
-                    and _match_cron_field(weekday, dt.weekday())):
+            if (
+                _match_cron_field(minute, dt.minute)
+                and _match_cron_field(hour, dt.hour)
+                and _match_cron_field(day, dt.day)
+                and _match_cron_field(month, dt.month)
+                and _match_cron_field(weekday, dt.weekday())
+            ):
                 return dt
             dt += timedelta(minutes=1)
         return None
     except Exception:
         return None
+
 
 def _match_cron_field(pattern: str, value: int) -> bool:
     """匹配单个 cron 字段: * / 步长 , 列表 - 范围"""

@@ -58,10 +58,9 @@ def _truncate(text: str, threshold: int) -> dict:
         "truncated": True,
         "locator": "",
         "chars": len(text),
-        "preview": (text[:HEAD_CHARS]
-                    + f"\n...[输出过长，已截断：共 {len(text)} 字符，"
-                      f"阈值 {threshold}，仅保留头 {HEAD_CHARS}]...\n"
-                    + text[-TAIL_CHARS:]),
+        "preview": (
+            text[:HEAD_CHARS] + f"\n...[输出过长，已截断：共 {len(text)} 字符，阈值 {threshold}，仅保留头 {HEAD_CHARS}]...\n" + text[-TAIL_CHARS:]
+        ),
     }
 
 
@@ -79,8 +78,7 @@ def spill_text(text: str, *, source: str = "", threshold: int | None = None) -> 
     """
     limit = threshold if threshold is not None else spill_threshold()
     if len(text) <= limit:
-        return {"spilled": False, "truncated": False, "locator": "",
-                "chars": len(text), "preview": text}
+        return {"spilled": False, "truncated": False, "locator": "", "chars": len(text), "preview": text}
 
     d = _spill_dir()
     if d is None:
@@ -95,10 +93,10 @@ def spill_text(text: str, *, source: str = "", threshold: int | None = None) -> 
             "truncated": False,
             "locator": path,
             "chars": len(text),
-            "preview": (text[:HEAD_CHARS]
-                        + f"\n...[输出过长，已落盘：共 {len(text)} 字符，"
-                          f"完整内容见 locator，可用 toolkit_file(action='read') 读取]...\n"
-                        + text[-TAIL_CHARS:]),
+            "preview": (
+                text[:HEAD_CHARS] + f"\n...[输出过长，已落盘：共 {len(text)} 字符，"
+                f"完整内容见 locator，可用 toolkit_file(action='read') 读取]...\n" + text[-TAIL_CHARS:]
+            ),
         }
     except Exception as e:  # noqa: BLE001 — 落盘失败回退截断，绝不影响主调用
         logger.warning("spill: 落盘失败(%s)，回退截断", e)

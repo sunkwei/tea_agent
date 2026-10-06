@@ -17,6 +17,7 @@ from .route_handlers_providers import _model_service, _provider_error_response
 def _model_store():
     """ModelConfigStore 单例（统一模型配置中心）。"""
     from tea_agent.model_config import get_model_config_store
+
     return get_model_config_store()
 
 
@@ -32,6 +33,7 @@ async def handle_model_config_get(request):
     server = get_server()
     try:
         from .modules.agent_module import AgentModule
+
         data = _model_store().panel(config_path=server.get_config_path() or "")
         data["pending_switch"] = AgentModule.get_pending_switch()
         # 标注「当前使用中」：提供商 api_url 与 main_model 一致 → is_configured（面板高亮）
@@ -54,8 +56,7 @@ async def handle_model_config_model_put(request):
     """
     body = await request.json()
     try:
-        entry = _model_store().update_model_config(
-            body.get("provider", ""), body.get("model", ""), body.get("config") or {})
+        entry = _model_store().update_model_config(body.get("provider", ""), body.get("model", ""), body.get("config") or {})
         return JSONResponse({"ok": True, **entry})
     except Exception as e:
         return _mc_error_response(e)
@@ -66,8 +67,7 @@ async def handle_model_config_model_add(request):
     body = await request.json()
     try:
         cfg = body.get("config") or None
-        entry = _model_store().upsert_model(
-            body.get("provider", ""), body.get("model", ""), cfg)
+        entry = _model_store().upsert_model(body.get("provider", ""), body.get("model", ""), cfg)
         return JSONResponse({"ok": True, **entry})
     except Exception as e:
         return _mc_error_response(e)
@@ -79,8 +79,7 @@ async def handle_model_config_model_del(request):
     model = request.query_params.get("model", "")
     try:
         if not _model_store().delete_model(provider, model):
-            return JSONResponse({"ok": False, "error": f"model '{model}' not found",
-                                 "code": "NOT_FOUND"}, status_code=404)
+            return JSONResponse({"ok": False, "error": f"model '{model}' not found", "code": "NOT_FOUND"}, status_code=404)
         return JSONResponse({"ok": True, "deleted": {"provider": provider, "model": model}})
     except Exception as e:
         return _mc_error_response(e)
@@ -94,14 +93,12 @@ async def handle_model_config_sync(request):
     body = await request.json() if request.headers.get("content-length") else {}
     try:
         res = _model_service().query_models(
-            body.get("provider", ""),
-            api_key=(body.get("api_key") or "").strip(),
-            refresh=bool(body.get("refresh", True)))
+            body.get("provider", ""), api_key=(body.get("api_key") or "").strip(), refresh=bool(body.get("refresh", True))
+        )
     except ProviderError as e:
         return _provider_error_response(e)
     try:
-        ids = [m.get("id") for m in res.get("models", [])
-               if isinstance(m, dict) and m.get("id")]
+        ids = [m.get("id") for m in res.get("models", []) if isinstance(m, dict) and m.get("id")]
         synced = _model_store().sync_live_models(res["provider"], ids)
         return JSONResponse({"ok": True, "query_source": res.get("source"), **synced})
     except Exception as e:
@@ -160,23 +157,32 @@ async def handle_model_config_switch(request):
         # 或 continue_session=false 的 main 切换，下一轮仍读旧配置。
         try:
             from .modules.agent_module import AgentModule
+
             AgentModule.invalidate_config_cache(server.get_config_path())
         except Exception as e:
             logger.warning("invalidate config cache failed: %s", e)
         if role == "main" and continue_session:
             try:
                 from tea_agent.config import load_config
+
                 mc = load_config(server.get_config_path() or None).main_model
                 switch = AgentModule.request_model_switch(
-                    mc.api_key, mc.api_url, mc.model_name,
-                    temperature=mc.temperature, max_tokens=mc.max_tokens,
-                    top_p=mc.top_p, max_context_tokens=mc.max_context_tokens,
-                    options=mc.options)
+                    mc.api_key,
+                    mc.api_url,
+                    mc.model_name,
+                    temperature=mc.temperature,
+                    max_tokens=mc.max_tokens,
+                    top_p=mc.top_p,
+                    max_context_tokens=mc.max_context_tokens,
+                    options=mc.options,
+                )
             except Exception as e:
                 logger.warning("session-continue switch failed (config saved): %s", e)
                 switch = {"mode": "error", "error": str(e)}
     result["switch"] = switch
     return JSONResponse(result)
+
+
 def _provider_option_list() -> list[dict]:
     """从 provider.yaml 派生 provider/model 组合列表（下拉框数据源）。
 
@@ -207,8 +213,7 @@ def _provider_option_list() -> list[dict]:
             if value in seen:
                 continue
             seen.add(value)
-            opts.append({"value": value, "provider": pname, "model": mid,
-                         "label": f"{pname} / {mid}"})
+            opts.append({"value": value, "provider": pname, "model": mid, "label": f"{pname} / {mid}"})
     opts.sort(key=lambda o: (o["provider"].lower(), o["model"].lower()))
     return opts
 
@@ -245,9 +250,9 @@ def _ensure_selected_option(options: list[dict], sel: dict) -> None:
         return
     if any(o.get("value") == sel["value"] for o in options):
         return
-    options.append({"value": sel["value"], "provider": sel.get("provider", ""),
-                    "model": sel.get("model", ""),
-                    "label": sel.get("label") or sel["value"]})
+    options.append(
+        {"value": sel["value"], "provider": sel.get("provider", ""), "model": sel.get("model", ""), "label": sel.get("label") or sel["value"]}
+    )
 
 
 async def handle_model_options(request):
@@ -266,13 +271,15 @@ async def handle_model_options(request):
         cheap_sel = _role_selection(cfg.cheap_model)
         _ensure_selected_option(options, main_sel)
         _ensure_selected_option(options, cheap_sel)
-        return JSONResponse({
-            "ok": True,
-            "options": options,
-            "main": main_sel,
-            "cheap": cheap_sel,
-            "active_config_path": server.get_config_path() or "",
-        })
+        return JSONResponse(
+            {
+                "ok": True,
+                "options": options,
+                "main": main_sel,
+                "cheap": cheap_sel,
+                "active_config_path": server.get_config_path() or "",
+            }
+        )
     except Exception as e:
         logger.exception("model-options failed")
         return JSONResponse({"ok": False, "error": str(e)}, status_code=500)
@@ -291,13 +298,11 @@ async def handle_model_select(request):
     body = await request.json() if request.headers.get("content-length") else {}
     role = (body.get("role") or "main").strip()
     if role not in ("main", "cheap"):
-        return JSONResponse({"ok": False, "error": f"invalid role '{role}'",
-                             "code": "BAD_REQUEST"}, status_code=400)
+        return JSONResponse({"ok": False, "error": f"invalid role '{role}'", "code": "BAD_REQUEST"}, status_code=400)
     provider = (body.get("provider") or "").strip()
     model = (body.get("model") or "").strip()
     if not model:
-        return JSONResponse({"ok": False, "error": "model required",
-                             "code": "BAD_REQUEST"}, status_code=400)
+        return JSONResponse({"ok": False, "error": "model required", "code": "BAD_REQUEST"}, status_code=400)
     server = get_server()
     try:
         from tea_agent.config import load_config, save_config
@@ -308,8 +313,7 @@ async def handle_model_select(request):
         store = get_provider_store()
         resolved = store.resolve(provider, model)
         if resolved is None:
-            return JSONResponse({"ok": False, "error": f"provider '{provider}' not found",
-                                 "code": "NOT_FOUND"}, status_code=404)
+            return JSONResponse({"ok": False, "error": f"provider '{provider}' not found", "code": "NOT_FOUND"}, status_code=404)
         cfg_path = server.get_config_path() or ""
         cfg = load_config(cfg_path)
         target = {"main": cfg.main_model, "cheap": cfg.cheap_model}[role]
@@ -335,29 +339,36 @@ async def handle_model_select(request):
             try:
                 mc = load_config(cfg_path or None).main_model
                 switch = AgentModule.request_model_switch(
-                    mc.api_key, mc.api_url, mc.model_name,
-                    temperature=mc.temperature, max_tokens=mc.max_tokens,
-                    top_p=mc.top_p, max_context_tokens=mc.max_context_tokens,
-                    options=mc.options)
+                    mc.api_key,
+                    mc.api_url,
+                    mc.model_name,
+                    temperature=mc.temperature,
+                    max_tokens=mc.max_tokens,
+                    top_p=mc.top_p,
+                    max_context_tokens=mc.max_context_tokens,
+                    options=mc.options,
+                )
             except Exception as e:
                 logger.warning("model-select hot-switch failed (config saved): %s", e)
                 switch = {"mode": "error", "error": str(e)}
 
         try:
-            _model_store().set_role(role, resolved["provider"], resolved["model"],
-                                    api_url=resolved.get("api_url", ""))
+            _model_store().set_role(role, resolved["provider"], resolved["model"], api_url=resolved.get("api_url", ""))
         except Exception as e:
             logger.debug("model-select role binding skipped: %s", e)
 
-        return JSONResponse({"ok": True, "role": role,
-                             "provider": resolved["provider"], "model": resolved["model"],
-                             "config_path": cfg_path, "switch": switch})
+        return JSONResponse(
+            {"ok": True, "role": role, "provider": resolved["provider"], "model": resolved["model"], "config_path": cfg_path, "switch": switch}
+        )
     except Exception as e:
         logger.exception("model-select failed")
         return JSONResponse({"ok": False, "error": str(e)}, status_code=500)
+
+
 def _provider_store():
     """ProviderStore 单例（provider.yaml 唯一事实源）。"""
     from tea_agent.provider_store import get_provider_store
+
     return get_provider_store()
 
 
@@ -374,9 +385,7 @@ async def handle_provider_store_list(request):
         store = _provider_store()
         providers = store.list_providers()
         total_models = sum(len(p.get("catalog") or []) for p in providers)
-        return JSONResponse({"ok": True, "providers": providers,
-                             "total": len(providers), "total_models": total_models,
-                             "file": str(store.file_path)})
+        return JSONResponse({"ok": True, "providers": providers, "total": len(providers), "total_models": total_models, "file": str(store.file_path)})
     except Exception as e:
         logger.exception("provider-store list failed")
         return JSONResponse({"ok": False, "error": str(e)}, status_code=500)
@@ -389,37 +398,44 @@ async def handle_provider_store_get(request):
         store = _provider_store()
         p = store.get_provider(name)
         if p is None:
-            return JSONResponse({"ok": False, "error": f"provider '{name}' not found",
-                                 "code": "NOT_FOUND"}, status_code=404)
+            return JSONResponse({"ok": False, "error": f"provider '{name}' not found", "code": "NOT_FOUND"}, status_code=404)
         models = p.get("models") or {}
         catalog = []
         for mid in sorted(models, key=str.lower):
             cfg = models[mid]
-            catalog.append({
-                "id": mid,
-                "max_context_tokens": int(cfg.get("max_context_tokens") or 0),
-                "max_output_tokens": int(cfg.get("max_output_tokens") or 0),
-                "supports_vision": bool(cfg.get("supports_vision", False)),
-                "supports_reasoning": bool(cfg.get("supports_reasoning", False)),
-                "reasoning_effort": cfg.get("reasoning_effort", ""),
-                "note": cfg.get("note", ""),
-            })
+            catalog.append(
+                {
+                    "id": mid,
+                    "max_context_tokens": int(cfg.get("max_context_tokens") or 0),
+                    "max_output_tokens": int(cfg.get("max_output_tokens") or 0),
+                    "supports_vision": bool(cfg.get("supports_vision", False)),
+                    "supports_reasoning": bool(cfg.get("supports_reasoning", False)),
+                    "reasoning_effort": cfg.get("reasoning_effort", ""),
+                    "note": cfg.get("note", ""),
+                }
+            )
         api_key = p.get("api_key", "") or ""
         from tea_agent.model_manager import _mask_key
+
         masked = _mask_key(api_key)
-        return JSONResponse({"ok": True, "provider": {
-            "name": p.get("name") or name,
-            "api_url": p.get("api_url", ""),
-            "api_key_masked": masked,
-            "has_key": bool(api_key),
-            "default_model": p.get("default_model", ""),
-            "description": p.get("description", ""),
-            "supports_vision": bool(p.get("supports_vision", False)),
-            "supports_reasoning": bool(p.get("supports_reasoning", False)),
-            "source": p.get("source", "custom"),
-            "catalog": catalog,
-            "model_count": len(catalog),
-        }})
+        return JSONResponse(
+            {
+                "ok": True,
+                "provider": {
+                    "name": p.get("name") or name,
+                    "api_url": p.get("api_url", ""),
+                    "api_key_masked": masked,
+                    "has_key": bool(api_key),
+                    "default_model": p.get("default_model", ""),
+                    "description": p.get("description", ""),
+                    "supports_vision": bool(p.get("supports_vision", False)),
+                    "supports_reasoning": bool(p.get("supports_reasoning", False)),
+                    "source": p.get("source", "custom"),
+                    "catalog": catalog,
+                    "model_count": len(catalog),
+                },
+            }
+        )
     except Exception as e:
         logger.exception("provider-store get failed: %s", name)
         return JSONResponse({"ok": False, "error": str(e)}, status_code=500)
@@ -431,9 +447,11 @@ async def handle_provider_store_upsert(request):
     name = (body.get("name") or "").strip()
     if not name:
         return JSONResponse({"ok": False, "error": "name required"}, status_code=400)
-    meta = {k: body[k] for k in (
-        "api_url", "api_key", "default_model", "description",
-        "supports_vision", "supports_reasoning", "source", "models") if k in body}
+    meta = {
+        k: body[k]
+        for k in ("api_url", "api_key", "default_model", "description", "supports_vision", "supports_reasoning", "source", "models")
+        if k in body
+    }
     try:
         store = _provider_store()
         p = store.upsert_provider(name, meta)
@@ -448,8 +466,7 @@ async def handle_provider_store_delete(request):
     try:
         ok = _provider_store().remove_provider(name)
         if not ok:
-            return JSONResponse({"ok": False, "error": f"provider '{name}' not found",
-                                 "code": "NOT_FOUND"}, status_code=404)
+            return JSONResponse({"ok": False, "error": f"provider '{name}' not found", "code": "NOT_FOUND"}, status_code=404)
         return JSONResponse({"ok": True, "deleted": name})
     except Exception as e:
         return _pstore_error_response(e)
@@ -481,8 +498,7 @@ async def handle_provider_store_model_delete(request):
     try:
         ok = _provider_store().delete_model(name, model)
         if not ok:
-            return JSONResponse({"ok": False, "error": f"model '{model}' not found",
-                                 "code": "NOT_FOUND"}, status_code=404)
+            return JSONResponse({"ok": False, "error": f"model '{model}' not found", "code": "NOT_FOUND"}, status_code=404)
         return JSONResponse({"ok": True, "deleted": {"provider": name, "model": model}})
     except Exception as e:
         return _pstore_error_response(e)
@@ -536,17 +552,16 @@ async def handle_provider_store_apply(request):
     model = (body.get("model") or "").strip()
     role = (body.get("role") or "main").strip()
     if role not in ("main", "cheap"):
-        return JSONResponse({"ok": False, "error": f"invalid role '{role}'",
-                             "code": "BAD_REQUEST"}, status_code=400)
+        return JSONResponse({"ok": False, "error": f"invalid role '{role}'", "code": "BAD_REQUEST"}, status_code=400)
     if not model:
         return JSONResponse({"ok": False, "error": "model required"}, status_code=400)
     try:
         from tea_agent.config import load_config, save_config
+
         store = _provider_store()
         resolved = store.resolve(name, model)
         if resolved is None:
-            return JSONResponse({"ok": False, "error": f"provider '{name}' not found",
-                                 "code": "NOT_FOUND"}, status_code=404)
+            return JSONResponse({"ok": False, "error": f"provider '{name}' not found", "code": "NOT_FOUND"}, status_code=404)
         server = get_server()
         cfg_path = server.get_config_path() or ""
         cfg = load_config(cfg_path)
@@ -570,11 +585,11 @@ async def handle_provider_store_apply(request):
         # 命中旧缓存，切换在同一进程内永不生效（与其他 apply 入口对齐）
         try:
             from .modules.agent_module import AgentModule
+
             AgentModule.invalidate_config_cache(cfg_path)
         except Exception as e:
             logger.warning("invalidate config cache after provider-store apply failed: %s", e)
-        return JSONResponse({"ok": True, "role": role, "provider": name, "model": model,
-                             "config_path": saved})
+        return JSONResponse({"ok": True, "role": role, "provider": name, "model": model, "config_path": saved})
     except Exception as e:
         logger.exception("provider-store apply failed: %s", name)
         return JSONResponse({"ok": False, "error": str(e)}, status_code=500)

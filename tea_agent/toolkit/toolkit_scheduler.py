@@ -97,6 +97,7 @@ def toolkit_scheduler(action: str, **kwargs):
     # ── DB 路径 ──
     try:
         from tea_agent.config import get_config
+
         DB_PATH = os.path.join(get_config().paths.data_dir_abs, "scheduler.db")  # noqa: N806
     except Exception:
         DB_PATH = os.path.expanduser("~/.tea_agent/scheduler.db")  # noqa: N806
@@ -112,7 +113,7 @@ def toolkit_scheduler(action: str, **kwargs):
         conn = sqlite3.connect(DB_PATH)
         conn.row_factory = sqlite3.Row
         conn.execute("PRAGMA journal_mode=WAL")
-        conn.execute('''
+        conn.execute("""
             CREATE TABLE IF NOT EXISTS scheduled_tasks (
                 id TEXT PRIMARY KEY,
                 name TEXT NOT NULL,
@@ -126,7 +127,7 @@ def toolkit_scheduler(action: str, **kwargs):
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
-        ''')
+        """)
         conn.commit()
         return conn
 
@@ -165,7 +166,7 @@ def toolkit_scheduler(action: str, **kwargs):
             if s.startswith("cron:"):
                 return _parse_cron(s[5:].strip(), now)
         except (ValueError, IndexError):
-            logger.exception('op_failed')
+            logger.exception("op_failed")
 
         return None
 
@@ -237,11 +238,14 @@ def toolkit_scheduler(action: str, **kwargs):
                 updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
         """)
-        conn.execute("""
+        conn.execute(
+            """
             INSERT OR REPLACE INTO scheduled_scripts
             (id, name, content, description, updated_at)
             VALUES (?, ?, ?, ?, ?)
-        """, (script_id, name, content, description, datetime.now().isoformat()))
+        """,
+            (script_id, name, content, description, datetime.now().isoformat()),
+        )
         conn.commit()
         conn.close()
         return {"status": "saved", "id": script_id}
@@ -260,9 +264,7 @@ def toolkit_scheduler(action: str, **kwargs):
                 updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
         """)
-        row = conn.execute(
-            "SELECT * FROM scheduled_scripts WHERE id = ?", (script_id,)
-        ).fetchone()
+        row = conn.execute("SELECT * FROM scheduled_scripts WHERE id = ?", (script_id,)).fetchone()
         conn.close()
         return dict(row) if row else None
 
@@ -325,9 +327,7 @@ def toolkit_scheduler(action: str, **kwargs):
 
         logger.info(f"执行定时任务: {task['name']} -> {argv}")
         try:
-            result = subprocess.run(
-                argv, shell=False, capture_output=True, text=True, timeout=300, cwd=os.getcwd()
-            )
+            result = subprocess.run(argv, shell=False, capture_output=True, text=True, timeout=300, cwd=os.getcwd())
             output = (result.stdout + result.stderr)[:2000]
             return result.returncode, output
         except subprocess.TimeoutExpired:
@@ -337,7 +337,8 @@ def toolkit_scheduler(action: str, **kwargs):
 
     # ── 调度守护线程（模块级全局变量，避免函数作用域隔离） ──
     import __main__ as _main_mod
-    for _var in ['_tea_scheduler_running', '_tea_scheduler_pid', '_tea_scheduler_thread']:
+
+    for _var in ["_tea_scheduler_running", "_tea_scheduler_pid", "_tea_scheduler_thread"]:
         if not hasattr(_main_mod, _var):
             setattr(_main_mod, _var, None)
 
@@ -351,8 +352,7 @@ def toolkit_scheduler(action: str, **kwargs):
             try:
                 conn = _get_conn()
                 due = conn.execute(
-                    "SELECT * FROM scheduled_tasks WHERE enabled=1 AND next_run IS NOT NULL AND next_run <= ?",
-                    (datetime.now().isoformat(),)
+                    "SELECT * FROM scheduled_tasks WHERE enabled=1 AND next_run IS NOT NULL AND next_run <= ?", (datetime.now().isoformat(),)
                 ).fetchall()
                 conn.close()
 
@@ -369,7 +369,7 @@ def toolkit_scheduler(action: str, **kwargs):
                         conn2.execute(
                             "UPDATE scheduled_tasks SET enabled=0, last_run=CURRENT_TIMESTAMP, "
                             "last_exit_code=?, last_result=?, updated_at=CURRENT_TIMESTAMP WHERE id=?",
-                            (exit_code, output, task["id"])
+                            (exit_code, output, task["id"]),
                         )
                     else:
                         # 重复任务计算下次执行
@@ -378,11 +378,10 @@ def toolkit_scheduler(action: str, **kwargs):
                         conn2.execute(
                             "UPDATE scheduled_tasks SET last_run=CURRENT_TIMESTAMP, "
                             "last_exit_code=?, last_result=?, next_run=?, updated_at=CURRENT_TIMESTAMP WHERE id=?",
-                            (exit_code, output, next_run, task["id"])
+                            (exit_code, output, next_run, task["id"]),
                         )
                     conn2.commit()
                     conn2.close()
-
 
             except Exception as e:
                 logger.warning(f"调度器循环异常: {e}")
@@ -394,9 +393,7 @@ def toolkit_scheduler(action: str, **kwargs):
     # ── action 分发 ──
     if action == "list":
         conn = _get_conn()
-        rows = conn.execute(
-            "SELECT * FROM scheduled_tasks ORDER BY enabled DESC, next_run ASC"
-        ).fetchall()
+        rows = conn.execute("SELECT * FROM scheduled_tasks ORDER BY enabled DESC, next_run ASC").fetchall()
         conn.close()
         tasks = []
         for r in rows:
@@ -416,11 +413,10 @@ def toolkit_scheduler(action: str, **kwargs):
             return {"error": _refusal["error"]}
         next_run = parse_schedule(schedule)
         conn = _get_conn()
-        tid = str(__import__('uuid').uuid4())
+        tid = str(__import__("uuid").uuid4())
         conn.execute(
             "INSERT INTO scheduled_tasks (id,name,command,schedule,enabled,next_run) VALUES (?,?,?,?,1,?)",
-            (tid, name.strip(), command.strip(), schedule.strip(),
-             next_run.isoformat() if next_run else None)
+            (tid, name.strip(), command.strip(), schedule.strip(), next_run.isoformat() if next_run else None),
         )
         conn.commit()
         conn.close()
@@ -452,10 +448,7 @@ def toolkit_scheduler(action: str, **kwargs):
         if updates:
             set_clause = safe_set_clause(updates.keys())
             vals = list(updates.values()) + [tid]
-            conn.execute(
-                f"UPDATE scheduled_tasks SET {set_clause}, updated_at=CURRENT_TIMESTAMP WHERE id=?",
-                vals
-            )
+            conn.execute(f"UPDATE scheduled_tasks SET {set_clause}, updated_at=CURRENT_TIMESTAMP WHERE id=?", vals)
             conn.commit()
         conn.close()
         return {"status": "updated"}
@@ -501,7 +494,7 @@ def toolkit_scheduler(action: str, **kwargs):
         conn2 = _get_conn()
         conn2.execute(
             "UPDATE scheduled_tasks SET last_run=CURRENT_TIMESTAMP, last_exit_code=?, last_result=?, updated_at=CURRENT_TIMESTAMP WHERE id=?",
-            (exit_code, output, tid)
+            (exit_code, output, tid),
         )
         conn2.commit()
         conn2.close()
@@ -601,19 +594,37 @@ def toolkit_scheduler(action: str, **kwargs):
         command = f"script:{script_id}"
         next_run = parse_schedule(schedule)
         conn = _get_conn()
-        tid = str(__import__('uuid').uuid4())
+        tid = str(__import__("uuid").uuid4())
         conn.execute(
             "INSERT INTO scheduled_tasks (id,name,command,schedule,enabled,next_run) VALUES (?,?,?,?,1,?)",
-            (tid, name.strip(), command, schedule.strip(),
-             next_run.isoformat() if next_run else None)
+            (tid, name.strip(), command, schedule.strip(), next_run.isoformat() if next_run else None),
         )
         conn.commit()
         conn.close()
         return {"status": "added", "task_id": tid, "next_run": next_run.isoformat() if next_run else None}
 
-    return {"error": f"未知 action: {action}",
-            "supported": ["list","add","update","delete","enable","disable","run","start","stop","status","test_schedule",
-                          "save_script","get_script","list_scripts","delete_script","add_script_task"]}
+    return {
+        "error": f"未知 action: {action}",
+        "supported": [
+            "list",
+            "add",
+            "update",
+            "delete",
+            "enable",
+            "disable",
+            "run",
+            "start",
+            "stop",
+            "status",
+            "test_schedule",
+            "save_script",
+            "get_script",
+            "list_scripts",
+            "delete_script",
+            "add_script_task",
+        ],
+    }
+
 
 def _format_next(task: dict) -> str:
     """格式化下次执行时间为人可读"""
@@ -624,6 +635,7 @@ def _format_next(task: dict) -> str:
         return "待计算"
     try:
         from datetime import datetime
+
         dt = datetime.fromisoformat(str(nr).replace("Z", "+00:00"))
         now = datetime.now()
         diff = dt - now
@@ -643,6 +655,7 @@ def _format_next(task: dict) -> str:
     except Exception:
         return str(nr)[:16]
 
+
 def meta_toolkit_scheduler() -> dict:
     """Meta toolkit scheduler."""
     return {
@@ -650,14 +663,14 @@ def meta_toolkit_scheduler() -> dict:
         "function": {
             "name": "toolkit_scheduler",
             "description": "定时任务管理器 — 增删改查定时任务、启动停止调度线程、测试调度表达式。"
-                           "schedule 格式: once:ISO单次 / daily:HH:MM每天 / hourly:MM每小时 / interval:SEC间隔 / weekly:mon:HH:MM每周 / cron:分 时 日 月 周",
+            "schedule 格式: once:ISO单次 / daily:HH:MM每天 / hourly:MM每小时 / interval:SEC间隔 / weekly:mon:HH:MM每周 / cron:分 时 日 月 周",
             "parameters": {
                 "type": "object",
                 "properties": {
                     "action": {
                         "type": "string",
                         "enum": ["list", "add", "update", "delete", "enable", "disable", "run", "start", "stop", "status", "test_schedule"],
-                        "description": "list/add/update/delete/enable/disable/run/start/stop/status/test_schedule"
+                        "description": "list/add/update/delete/enable/disable/run/start/stop/status/test_schedule",
                     },
                     "task_id": {"type": "string", "description": "任务ID"},
                     "name": {"type": "string", "description": "任务名称"},

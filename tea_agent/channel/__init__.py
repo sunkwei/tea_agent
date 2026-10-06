@@ -16,6 +16,8 @@ from .telegram_adapter import TelegramAdapter, run_telegram_bot
 from .wechat_adapter import WeChatAdapter, run_wechat_bot
 
 __all__ = [
-    "TelegramAdapter", "run_telegram_bot",
-    "WeChatAdapter", "run_wechat_bot",
+    "TelegramAdapter",
+    "run_telegram_bot",
+    "WeChatAdapter",
+    "run_wechat_bot",
 ]

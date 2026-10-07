@@ -22,14 +22,30 @@ class SummarizerComponent(SessionComponent):
     def initialize(self) -> None:
         pass
 
-    def summarize_old_history(self, api_component, get_summarize_client_fn, force: bool = False) -> None:
-        """将旧对话历史压缩为摘要。
+    def summarize_old_history(
+        self,
+        api_component,
+        get_summarize_client_fn,
+        force: bool = False,
+        urgent: bool = False,
+    ) -> None:
+        """将旧对话历史压缩为摘要（并在同一边界把 L2 溢出条目并入 L3）。
+
+        两条通道：
+
+        - **常压（轮次 + 批处理）**：未摘要轮数越过 ``keep_turns`` 后不立刻摘要，
+          需再积攒 ``l3_batch`` 条（0=自动 → ``keep_turns // 2``，默认 10→5）
+          才一次性压回 ``keep_turns`` 条 —— 避免"每多一条就调一次便宜模型"。
+        - **强制**：``force``（token 预算用尽，S5）或 ``urgent``（上下文越过
+          ``l3_urgent_ratio``，默认 75%）时无视上述阈值，立即压缩。
 
         Args:
             api_component: API 组件
             get_summarize_client_fn: 获取摘要客户端的回调
             force: S5 强制压缩标志 — token 预算已用尽时忽略 keep_turns
                 轮次阈值，无条件执行摘要（即使未摘要对话较少也压缩）。
+            urgent: 上下文告急（token 水位越过 l3_urgent_ratio）— 与 force 同效，
+                但语义独立：由 ``ctx._l2_urgent`` 消费而来，便于日志区分归因。
         """
         # 检查是否禁用摘要（disable_l3 或向后兼容的 disable_summary）
         if self.ctx.disable_summary or getattr(self.ctx, "disable_l3", False):
@@ -53,12 +69,20 @@ class SummarizerComponent(SessionComponent):
             logger.warning(f"Fetch unsaved conversations failed: {e}")
             return
 
-        if len(unsummarized) <= self.ctx.keep_turns and not force:
+        keep_turns = max(1, int(getattr(self.ctx, "keep_turns", 10) or 10))
+        l3_batch = self._resolve_l3_batch()
+        forced = bool(force or urgent)
+        if not forced and len(unsummarized) < keep_turns + l3_batch:
+            # 批处理闸门：未攒够一批 → 不动（这是"不要每多一条就摘要"的核心）
             return
 
-        # 2. 确定需要摘要的范围
-        num_to_summarize = len(unsummarized) - self.ctx.keep_turns
+        # 2. 确定需要摘要的范围（压缩后未摘要轮数回到 keep_turns）
+        num_to_summarize = max(0, len(unsummarized) - keep_turns)
         convs_to_summarize = unsummarized[:num_to_summarize]
+        if not convs_to_summarize:
+            # 告急但轮次未越水位 → 无新增对话可摘要，仍可压 L2（见下方兜底）
+            self._compress_l2_to_l3(topic_id, get_summarize_client_fn, urgent=forced)
+            return
 
         # 3. 提取对话文本
         old_text = self._conversations_to_text(convs_to_summarize)
@@ -118,10 +142,68 @@ class SummarizerComponent(SessionComponent):
                 if self.ctx.tool_log:
                     self.ctx.tool_log(f"📝 历史摘要更新：{new_summary}")
 
+            # 6. 同一边界压缩 L2 → L3（两条通道共用同一水位判定事实源）：
+            #    常压走批处理闸门，告急（urgent）则无视闸门立即压回 keep_turns。
+            self._compress_l2_to_l3(topic_id, get_summarize_client_fn, urgent=forced)
+
         except Exception as e:
             logger.warning(f"History summary failed: error={e}")
             if self.ctx.tool_log:
                 self.ctx.tool_log(f"⚠️ 摘要生成失败: {e}")
+
+    def _resolve_l3_batch(self) -> int:
+        """L2→L3 批大小：ctx.l3_batch 优先（0=自动 → keep_turns//2）。"""
+        from tea_agent.l3_policy import resolve_l2_batch
+
+        keep_turns = getattr(self.ctx, "keep_turns", 10)
+        raw = getattr(self.ctx, "l3_batch", 0)
+        cap = getattr(self.ctx, "history_l2_max", 0)
+        return resolve_l2_batch(keep_turns, raw, cap)
+
+    def _compress_l2_to_l3(self, topic_id: str, get_summarize_client_fn, urgent: bool = False) -> None:
+        """把 L2 溢出条目并入 L3 语义摘要（失败隔离，不影响主流程）。
+
+        与 ``push_to_level2`` 共用 ``tea_agent/l3_policy`` 的水位判定；
+        裁剪由 ``storage.trim_level2`` 完成（不新增条目），摘要由
+        ``storage.generate_l2_to_l3_summary`` 生成，成功后同步 ``ctx._semantic_summary``。
+
+        Args:
+            topic_id: 主题 ID。
+            get_summarize_client_fn: 获取摘要客户端的回调。
+            urgent: 告急 → 无视轮次水位立即压缩。
+        """
+        storage = self.ctx.storage
+        if storage is None or not topic_id:
+            return
+        trim = getattr(storage, "trim_level2", None)
+        gen = getattr(storage, "generate_l2_to_l3_summary", None)
+        if not callable(trim) or not callable(gen):
+            return  # 鸭子类型替身/精简 storage：静默跳过（非失败）
+        try:
+            _count, overflow_items, should = trim(
+                topic_id,
+                keep_turns=getattr(self.ctx, "keep_turns", 10),
+                l3_batch=getattr(self.ctx, "l3_batch", 0),
+                urgent=urgent,
+                max_level2=getattr(self.ctx, "history_l2_max", 0),
+                max_level2_chars=getattr(self.ctx, "l2_max_chars", 120000),
+            )
+        except Exception:
+            logger.debug("trim_level2 failed (isolated)", exc_info=True)
+            return
+        if not should or not overflow_items:
+            return
+        try:
+            cli, mdl = get_summarize_client_fn()
+            existing = storage.get_semantic_summary(topic_id) or ""
+            extra = get_cheap_params("summarizer")
+            new_summary, _usage = gen(topic_id, overflow_items, existing, cli, mdl, extra_params=extra)
+            if new_summary:
+                self.ctx._semantic_summary = new_summary
+            if self.ctx.tool_log:
+                self.ctx.tool_log(f"🗜️ L2→L3 压缩：{len(overflow_items)} 条并入摘要")
+        except Exception as e:
+            logger.warning(f"L2→L3 压缩失败（隔离）: {e}")
 
     def _conversations_to_text(self, conversations: list[dict], max_per_msg: int = 500) -> str:
         lines = []

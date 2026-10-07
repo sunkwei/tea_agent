@@ -356,13 +356,14 @@ roles:                      # 角色绑定（原 config.yaml 的 main_model/chea
     model: "deepseek-chat"
 
 settings:                   # 运行时参数（原 config.yaml 顶层标量 + paths）
-  keep_turns: 5
+  keep_turns: 10
 ```
 
 > 视觉能力不再有独立 `vision_model` 角色，由模型自身的 `supports_vision` 判定。完整运行参数清单与默认值见 [docs/CONFIG_DEFAULTS.md](docs/CONFIG_DEFAULTS.md)。隔离环境可用 `TEA_PROVIDER_FILE` 指向临时 provider.yaml。
 
 - **上下文窗口控制**：`max_context_tokens` 作为"上下文已用"百分比的分母（窗口上限），超预算时按 5 级渐进裁剪（删旧历史 → 工具输出占位 → 清 thinking → 截长文 → 删旧轮）。未显式配置时默认 1M（1048576），**不做模型名推断**，避免模型名不匹配导致窗口上限误判。输入预算与 `max_tokens` 联动求解（窗口 − 输出请求 − 2% 安全余量），从源头防止"输入+输出 > 窗口"的 400 溢出；API 真返回 400 时自动修正窗口、激进压缩历史、钳制 max_tokens 后重试。
-- **上下文填充治理（2026-09）**：修复"多轮对话迅速打满窗口"。`provider.yaml` 的 `max_output_tokens` 自动填充时按窗口 25% 限幅（不再把 384K 输出预留算进预算，1M 窗口的输入预算从 446K 回到 580K）；L1 的 `reasoning_content` 以 `rc_keep_steps`（默认 8）分块，只保留最近一块全文、更早的块置空（字段保留，满足 DeepSeek V4 回传要求），单轮 200 步的思考链不再全量重放；L2 单条 `thinking` 限幅 `l2_thinking_max_chars`（默认 6000 字符）且总字符数达到 `l2_max_chars`（默认 120000）即触发 L3 摘要；L2 与 L1 重叠的轮次自动去重；源码文件回放上限 64KB（此前不截断）；`keep_turns` 默认回落 5 并让 `max_history` 真正生效（限制 L1 保留的最近用户轮数）。
+- **上下文填充治理（2026-09）**：修复"多轮对话迅速打满窗口"。`provider.yaml` 的 `max_output_tokens` 自动填充时按窗口 25% 限幅（不再把 384K 输出预留算进预算，1M 窗口的输入预算从 446K 回到 580K）；L1 的 `reasoning_content` 以 `rc_keep_steps`（默认 8）分块，只保留最近一块全文、更早的块置空（字段保留，满足 DeepSeek V4 回传要求），单轮 200 步的思考链不再全量重放；L2 单条 `thinking` 限幅 `l2_thinking_max_chars`（默认 6000 字符）且总字符数达到 `l2_max_chars`（默认 120000）即触发 L3 摘要；L2 与 L1 重叠的轮次自动去重；源码文件回放上限 64KB（此前不截断）；`keep_turns` 让 `max_history` 真正生效（限制 L1 保留的最近用户轮数）。
+- **L2→L3 分层压缩（2026-10）**：L2（主题级滚动窗口）向 L3（语义摘要）的溢出改为**批处理 + 告急双通道**，判定统一收敛到纯函数模块 `tea_agent/l3_policy.py`（无 IO，边界可秒级单测）。`keep_turns` 默认 5→**10**，它同时是 L1 保留轮数**和** L2 压缩后的压回水位：L2 越过 `keep_turns` 后**不**每多一条就调一次便宜模型，而是继续攒到 `keep_turns + keep_turns//2`（默认 10+5）再一次性压回 10 条（`history_l3_batch` 可显式覆盖批大小）；**上下文告急**（token 水位越过 `l3_urgent_ratio`，默认 **0.75×窗口**）时无视轮次水位立即压缩，不等攒批——由 `build_api_messages` / 发送前护栏置 `ctx._l2_urgent`、回合边界的 summarize 步骤消费（用后即焚）。`history_l2_max` 退化为**上限约束**（默认 0=自动），不再充当"压回目标"，旧模板里的 30 不会再导致一次砍掉过多 L2。
 - **视觉能力**：按模型 `supports_vision` 判定（无独立 `vision_model` 角色）；`toolkit_vision_analyze` 供主模型委托视觉模型分析图片，首选模型配额耗尽时自动回退
 - **自我进化闸门**：`evolution.gate = off | advisory | enforce`（环境变量 `TEA_EVOLVE_GATE`，阈值 `TEA_EVOLVE_GATE_THRESHOLD` 默认 0.0 即"必须严格提升才算 keep"）；`enforce` 下修改自身代码后自动跑 EvolutionBench，分数未提升即按 `.bak` 回滚 —— 把"测试通过"升级为"确实更好"
 - **工具暴露自缩减**：`TEA_TOOL_SHIELD=0` 关闭长期未使用工具自动屏蔽；`TEA_TOOL_SHIELD_IDLE_DAYS=N` 调整闲置阈值（默认 30 天，观测期未满不屏蔽）

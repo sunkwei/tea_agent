@@ -469,8 +469,7 @@ class Agent:
             # 步骤3: 提取用户文本
             user_text = self._extract_user_text(user_msg)
 
-            # 步骤4: 推送到L2缓存（使用 config 中的 history_l2_max）
-            l2_max = getattr(self._cfg, "history_l2_max", 8) if hasattr(self, "_cfg") else 8
+            # 步骤4: 推送到L2缓存（水位/批处理参数见 config 的 keep_turns 等）
             # 上下文填充治理：单条 thinking 限幅 + 总量字符阈值（溢出即摘要）
             _cfg = getattr(self, "_cfg", None)
 
@@ -483,14 +482,27 @@ class Agent:
 
             l2_thinking_max = _cfg_int("l2_thinking_max_chars", 6000) or 6000
             l2_max_chars = _cfg_int("l2_max_chars", 120000)
+            # L2→L3 批处理水位：keep_turns 为压回水位，history_l2_max 仅作上限约束，
+            # history_l3_batch 为批大小（0=自动 keep_turns//2）。
+            _l2_keep_turns = _cfg_int("keep_turns", 10) or 10
+            _l2_batch = _cfg_int("history_l3_batch", 0)
+            _l2_cap = _cfg_int("history_l2_max", 0)
+            # 上下文告急（本回合 token 水位越过 l3_urgent_ratio）→ 立即压缩，
+            # 不等攒够一批；消费后清零，避免下一回合重复触发。
+            _l2_urgent = bool(getattr(_ctx, "_l2_urgent", False))
+            if _l2_urgent and _ctx is not None:
+                _ctx._l2_urgent = False
             l2_count, overflow_items, should_summarize = self._db.push_to_level2(
                 topic_id,
                 user_text,
                 ai_msg,
                 rounds=rounds if rounds else None,
-                max_level2=l2_max,
+                max_level2=_l2_cap,
                 thinking_max_chars=l2_thinking_max,
                 max_level2_chars=l2_max_chars,
+                keep_turns=_l2_keep_turns,
+                l3_batch=_l2_batch,
+                urgent=_l2_urgent,
             )
             logger.debug(f"L2 push: count={l2_count}, overflow={len(overflow_items)}, summarize={should_summarize}")
 

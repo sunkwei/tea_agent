@@ -1516,8 +1516,8 @@
 | `guess_model_cfg` | `tea_agent\provider_store.py:121` | function |
 | `guess_model_config` | `tea_agent\model_config.py:64` | function |
 | `has_tool` | `tea_agent\onlinesession.py:187` | function |
-| `history_l2_max` | `tea_agent\config.py:319` | variable |
-| `history_l3_batch` | `tea_agent\config.py:320` | variable |
+| `history_l2_max` | `tea_agent\config.py:320` | variable |
+| `history_l3_batch` | `tea_agent\config.py:323` | variable |
 | `install_builtin_hooks` | `tea_agent\tool_approval.py:357` | function |
 | `install_evolution_gate` | `tea_agent\evolution_gate.py:111` | function |
 | `interrupted` | `tea_agent\reflection.py:35` | variable |
@@ -1531,7 +1531,7 @@
 | `iter_files` | `tea_agent\path_filters.py:85` | function |
 | `kb_dir` | `tea_agent\config.py:151` | variable |
 | `keep_recent` | `tea_agent\auto_compact.py:115` | variable |
-| `keep_turns` | `tea_agent\config.py:311` | variable |
+| `keep_turns` | `tea_agent\config.py:309` | variable |
 | `l2_max_chars` | `tea_agent\config.py:328` | variable |
 | `l2_thinking_max_chars` | `tea_agent\config.py:324` | variable |
 | `l2_to_l3_summary` | `tea_agent\agent_pipeline.py:59` | function |

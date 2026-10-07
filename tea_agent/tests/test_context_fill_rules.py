@@ -259,16 +259,21 @@ class TestLevel2Governance:
         assert seen[-1][2] is True
         assert len(store._l2) >= 1
 
-    def test_count_trigger_keeps_five(self):
+    def test_count_trigger_keeps_waterline(self):
+        """轮次水位触发：越过 keep_turns + batch 后一次性压回 keep_turns 条。
+
+        2026-10 批处理：max_level2 仅作上限约束，压回水位取 keep_turns
+        （默认 10）；本用例显式给 keep_turns=8 以保持"压回 8 条"的旧语义。
+        """
         store = _L2Store()
         overflow, should = [], False
-        for _i in range(8):
+        for _i in range(13):  # keep=8, batch=4 → 触发点 n>12
             _count, overflow, should = store.push_to_level2(
-                "t", "u", "a", max_level2=8, thinking_max_chars=0, max_level2_chars=0,
+                "t", "u", "a", keep_turns=8, max_level2_chars=0, thinking_max_chars=0,
             )
         assert should is True
-        assert len(store._l2) == 5
-        assert len(overflow) == 3
+        assert len(store._l2) == 8
+        assert len(overflow) == 5  # 13 - 8
 
     def test_zero_char_threshold_never_char_triggers(self):
         store = _L2Store()

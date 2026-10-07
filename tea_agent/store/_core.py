@@ -559,11 +559,19 @@ class Storage:
         ai_msg: str,
         files: list = None,
         rounds: list = None,
-        max_level2: int = 50,
+        max_level2: int = 0,
         thinking_max_chars: int = 6000,
         max_level2_chars: int = 120000,
+        keep_turns: int = 0,
+        l3_batch: int = 0,
+        urgent: bool = False,
     ) -> tuple:
-        """将一轮对话推入 Level 2（条数或总字符数超限即溢出至 L3）。"""
+        """将一轮对话推入 Level 2（轮次/字符水位超限即溢出至 L3）。
+
+        压回水位 = ``keep_turns``（0=默认 10），``max_level2`` 仅作上限约束；
+        批处理见 ``l3_batch``（0=自动 keep_turns//2）；``urgent`` 无视轮次水位
+        立即压缩（上下文告急）。
+        """
         return self._summaries.push_to_level2(
             topic_id,
             user_msg,
@@ -573,6 +581,9 @@ class Storage:
             max_level2=max_level2,
             thinking_max_chars=thinking_max_chars,
             max_level2_chars=max_level2_chars,
+            keep_turns=keep_turns,
+            l3_batch=l3_batch,
+            urgent=urgent,
         )
 
     def generate_l2_to_l3_summary(

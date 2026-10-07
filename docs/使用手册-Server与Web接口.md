@@ -528,14 +528,14 @@ curl -X POST http://localhost:8080/v1/upload \
 |------|------|------|
 | `max_iterations` | int | 最大工具调用轮数 |
 | `max_history` | int | 最大历史消息数 |
-| `keep_turns` | int | 保留最新轮数 |
+| `keep_turns` | int | 保留最新轮数；也是 L2 压缩后的压回水位（默认 10） |
 | `max_tool_output` | int | 工具输出最大字符数 |
 | `max_assistant_content` | int | AI 回复最大字符数 |
 | `memory_extraction_threshold` | float | 记忆提取阈值 |
 | `memory_dedup_threshold` | float | 记忆去重阈值 |
 | `chat_page_size` | int | 聊天分页大小 |
-| `history_l2_max` | int | L2 摘要最大数 |
-| `history_l3_batch` | int | L3 批处理大小 |
+| `history_l2_max` | int | L2 条数上限约束（0=自动 = keep_turns+batch） |
+| `history_l3_batch` | int | L3 摘要批大小（0=自动 = keep_turns//2） |
 | `enable_thinking` | bool | 是否显示推理过程 |
 
 ### 5.6 模型切换
@@ -716,14 +716,14 @@ settings:                     # 运行时参数
   max_history: 10
   max_iterations: 100
   enable_thinking: true
-  keep_turns: 5
+  keep_turns: 10
   max_tool_output: 128000
   max_assistant_content: 128000
   memory_extraction_threshold: 2
   memory_dedup_threshold: 0.3
   chat_page_size: 50
-  history_l2_max: 30
-  history_l3_batch: 10
+  history_l2_max: 0   # 0=自动（L2 条数上限 = keep_turns + batch）
+  history_l3_batch: 0 # 0=自动（keep_turns//2）
 ```
 
 ### 7.3 配置管理方式

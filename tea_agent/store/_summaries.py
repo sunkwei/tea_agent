@@ -195,6 +195,88 @@ class SummaryStore(StoreComponent):
             logger.debug("get_l3_versions failed (isolated)", exc_info=True)
             return []
 
+    def _apply_l2_waterline(
+        self,
+        level2: list,
+        keep_turns: int = 0,
+        l3_batch: int = 0,
+        urgent: bool = False,
+        max_level2: int = 0,
+        max_level2_chars: int = 0,
+    ) -> tuple:
+        """按水位把 L2 切成 (保留, 溢出)，并返回触发诊断信息（纯计算，不落库）。
+
+        这是 L2→L3 的**唯一判定事实源**：``push_to_level2``（回合边界追加）
+        与 ``trim_level2``（告急立即压缩）都走这里，避免两处漂移。
+
+        Returns:
+            (kept, overflow_items, total_chars, keep, batch)
+        """
+        from tea_agent.l3_policy import plan_l2_overflow, resolve_l2_batch, resolve_l2_keep
+
+        keep = resolve_l2_keep(keep_turns, max_level2)
+        batch = resolve_l2_batch(keep_turns, l3_batch, max_level2)
+
+        total_chars = sum(
+            len(e.get("user", "") or "") + len(e.get("thinking", "") or "") + len(e.get("assistant", "") or "")
+            for e in level2
+        )
+        over_chars = max_level2_chars > 0 and total_chars >= max_level2_chars
+
+        # 条数水位（轮次）与总量水位（字符）都走同一批量闸门；告急则无视闸门。
+        overflow_count = plan_l2_overflow(len(level2), keep_turns, l3_batch, urgent=urgent, cap=max_level2)
+        if over_chars and overflow_count <= 0:
+            # 总量触发（条数还很少）：至少溢出 1 条，否则阈值永远无法收敛，
+            # 历史继续堆在 L2（n<=keep 时无从溢出，保持不动）。
+            overflow_count = max(0, len(level2) - min(keep, max(0, len(level2) - 1)))
+
+        if overflow_count > 0:
+            overflow_items = level2[:overflow_count]
+            kept = level2[overflow_count:]
+        else:
+            overflow_items = []
+            kept = level2
+
+        if overflow_items:
+            logger.info(
+                f"L2 溢出→L3: 触发原因={'告急' if urgent else ''}"
+                f"{'/总量' if over_chars else ''}"
+                f"{'/轮次' if (not urgent and not over_chars) else ''} "
+                f"(count={len(level2)}, keep={keep}, batch={batch}, chars={total_chars}), "
+                f"溢出 {len(overflow_items)} 条"
+            )
+        return kept, overflow_items, total_chars, keep, batch
+
+    def trim_level2(
+        self,
+        topic_id: str,
+        keep_turns: int = 0,
+        l3_batch: int = 0,
+        urgent: bool = False,
+        max_level2: int = 0,
+        max_level2_chars: int = 120000,
+    ) -> tuple:
+        """按当前 L2 现状做一次水位裁剪（**不新增条目**），返回溢出条目。
+
+        用途：上下文告急时的"立即压缩"——此时不该等下一轮 push，
+        而应就地把已堆积的 L2 压给 L3。
+
+        Returns:
+            (level2_count, overflow_items, should_summarize)
+        """
+        level2 = self.get_level2(topic_id)
+        kept, overflow_items, _chars, _keep, _batch = self._apply_l2_waterline(
+            level2,
+            keep_turns=keep_turns,
+            l3_batch=l3_batch,
+            urgent=urgent,
+            max_level2=max_level2,
+            max_level2_chars=max_level2_chars,
+        )
+        if overflow_items:
+            self.set_level2(topic_id, kept)
+        return len(kept), overflow_items, bool(overflow_items)
+
     def push_to_level2(
         self,
         topic_id: str,
@@ -202,22 +284,28 @@ class SummaryStore(StoreComponent):
         ai_msg: str,
         files: list = None,
         rounds: list = None,
-        max_level2: int = 8,
+        max_level2: int = 0,
         thinking_max_chars: int = 6000,
         max_level2_chars: int = 120000,
+        keep_turns: int = 0,
+        l3_batch: int = 0,
+        urgent: bool = False,
     ) -> tuple:
         """
-        将一轮对话推入 Level 2，超过上限时溢出并触发 L3 摘要。
+        将一轮对话推入 Level 2，达到水位时溢出并触发 L3 摘要。
 
-        策略（v4，2026-09 上下文填充治理）：
-        - L2 最多保留 max_level2 条（默认 8）
+        策略（v5，2026-10 批处理 + 告急立即压缩）：
+        - L2 压回水位 = ``keep_turns``（0=默认 10），``max_level2`` 仅作上限约束
+          （>0 时取 min；0=不约束）——历史上它是"压回目标"，一次会砍掉过多 L2。
+        - **批处理**：L2 越过 keep_turns 后不立刻摘要，需再积攒 ``l3_batch`` 条
+          （0=自动 → keep_turns//2，默认 10→5）才一次性压回 keep_turns 条，
+          避免"每多一条就调一次便宜模型"。
+        - **告急**（``urgent=True``，token 水位越过 l3_urgent_ratio 即 75%）：
+          无视轮次水位，立即压回 keep_turns 条。
         - 单条 thinking（本轮全部工具步 reasoning_content 拼接）截断到
-          thinking_max_chars（默认 6000 字符）——此前无上限，实测单条 1.5MB，
-          既撑爆存储又让 L2→L3 摘要输入无谓膨胀
+          ``thinking_max_chars``（默认 6000 字符）。
         - **总量触发**：所有条目 user+thinking+assistant 字符之和 ≥
-          max_level2_chars（默认 12 万字符 ≈ 3 万 token）即视同溢出 ——
-          此前只看条数，条数没到就永不摘要，历史全量堆在 L2 空转
-        - 溢出时：保留最新 keep_count 条（5），其余全部交给 L3 摘要
+          ``max_level2_chars``（默认 12 万字符 ≈ 3 万 token）即视同溢出。
 
         L2 条目包含完整 user + ai thinking + ai final msg（不含工具轮）。
         thinking 从 rounds 中提取所有带 tool_calls 的 assistant content。
@@ -228,7 +316,6 @@ class SummaryStore(StoreComponent):
             - overflow_items: 溢出的最老条目（待摘要），[] 表示无溢出
             - should_summarize: 是否需要触发 L2→L3 摘要
         """
-        keep_count = 5
         level2 = self.get_level2(topic_id)
 
         # 从 rounds 提取 thinking：所有带 tool_calls 的 assistant 消息
@@ -254,30 +341,16 @@ class SummaryStore(StoreComponent):
             entry["files"] = files
         level2.append(entry)
 
-        overflow_items = []
-        should_summarize = False
-
-        total_chars = sum(len(e.get("user", "") or "") + len(e.get("thinking", "") or "") + len(e.get("assistant", "") or "") for e in level2)
-        over_count = len(level2) >= max_level2
-        over_chars = max_level2_chars > 0 and total_chars >= max_level2_chars
-        if over_count or over_chars:
-            # 条数触发：保留最新 keep_count 条；总量触发（条数还很少）：
-            # 至少溢出 1 条（否则阈值永远无法收敛，历史继续堆在 L2）
-            keep = keep_count if over_count else min(keep_count, max(1, len(level2) - 1))
-            overflow_count = max(0, len(level2) - keep)
-            overflow_items = level2[:overflow_count]
-            level2 = level2[-keep:]
-            should_summarize = bool(overflow_items)
-            if should_summarize:
-                logger.info(
-                    f"L2 溢出→L3: 触发原因={'条数' if over_count else ''}"
-                    f"{'/总量' if over_chars else ''} "
-                    f"(count={len(level2) + len(overflow_items)}, "
-                    f"chars={total_chars}), 溢出 {len(overflow_items)} 条"
-                )
-
-        self.set_level2(topic_id, level2)
-        return len(level2), overflow_items, should_summarize
+        kept, overflow_items, _chars, _keep, _batch = self._apply_l2_waterline(
+            level2,
+            keep_turns=keep_turns,
+            l3_batch=l3_batch,
+            urgent=urgent,
+            max_level2=max_level2,
+            max_level2_chars=max_level2_chars,
+        )
+        self.set_level2(topic_id, kept)
+        return len(kept), overflow_items, bool(overflow_items)
 
     # ── L2→L3 摘要生成 ──
 

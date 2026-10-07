@@ -243,7 +243,7 @@ class OnlineToolSession(BaseChatSession):
         cheap_api_key: str = "",
         cheap_api_url: str = "",
         cheap_model: str = "",
-        keep_turns: int = 5,
+        keep_turns: int = 10,
         max_tool_output: int = 128 * 1024,
         max_assistant_content: int = 128 * 1024,
         max_context_tokens: int = 0,
@@ -272,7 +272,7 @@ class OnlineToolSession(BaseChatSession):
             cheap_api_key: 便宜模型 API密钥
             cheap_api_url: 便宜模型 API地址
             cheap_model: 便宜模型名称
-            keep_turns: 保留最近N轮完整对话
+            keep_turns: 保留最近N轮完整对话（L2 压缩后也回到该条数）
             max_tool_output: 工具输出截断字符数
             max_assistant_content: 助手回复截断字符数
             max_context_tokens: 最大上下文 token 数，0=不限制
@@ -1301,14 +1301,25 @@ class OnlineToolSession(BaseChatSession):
         S5: token_budget 片段检测到上下文已用尽时（_frag_token_budget 置
         context._token_exhausted=True），此处强制压缩（即便未达到 keep_turns
         轮次阈值也执行），形成「报警 → 自动压缩」闭环。
+
+        告急通道（2026-10）：token 水位越过 ``l3_urgent_ratio``（默认 75%）时
+        build_api_messages / 发送前护栏置 ``_l2_urgent``，此处消费后立即把
+        L2 压给 L3（无视轮次水位），同样用后即焚。
         """
         force = bool(getattr(self.context, "_token_exhausted", False))
-        if force:
+        urgent = bool(getattr(self.context, "_l2_urgent", False))
+        if force or urgent:
             # 消费标志，避免后续轮次重复触发
             self.context._token_exhausted = False
+            self.context._l2_urgent = False
             if self.context.tool_log:
-                self.context.tool_log("⚠️ 上下文已用尽，强制压缩历史…")
-            self.summarizer_comp.summarize_old_history(self.api, self._get_summarize_client, force=True)
+                if urgent and not force:
+                    self.context.tool_log("⚠️ 上下文告急（>75% 窗口），立即压缩 L2→L3…")
+                else:
+                    self.context.tool_log("⚠️ 上下文已用尽，强制压缩历史…")
+            self.summarizer_comp.summarize_old_history(
+                self.api, self._get_summarize_client, force=force, urgent=urgent
+            )
         else:
             self.summarizer_comp.summarize_old_history(self.api, self._get_summarize_client)
         return context  # summarize_old_history 副作用修改 context，此处显式返回

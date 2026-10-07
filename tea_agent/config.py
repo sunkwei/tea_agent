@@ -303,10 +303,10 @@ class AgentConfig:
     reasoning_effort: str = "auto"  # 推理努力: "auto"=自动推导不发送 / none/minimal/low/medium/high/xhigh/max
 
     # Token 优化参数
-    # 2026-09 上下文填充治理：默认从 20 回落到 5（与 SessionContext /
-    # OnlineToolSession / 配置模板一致）。L1 每轮都带完整工具链与思考链，
-    # 20 轮会让会话一启动就逼近窗口上限。
-    keep_turns: int = 5  # 保留最近N轮完整对话，更早的对话自动摘要
+    # 2026-10 L2→L3 批处理：keep_turns 既是 L1 保留轮数，也是 L2 压缩后的
+    # **压回水位**（默认 10）。L2 越过 keep_turns 后不立刻摘要，而是攒到
+    # keep_turns + batch 再一次性压回 keep_turns（batch 见 history_l3_batch）。
+    keep_turns: int = 10  # 保留最近N轮完整对话；L2 压缩后也回到该条数
     max_tool_output: int = 128 * 1024  # 工具输出截断字符数
     max_assistant_content: int = 128 * 1024  # 助手回复截断字符数
 
@@ -314,8 +314,13 @@ class AgentConfig:
     memory_extraction_threshold: int = 2  # 触发记忆提取的最低未摘要消息数
     memory_dedup_threshold: float = 0.3  # 记忆去重相似度阈值 (0~1)，bigram Jaccard
     chat_page_size: int = 50  # 单页加载的对话轮数（最多50条）
-    history_l2_max: int = 8  # L2最大保留轮数，超出时溢出 keep=5 条至 L3 摘要
-    history_l3_batch: int = 5  # L3摘要批处理：每次溢出至少 N 条才触发便宜模型摘要
+    # L2 条数**上限约束**（0=不约束，默认）。L2 的压回水位统一取 keep_turns
+    # （见 tea_agent/l3_policy.py）；本项只用于额外收紧上限（>0 时取 min），
+    # 不再充当"压回目标"——历史模板里的 30 不会再导致一次砍掉过多 L2。
+    history_l2_max: int = 0  # 0=自动（上限=keep_turns+batch）
+    # L3 摘要批处理：L2 越过 keep_turns 后需再积攒 N 条才触发便宜模型摘要
+    # （0=自动 → keep_turns//2，默认 10 → 5）。压缩后 L2 回到 keep_turns 条。
+    history_l3_batch: int = 0  # 0=自动（keep_turns//2）
     # 单条 L2 条目 thinking（本轮全部工具步的 reasoning_content 拼接）上限（字符）。
     # 不限幅时单轮 thinking 可达 1.5MB（实测），既撑爆 L2 存储又让 L2→L3 摘要
     # 输入无谓膨胀；截断只影响"回顾用"的 thinking，不影响 API 回传的 L1 RC。

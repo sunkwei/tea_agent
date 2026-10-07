@@ -305,6 +305,12 @@ def _ensure_within_output_budget(session) -> None:
         ratio = est / max_ctx
         ctx._loop_max_ratio = max(float(getattr(ctx, "_loop_max_ratio", 0.0)), ratio)
         ctx._loop_trim_done = False
+        # L2→L3 告急标记：越过 l3_urgent_ratio（默认 75%）→ 回合边界立即压缩 L2。
+        # 与 _token_exhausted（预算已用尽）互补：告急更早、且专门驱动 L2→L3。
+        from tea_agent.l3_policy import exceeds_urgent_ratio
+
+        if exceeds_urgent_ratio(ratio, ctx):
+            ctx._l2_urgent = True
         if est + out_cap >= max_ctx:
             ctx._token_exhausted = True
         logger.warning(f"A8 发送前护栏: 估算输入 {est} + 输出 {out_cap} + 余量 > 窗口 {max_ctx}，强制重新裁剪")

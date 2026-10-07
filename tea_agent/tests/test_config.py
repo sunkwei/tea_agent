@@ -209,7 +209,7 @@ class TestAgentConfig:
         cfg = default_agent_config
         assert cfg.max_iterations == 200
         assert cfg.max_history == 10
-        assert cfg.keep_turns == 5
+        assert cfg.keep_turns == 10  # 2026-10：L2 批处理压回水位（5→10）
         assert cfg.chat_page_size == 50
         assert cfg.memory_dedup_threshold == 0.3
         assert cfg.enable_thinking is True

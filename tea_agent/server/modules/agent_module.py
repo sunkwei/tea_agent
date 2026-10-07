@@ -785,14 +785,24 @@ class AgentModule(HotReloadModule):
                     return raw
                 return default
 
+            # 上下文告急 → 立即压缩（不等攒批）。先读后消费（用后即焚），
+            # 且消费失败只吞不抛：旁路写入绝不能拖累 L2 落库主流程。
+            _urgent = bool(getattr(session.context, "_l2_urgent", False))
+            if _urgent:
+                with contextlib.suppress(Exception):
+                    session.context._l2_urgent = False
             l2_count, overflow_items, should_summarize = storage.push_to_level2(
                 topic_id,
                 user_text,
                 ai_msg,
                 rounds=rounds if rounds else None,
-                max_level2=_cfg_int("history_l2_max", 8) or 8,
+                max_level2=_cfg_int("history_l2_max", 0),
                 thinking_max_chars=_cfg_int("l2_thinking_max_chars", 6000) or 6000,
                 max_level2_chars=_cfg_int("l2_max_chars", 120000),
+                # L2→L3 批处理：keep_turns=压回水位，history_l3_batch=批大小（0=自动）
+                keep_turns=_cfg_int("keep_turns", 10) or 10,
+                l3_batch=_cfg_int("history_l3_batch", 0),
+                urgent=_urgent,
             )
         except Exception:
             logger.exception("push_to_level2 failed")
@@ -1350,14 +1360,14 @@ class AgentModule(HotReloadModule):
         lines.append("max_history: 10")
         lines.append("max_iterations: 100")
         lines.append("enable_thinking: true")
-        lines.append("keep_turns: 5")
+        lines.append("keep_turns: 10")
         lines.append("max_tool_output: 128000")
         lines.append("max_assistant_content: 128000")
         lines.append("memory_extraction_threshold: 2")
         lines.append("memory_dedup_threshold: 0.3")
         lines.append("chat_page_size: 50")
-        lines.append("history_l2_max: 30")
-        lines.append("history_l3_batch: 10")
+        lines.append("history_l2_max: 0  # 0=自动（L2 条数上限 = keep_turns + batch）")
+        lines.append("history_l3_batch: 0  # 0=自动（keep_turns//2）")
 
         content = "\n".join(lines) + "\n"
         fpath.write_text(content, encoding="utf-8")

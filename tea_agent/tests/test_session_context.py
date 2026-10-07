@@ -48,7 +48,7 @@ class TestSessionContextDefaults:
         from tea_agent.session import SessionContext
 
         ctx = SessionContext()
-        assert ctx.keep_turns == 5
+        assert ctx.keep_turns == 10  # 2026-10：L2 批处理压回水位（5→10）
         assert ctx.max_tool_output == 128 * 1024
         assert ctx.max_assistant_content == 128 * 1024
         assert ctx.max_context_tokens == 0

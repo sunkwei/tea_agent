@@ -32,7 +32,7 @@ roles:                # 主/便宜模型绑定（原 config.yaml 的 main/cheap_
   main:  {provider, model, api_url, updated_at}
   cheap: {provider, model, api_url, updated_at}
 settings:             # 运行时参数（原 config.yaml 顶层标量 + paths）
-  keep_turns: 5
+  keep_turns: 10
   ...
 ```
 
@@ -43,7 +43,7 @@ settings:             # 运行时参数（原 config.yaml 顶层标量 + paths�
 |---|---|---|
 | `max_history` | 10 | 最大历史消息数 |
 | `max_iterations` | 200 | 最大工具调用迭代 |
-| `keep_turns` | 5 | 保留完整对话轮数，更早自动摘要 |
+| `keep_turns` | 10 | 保留完整对话轮数；也是 L2 压缩后的压回水位 |
 | `max_tool_output` | 131072 | 工具输出截断字符 |
 | `max_assistant_content` | 131072 | 助手回复截断字符 |
 
@@ -60,8 +60,8 @@ settings:             # 运行时参数（原 config.yaml 顶层标量 + paths�
 | `memory_extraction_threshold` | 2 | 触发记忆提取的最低未摘要消息数 |
 | `memory_dedup_threshold` | 0.3 | 记忆去重相似度阈值 |
 | `chat_page_size` | 50 | 单页对话轮数 |
-| `history_l2_max` | 8 | L2 最大保留轮数 |
-| `history_l3_batch` | 5 | L3 摘要批处理阈值 |
+| `history_l2_max` | 0 | L2 条数上限约束（0=自动，= keep_turns+batch） |
+| `history_l3_batch` | 0 | L3 摘要批大小（0=自动 = keep_turns//2） |
 | `l2_thinking_max_chars` | 6000 | 单条 L2 thinking 上限 |
 | `l2_max_chars` | 120000 | L2 总量触发摘要阈值 |
 | `rc_keep_steps` | 8 | L1 reasoning_content 分块回传步数 |

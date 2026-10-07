@@ -47,7 +47,14 @@ class SessionContext:
     conversation_id: str = ""
 
     # ── 配置参数 ──
-    keep_turns: int = 5
+    keep_turns: int = 10
+    # L2→L3 批大小（0=自动 → keep_turns//2）。L2 越过 keep_turns 后需再积攒
+    # 这么多条才触发一次便宜模型摘要，压缩后 L2 回到 keep_turns 条。
+    # 判定见 tea_agent/l3_policy.py（纯函数，可秒级单测）。
+    l3_batch: int = 0
+    # 上下文告急水位（占窗口比例，默认 0.75）：越过即置 _l2_urgent，
+    # 下一回合边界立即执行 L2→L3，无视轮次水位。
+    l3_urgent_ratio: float = 0.75
     max_tool_output: int = 128 * 1024
     max_assistant_content: int = 128 * 1024
     max_context_tokens: int = 0
@@ -97,6 +104,10 @@ class SessionContext:
     _decode_samples: list = field(default_factory=list)
     # S5: token 预算已用尽标志，pipeline 的 summarize 步骤检测后强制压缩。
     _token_exhausted: bool = False
+    # 上下文告急（token 水位越过 l3_urgent_ratio，默认 75%）标志：由
+    # build_api_messages / 发送前护栏置位，回合边界的 summarize 步骤消费，
+    # 立即执行 L2→L3（无视轮次水位），用后即焚。
+    _l2_urgent: bool = False
     # A8: 输出感知预算（上下文溢出防线）——
     # _output_cap: 求解器（history_builder.solve_token_budget）解析出的输出 token 上限，
     #   build_api_messages 每次构建时刷新；工具循环把请求的 max_tokens 钳制到该值，

@@ -950,7 +950,7 @@ settings:                       # 运行时参数
   max_history: 10
   max_iterations: 100
   enable_thinking: true
-  keep_turns: 5
+  keep_turns: 10
   max_tool_output: 128000
   max_assistant_content: 128000
   memory_extraction_threshold: 2

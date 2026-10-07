@@ -21,6 +21,7 @@ from tea_agent.auto_compact import (
     waterline_name,
 )
 from tea_agent.image_ref import build_data_url, parse_image_ref
+from tea_agent.l3_policy import exceeds_urgent_ratio
 
 logger = logging.getLogger("session.history_builder")
 
@@ -1693,6 +1694,11 @@ def build_api_messages(context: Any, system_prompt: str) -> list[dict]:
                 logger.debug(f"水位线 ratio 单调收紧: {ratio:.3f} -> {new_ratio:.3f}")
             ratio = new_ratio
             context._loop_max_ratio = ratio
+            # L2→L3 告急标记（l3_policy，默认 75%）：越过告急线即置位，
+            # 回合边界的 summarize 步骤消费 → 立即把 L2 压给 L3（无视轮次水位）。
+            # 与水位线裁剪是两条互补通道：裁剪缩"当前请求"，摘要缩"长期历史"。
+            if exceeds_urgent_ratio(ratio, context):
+                context._l2_urgent = True
             tier = classify_waterline(ratio)
             # B2: 提前裁剪线——B1 校准后的真实用量（含 tools 开销）+ 输出
             # 已越过 (1-warn_ratio) 窗口（默认 85%）而 ratio 档位不够深时，

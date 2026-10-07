@@ -94,6 +94,8 @@ def _build_routes() -> list:
         Route("/api/restart", rh.handle_restart, methods=["POST"]),
         Route("/api/files", rh.handle_file_tree),
         Route("/api/file", rh.handle_file_read),
+        # 原样字节（图片内联预览）：正确 MIME + inline，可直接作 <img src>
+        Route("/api/file/raw", rh.handle_file_raw),
         Route("/v1/models", rh.handle_list_models),
         Route("/v1/tools", rh.handle_list_tools),
         Route("/v1/tools/{name:str}/run", rh.handle_run_tool, methods=["POST"]),

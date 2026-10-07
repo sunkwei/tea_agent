@@ -3734,15 +3734,15 @@ window.toggleFileTree = function() {
 window.loadFileTree = async function(path) {
   var container = $('file-tree-content');
   if (!container) return;
-  
+
   if (!path && _fileTreeCache['/']) {
     // 使用缓存
-    renderFileTree(_fileTreeCache['/'], container);
+    renderFileTree(_fileTreeCache['/'], container, '');
     return;
   }
-  
+
   container.innerHTML = '<div class="ft-loading">📂 加载中...</div>';
-  
+
   try {
     var url = '/api/files';
     if (path) url += '?path=' + encodeURIComponent(path);
@@ -3754,25 +3754,45 @@ window.loadFileTree = async function(path) {
     }
     // 缓存根目录
     if (!path) _fileTreeCache['/'] = data.items;
-    renderFileTree(data.items, container, path);
+    renderFileTree(data.items, container, path || '');
   } catch(e) {
     container.innerHTML = '<div class="ft-loading" style="color:var(--red)">❌ ' + esc(e.message) + '</div>';
   }
 };
 
+// 面包屑：进目录后仍能回到任意上级（此前点进目录就出不来，只能刷新）
+function ftBreadcrumb(relPath) {
+  var parts = String(relPath || '').split(/[\/\\]+/).filter(Boolean);
+  var html = '<div class="ft-crumb">';
+  html += '<span class="ft-crumb-seg ft-crumb-root" onclick="loadFileTree(\'\')" title="启动目录">📁 根</span>';
+  var acc = '';
+  parts.forEach(function(p) {
+    acc = acc ? (acc + '/' + p) : p;
+    html += '<span class="ft-crumb-sep">›</span>'
+      + '<span class="ft-crumb-seg" onclick="loadFileTree(\'' + jsAttr(acc) + '\')"'
+      + ' title="' + escAttr(acc) + '">' + esc(p) + '</span>';
+  });
+  return html + '</div>';
+}
+
 function renderFileTree(items, container, parentPath) {
+  var crumb = ftBreadcrumb(parentPath);
   if (!items || !items.length) {
-    container.innerHTML = '<div class="ft-loading">(空目录)</div>';
+    container.innerHTML = crumb + '<div class="ft-loading">(空目录)</div>';
     return;
   }
-  var html = '<div class="ft-children">';
+  var html = crumb + '<div class="ft-children">';
   items.forEach(function(item) {
     var isDir = item.type === 'dir';
+    var kind = item.kind || 'text';
     var icon = isDir ? '📁' : getFileIcon(item.ext || '');
     var sizeStr = item.size ? formatSize(item.size) : '';
-    html += '<div class="ft-item ' + (isDir ? 'ft-dir' : 'ft-file') + '"'
-      + ' onclick="' + (isDir ? 'loadFileTree(\'' + escAttr(item.path) + '\')' : 'openFile(\'' + escAttr(item.path) + '\')') + '"'
-      + ' title="' + escAttr(item.name) + '">'
+    // 目录：进入下一层；文件：弹窗预览（二进制也会给明确提示，故仍可点）
+    var cls = isDir ? 'ft-dir' : ('ft-file ft-kind-' + kind);
+    var act = isDir ? 'loadFileTree' : 'openFile';
+    html += '<div class="ft-item ' + cls + '"'
+      + ' onclick="' + act + '(\'' + jsAttr(item.path) + '\')"'
+      + ' title="' + escAttr(item.path) + '">'
       + '<span class="ft-icon">' + icon + '</span>'
       + '<span class="ft-name">' + esc(item.name) + '</span>'
       + (sizeStr ? '<span class="ft-size">' + sizeStr + '</span>' : '')
@@ -3804,6 +3824,173 @@ function formatSize(bytes) {
   return (bytes / (1024 * 1024)).toFixed(1) + 'MB';
 }
 
+// ══════════════════════════════════════════════════
+//  FILE PREVIEW（文件树 → 选中文件 → 弹窗预览）
+//  文本/代码：行号 + 语法高亮；JSON：格式化；Markdown：渲染；图片：内联
+//  后端按 kind 分流（/api/file 给文本、/api/file/raw 给图片字节），
+//  前端只负责按 kind 选渲染方式。
+// ══════════════════════════════════════════════════
+
+var _fpData = null;    // 当前预览数据（格式化/换行切换需重渲染）
+var _fpPretty = true;  // 格式化开关（JSON 美化 / Markdown 渲染 / 语法高亮）
+var _fpWrap = true;    // 自动换行开关
+
+// 各语言注释风格（决定高亮规则集；未列出者只高亮字符串/数字/关键字）
+var _FP_LANG = {
+  '.py': {hash: 1}, '.pyi': {hash: 1}, '.sh': {hash: 1}, '.bash': {hash: 1}, '.zsh': {hash: 1},
+  '.yaml': {hash: 1}, '.yml': {hash: 1}, '.toml': {hash: 1}, '.ini': {hash: 1}, '.cfg': {hash: 1},
+  '.conf': {hash: 1}, '.properties': {hash: 1}, '.env': {hash: 1}, '.md': {hash: 1},
+  '.js': {slash: 1}, '.mjs': {slash: 1}, '.cjs': {slash: 1}, '.ts': {slash: 1}, '.tsx': {slash: 1},
+  '.jsx': {slash: 1}, '.java': {slash: 1}, '.kt': {slash: 1}, '.c': {slash: 1}, '.h': {slash: 1},
+  '.cc': {slash: 1}, '.cpp': {slash: 1}, '.hpp': {slash: 1}, '.cs': {slash: 1}, '.go': {slash: 1},
+  '.rs': {slash: 1}, '.php': {slash: 1}, '.swift': {slash: 1}, '.dart': {slash: 1}, '.scala': {slash: 1},
+  '.css': {slash: 1}, '.scss': {slash: 1}, '.less': {slash: 1},
+  '.sql': {dash: 1},
+  '.html': {html: 1, slash: 1}, '.htm': {html: 1, slash: 1}, '.xml': {html: 1}, '.vue': {html: 1, slash: 1},
+};
+
+// 关键字集（按扩展名；未列出者用 _default）
+var _FP_KW = {
+  _default: 'if else for while return break continue class def function var let const new this'
+    + ' true false null undefined import from export async await try catch finally throw'
+    + ' switch case default do in of typeof instanceof extends super yield static void'
+    + ' public private protected interface enum struct impl fn mut pub use mod match'
+    + ' and or not None True False lambda with as pass raise global assert del elif self is',
+  '.py': 'False None True and as assert async await break class continue def del elif else except'
+    + ' finally for from global if import in is lambda nonlocal not or pass raise return'
+    + ' try while with yield match case self',
+  '.js': 'await async break case catch class const continue debugger default delete do else export'
+    + ' extends finally for function if import in instanceof let new of return static super'
+    + ' switch this throw try typeof var void while with yield null true false undefined',
+  '.json': 'true false null',
+  '.sh': 'if then else elif fi for while do done case esac function return export local echo cd set unset source',
+  '.sql': 'select from where insert into values update set delete create table drop alter join left'
+    + ' right inner outer on group by order having limit offset union all as and or not null'
+    + ' distinct count sum avg min max primary key index',
+};
+var _FP_KWSET = {};
+Object.keys(_FP_KW).forEach(function(k) {
+  var s = {};
+  _FP_KW[k].split(/\s+/).forEach(function(w) { if (w) s[w] = 1; });
+  _FP_KWSET[k] = s;
+});
+
+// 单行语法高亮：单遍扫描，逐 token 转义后包 span（不做二次 esc，避免双重转义）
+function fpHighlight(code, ext) {
+  var cfg = _FP_LANG[String(ext || '').toLowerCase()] || {};
+  var rules = [];
+  if (cfg.html) rules.push({re: /<\/?[A-Za-z][\w:-]*(?:\s[^<>]*)?\/?>/, cls: 'fp-tag'});
+  rules.push({re: /\/\*[^\n]*?\*\//, cls: 'fp-cmt'});
+  if (cfg.slash) rules.push({re: /\/\/[^\n]*/, cls: 'fp-cmt'});
+  if (cfg.hash) rules.push({re: /#[^\n]*/, cls: 'fp-cmt'});
+  if (cfg.dash) rules.push({re: /--[^\n]*/, cls: 'fp-cmt'});
+  rules.push({re: /"(?:[^"\\\n]|\\.)*"|'(?:[^'\\\n]|\\.)*'|`(?:[^`\\]|\\.)*`/, cls: 'fp-str'});
+  rules.push({re: /\b\d[\d_]*(?:\.\d+)?\b/, cls: 'fp-num'});
+  rules.push({re: /[A-Za-z_$][\w$]*/, cls: 'fp-word'});
+
+  var master = new RegExp(rules.map(function(r) { return '(' + r.re.source + ')'; }).join('|'), 'g');
+  var kwset = _FP_KWSET[String(ext || '').toLowerCase()] || _FP_KWSET._default;
+  var out = '', last = 0, m;
+  while ((m = master.exec(code)) !== null) {
+    if (m[0] === '') { master.lastIndex++; continue; }   // 防空匹配死循环
+    if (m.index > last) out += esc(code.slice(last, m.index));
+    var hit = null;
+    for (var gi = 1; gi < m.length; gi++) {
+      if (m[gi] !== undefined) { hit = rules[gi - 1]; break; }
+    }
+    var tok = m[0];
+    if (hit && hit.cls === 'fp-word' && !kwset[tok]) {
+      out += esc(tok);                                   // 普通标识符不高亮
+    } else if (hit) {
+      out += '<span class="' + hit.cls + '">' + esc(tok) + '</span>';
+    } else {
+      out += esc(tok);
+    }
+    last = master.lastIndex;
+  }
+  out += esc(code.slice(last));
+  return out;
+}
+
+// 带行号的代码块（逐行高亮：行号才能与内容对齐）
+function fpCodeBlock(text, ext, doHighlight) {
+  var lines = String(text == null ? '' : text).split('\n');
+  var html = '<div class="fp-code-wrap' + (_fpWrap ? ' fp-wrap' : '') + '">';
+  for (var i = 0; i < lines.length; i++) {
+    var inner = doHighlight ? fpHighlight(lines[i], ext) : esc(lines[i]);
+    html += '<div class="fp-line"><span class="fp-ln">' + (i + 1) + '</span>'
+      + '<span class="fp-code">' + (inner || '&nbsp;') + '</span></div>';
+  }
+  return html + '</div>';
+}
+
+// 按 format_hint 套用格式化（json 美化 / md 渲染 / 其余语法高亮）
+function fpFormatText(text, data) {
+  var hint = data.format_hint || 'code';
+  if (hint === 'json') {
+    try {
+      return fpCodeBlock(JSON.stringify(JSON.parse(text), null, 2), data.ext, true);
+    } catch (e) {
+      return '<div class="fp-note">⚠️ JSON 解析失败，已显示原文：' + esc(e.message) + '</div>'
+        + fpCodeBlock(text, data.ext, true);
+    }
+  }
+  if (hint === 'markdown') {
+    return '<div class="fp-md md-body">' + formatMarkdown(text) + '</div>';
+  }
+  return fpCodeBlock(text, data.ext, true);
+}
+
+// 复制用文本：与"当前所见"一致（格式化开启时给美化后的 JSON）
+function fpDisplayText() {
+  if (!_fpData) return '';
+  var t = _fpData.content || '';
+  if (_fpPretty && _fpData.format_hint === 'json') {
+    try { return JSON.stringify(JSON.parse(t), null, 2); } catch (e) { return t; }
+  }
+  return t;
+}
+
+function fpRender(data) {
+  var body = $('fvp-body'), title = $('fvp-title'), meta = $('fvp-meta');
+  if (!body) return;
+
+  var isText = data.kind === 'text';
+  title.textContent = (data.kind === 'image' ? '🖼 ' : data.kind === 'binary' ? '🚫 ' : '📄 ')
+    + (data.name || data.path || '');
+  title.title = data.path || '';
+
+  var bits = [];
+  if (data.size != null) bits.push(formatSize(data.size));
+  if (data.ext) bits.push(data.ext);
+  if (data.kind) bits.push(data.kind);
+  if (data.truncated) bits.push('已截断');
+  meta.textContent = bits.join(' · ');
+
+  // 格式化/换行/复制只对文本有意义
+  var fmtBtn = $('fvp-fmt'), wrapBtn = $('fvp-wrap'), copyBtn = $('fvp-copy');
+  var canFmt = isText && (data.format_hint || 'code') !== 'none';
+  if (fmtBtn) { fmtBtn.style.display = canFmt ? '' : 'none'; fmtBtn.textContent = _fpPretty ? '🎨' : '📃'; }
+  if (wrapBtn) { wrapBtn.style.display = isText ? '' : 'none'; wrapBtn.textContent = _fpWrap ? '↩' : '⇥'; }
+  if (copyBtn) copyBtn.style.display = isText ? '' : 'none';
+
+  if (data.kind === 'image') {
+    var src = data.raw_url || ('/api/file/raw?path=' + encodeURIComponent(data.path || ''));
+    body.innerHTML = '<div class="fp-image-wrap">'
+      + '<img class="fp-image" src="' + escAttr(src) + '" alt="' + escAttr(data.name || '') + '"'
+      + ' onclick="this.classList.toggle(\'fp-image-zoom\')" title="点击放大 / 还原">'
+      + '</div><div class="fp-note">💡 点击图片可放大 / 还原</div>';
+    return;
+  }
+  if (data.kind === 'binary') {
+    body.innerHTML = '<div class="fp-empty">🚫 ' + esc(data.message || '二进制文件，不支持预览') + '</div>';
+    return;
+  }
+  var text = data.content || '';
+  body.innerHTML = (data.message ? '<div class="fp-note">⚠️ ' + esc(data.message) + '</div>' : '')
+    + (_fpPretty ? fpFormatText(text, data) : fpCodeBlock(text, data.ext, false));
+}
+
 window.openFile = async function(filePath) {
   try {
     var res = await fetch('/api/file?path=' + encodeURIComponent(filePath));
@@ -3812,25 +3999,46 @@ window.openFile = async function(filePath) {
       toast('❌ ' + (data.error || '读取失败'), 'error');
       return;
     }
-    // 在消息区域显示文件内容
-    var msgs = $('msgs');
-    var div = document.createElement('div');
-    div.className = 'file-view';
-    div.innerHTML = '<div class="file-view-header">'
-      + '<span>📄 ' + esc(filePath) + '</span>'
-      + '<button class="tb-btn" onclick="closeFileView(this)" title="关闭">✕</button>'
-      + '</div>'
-      + '<pre class="file-view-content"><code>' + esc(data.content || '') + '</code></pre>';
-    // 插入到消息区域顶部
-    msgs.insertBefore(div, msgs.firstChild);
-  } catch(e) {
+    _fpData = data;
+    _fpPretty = true;
+    fpRender(data);
+    showModal('modal-filepreview');
+  } catch (e) {
     toast('❌ ' + e.message, 'error');
   }
 };
 
-window.closeFileView = function(btn) {
-  var view = btn.closest('.file-view');
-  if (view) view.remove();
+window.fpToggleFormat = function() {
+  if (!_fpData || _fpData.kind !== 'text') return;
+  _fpPretty = !_fpPretty;
+  var b = $('fvp-fmt');
+  if (b) b.title = _fpPretty ? '当前：格式化（点击看原文）' : '当前：原文（点击格式化）';
+  fpRender(_fpData);
+};
+
+window.fpToggleWrap = function() {
+  _fpWrap = !_fpWrap;
+  var b = $('fvp-wrap');
+  if (b) b.title = _fpWrap ? '自动换行：开（点击关闭）' : '自动换行：关（点击开启）';
+  if (_fpData) fpRender(_fpData);
+};
+
+window.fpCopy = function(btn) {
+  var text = fpDisplayText();
+  if (!text) return;
+  navigator.clipboard.writeText(text).then(function() {
+    btn.textContent = '✅';
+    setTimeout(function() { btn.textContent = '📋'; }, 2000);
+  }).catch(function() {
+    var ta = document.createElement('textarea');
+    ta.value = text;
+    document.body.appendChild(ta);
+    ta.select();
+    document.execCommand('copy');
+    ta.remove();
+    btn.textContent = '✅';
+    setTimeout(function() { btn.textContent = '📋'; }, 2000);
+  });
 };
 
 

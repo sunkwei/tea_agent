@@ -225,6 +225,32 @@ pip install starlette uvicorn
 
 支持拖拽或点击上传图片，自动转换为 base64 发送。图片参数通过 `images` 字段传递（`data:image/...;base64,` 或裸 base64），服务端**不落盘**，直接以 BLOB 存入数据库 `images` 表；`conversations.user_msg` 只保存 `img:<id>` 轻量引用。历史回放由 `GET /api/image/{id}` 回读，PDF/Markdown 导出会自动把图片带上。
 
+### 3.6 文件树与文件预览
+
+侧边栏顶部的 **📁** 按钮（`Ctrl+Shift+F`）展开「项目文件」面板，显示**启动目录**（服务端 `os.getcwd()`）的目录结构。
+
+**导航**：点击目录进入下一层，顶部面包屑（`📁 根 › sub › deeper`）可跳回任意上级。目录/文件列表懒加载，根目录带缓存（🔄 刷新按钮强制重取）。
+
+**预览**：点击文件弹出预览窗口，按类型自动选择渲染方式：
+
+| 类型 | 渲染方式 | 说明 |
+|------|----------|------|
+| `.py` `.js` `.ts` `.c` `.go` `.rs` `.sh` `.sql` `.html` `.css` … | 代码视图 | 行号 + 语法高亮（注释/字符串/数字/关键字），🎨 切换原文 |
+| `.json` | 格式化 JSON | 默认 2 空格缩进美化，解析失败自动回落原文并提示 |
+| `.md` `.markdown` | 渲染 Markdown | 标题/列表/代码块/表格，🎨 切换源码 |
+| `.txt` `.log` `.csv` `.yaml` `.toml` `.ini` … | 纯文本 | 行号 + 自动换行 |
+| `.png` `.jpg` `.jpeg` `.gif` `.webp` `.bmp` `.svg` `.avif` `.ico` | 图片内联 | 正确 MIME 直接渲染，点击图片放大/还原 |
+| 其他（`.zip` `.exe` `.bin` …） | 不支持 | 给出明确提示，不返回内容 |
+
+预览窗口工具栏：**🎨 格式化/原文**、**↩ 自动换行**、**📋 复制内容**（复制的是"当前所见"，格式化开启时给美化后的 JSON）、**✕ 关闭**（`Esc` 亦可）。
+
+**类型判定与安全**：
+- 文件树对每个条目返回 `kind`（`text`/`image`/`binary`），前端据此决定图标与渲染方式；`image` 类条目在树中着黄色、`binary` 着灰色
+- 图片白名单与 `/v1/preview`（文档生成物预览）**共用同一事实源**（`_IMAGE_MIME`），避免同一文件一处能预览、另一处不能
+- 图片**不**经文本接口读取（二进制读成乱码），改由 `GET /api/file/raw` 原样输出字节；SVG 额外加 sandbox CSP —— SVG 可内嵌 `<script>`，同源内联渲染即存储型 XSS
+- 三个端点共用同一套路径遍历防护（`relative_to` 判定，杜绝 `/root2` 被误判为 `/root` 子路径），访问范围严格限定在启动目录内
+- 文本读取上限 2 MB，超出截断并在预览顶部提示；`.zip`/`.pyc`/`.mp4` 等大体积二进制仍在树中过滤
+
 ---
 
 ## 4. OpenAI 兼容 API（/v1/\*）
@@ -538,7 +564,34 @@ curl -X POST http://localhost:8080/v1/upload \
 | `history_l3_batch` | int | L3 摘要批大小（0=自动 = keep_turns//2） |
 | `enable_thinking` | bool | 是否显示推理过程 |
 
-### 5.6 模型切换
+### 5.6 文件树与文件预览
+
+| 端点 | 方法 | 说明 |
+|------|------|------|
+| `/api/files?path=<rel>` | GET | 列出启动目录下的条目（懒加载，`path` 省略=根） |
+| `/api/file?path=<rel>` | GET | 读取文件（按 `kind` 分流，见下） |
+| `/api/file/raw?path=<rel>` | GET | 原样字节输出（图片内联预览用，正确 `image/*` MIME） |
+
+**`GET /api/files`** 返回 `{ok, path, abs_path, items[], parent}`；每个 `item` 含
+`{name, path, type(dir/file), ext, size, kind}`。`kind ∈ {text, image, binary}`
+决定前端图标与渲染方式。
+
+**`GET /api/file`** 按类型返回不同字段：
+
+| `kind` | 返回字段 |
+|--------|----------|
+| `text` | `content`（上限 2 MB，超出截断并置 `truncated` + `message`）、`format_hint`（`json`/`markdown`/`code`） |
+| `image` | `mime`、`raw_url`（指向 `/api/file/raw`）；**不含** `content` |
+| `binary` | `message`（不支持预览）；**不含** `content` |
+
+**`GET /api/file/raw`** 仅接受图片白名单扩展名（否则 415），返回
+`Content-Type: image/*` + `X-Content-Type-Options: nosniff`；SVG 额外加
+`Content-Security-Policy: … sandbox`（防存储型 XSS）。
+
+**安全**：三个端点共用同一套路径解析（`relative_to` 判定包含关系），
+访问范围严格限定在**启动目录**内，越界返回 400/403，不存在返回 404。
+
+### 5.7 模型切换
 
 | 端点 | 方法 | 说明 |
 |------|------|------|
@@ -986,6 +1039,9 @@ rm <启动目录>/.tea_agent_run/chat_history.db
 | POST | `/api/model` | 切换模型 |
 | POST | `/api/model/config` | 切换配置文件 |
 | GET | `/api/tools` | 工具列表 |
+| GET | `/api/files` | 文件树（启动目录，懒加载） |
+| GET | `/api/file` | 读取文件（按 kind 分流） |
+| GET | `/api/file/raw` | 图片原样字节（内联预览） |
 | GET | `/api/screenshot/full` | 全屏截图 |
 | POST | `/api/screenshot/region` | 区域截图 |
 | POST | `/api/screenshot/interactive` | 交互式选区 |

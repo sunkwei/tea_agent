@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Tea Agent GUI2</title>
-<link rel="stylesheet" href="/static/style.css?v=20260919_bar">
+<link rel="stylesheet" href="/static/style.css?v=20261007_fprev">
 </head>
 <body>
 <div id="app">
@@ -298,6 +298,20 @@
   </div>
 </div></div>
 
+<!-- File Preview Modal（文件树 → 选中文件预览：文本/代码/图片） -->
+<div id="modal-filepreview" class="modal"><div class="modal-box fvp-box">
+  <div class="fvp-head">
+    <span class="fvp-title" id="fvp-title">📄 文件预览</span>
+    <span class="fvp-meta" id="fvp-meta"></span>
+    <span class="fvp-spacer"></span>
+    <button class="tb-btn" id="fvp-fmt" onclick="fpToggleFormat()" title="格式化 / 原文">🎨</button>
+    <button class="tb-btn" id="fvp-wrap" onclick="fpToggleWrap()" title="自动换行">↩</button>
+    <button class="tb-btn" id="fvp-copy" onclick="fpCopy(this)" title="复制内容">📋</button>
+    <button class="tb-btn" onclick="closeModal('modal-filepreview')" title="关闭 (Esc)">✕</button>
+  </div>
+  <div class="fvp-body" id="fvp-body"></div>
+</div></div>
+
 <!-- Max Iter 续命确认 Modal（达限弹框：输入续命 N 轮 / 取消终止） -->
 <div id="modal-maxiter" class="modal"><div class="modal-box" style="max-width:420px">
   <h3>⏳ 工具调用达上限</h3>
@@ -311,7 +325,7 @@
   </div>
 </div></div>
 
-<script src="/static/app.js?v=20260919_bar"></script>
+<script src="/static/app.js?v=20261007_fprev"></script>
 <!-- ═══ DAG 灯箱（双击放大） ═══ -->
 <div id="dag-lightbox" class="dag-lightbox" onclick="closeDagLightbox()">
   <span class="dag-lightbox-close" onclick="closeDagLightbox()">&times;</span>

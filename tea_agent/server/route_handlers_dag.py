@@ -6,10 +6,69 @@
 import asyncio
 import json
 import time
+import urllib.parse
 
-from starlette.responses import HTMLResponse, JSONResponse, Response, StreamingResponse
+from starlette.responses import FileResponse, HTMLResponse, JSONResponse, Response, StreamingResponse
 
 from tea_agent.multi_agent.workflow_viz import DagVizRegistry, get_viz_html
+
+# 图片 MIME 白名单与 /v1/preview 共用同一事实源：文件树预览与文档预览
+# 对"什么算图片"必须一致，否则同一文件在一处能预览、另一处不能。
+from tea_agent.server.route_handlers_exports import _IMAGE_MIME
+
+#: 可作为文本读取并格式化的扩展名（白名单；未列出者按二进制处理）
+_TEXT_EXTS: frozenset = frozenset({
+    ".py", ".pyi", ".pyw", ".js", ".mjs", ".cjs", ".ts", ".tsx", ".jsx", ".vue", ".svelte",
+    ".html", ".htm", ".css", ".scss", ".less", ".json", ".jsonl", ".ndjson", ".yaml", ".yml",
+    ".toml", ".ini", ".cfg", ".conf", ".properties", ".md", ".markdown", ".rst", ".txt",
+    ".log", ".csv", ".tsv", ".sh", ".bash", ".zsh", ".fish", ".bat", ".cmd", ".ps1",
+    ".sql", ".c", ".h", ".cc", ".cpp", ".hpp", ".cs", ".java", ".kt", ".rs", ".go",
+    ".rb", ".php", ".pl", ".lua", ".r", ".m", ".swift", ".dart", ".scala", ".gradle",
+    ".dockerfile", ".editorconfig", ".gitignore", ".dockerignore", ".env", ".lock", ".patch", ".diff",
+})
+
+#: 文本读取上限（超出即截断并提示；避免把巨型日志塞进弹窗）
+_TEXT_READ_MAX = 2 * 1024 * 1024
+
+
+def classify_file(name: str) -> tuple:
+    """按扩展名判定文件预览类型。
+
+    Returns:
+        ``(kind, mime)``；kind ∈ {``image``, ``text``, ``binary``}。
+        ``binary`` 的 mime 恒为 ``application/octet-stream``。
+    """
+    from pathlib import Path as _Path
+
+    ext = _Path(name).suffix.lower()
+    if ext in _IMAGE_MIME:
+        return "image", _IMAGE_MIME[ext]
+    # 无扩展名的常见文本文件（Dockerfile / Makefile / LICENSE …）
+    if ext in _TEXT_EXTS or (not ext and _Path(name).name.lower() in {"dockerfile", "makefile", "license", "readme"}):
+        return "text", "text/plain"
+    return "binary", "application/octet-stream"
+
+
+def _resolve_in_root(rel_path: str):
+    """把请求路径解析到**启动目录**内（防路径遍历）。
+
+    Returns:
+        ``(Path, None)`` 成功；``(None, JSONResponse)`` 失败（400/403）。
+    """
+    import os as _os
+    from pathlib import Path as _Path
+
+    root = _Path(_os.getcwd()).resolve()
+    try:
+        target = (_Path(root) / rel_path).resolve()
+    except (ValueError, OSError):
+        return None, JSONResponse({"ok": False, "error": "无效路径"}, status_code=400)
+    # 用 relative_to 判定包含关系：纯 startswith 会把 /root2 误判为 /root 的子路径
+    try:
+        target.relative_to(root)
+    except ValueError:
+        return None, JSONResponse({"ok": False, "error": "路径超出项目目录"}, status_code=403)
+    return target, None
 
 
 async def handle_dag_viz(request):
@@ -315,25 +374,36 @@ async def handle_file_tree(request):
         ".mypy_cache",
         ".pytest_cache",
     }
+    # 仅过滤"体积大且无法文本预览"的类型；图片**不再**过滤——它们可内联预览
+    # （此前 .png/.jpg 被排除，导致文件树里根本看不到图片，自然无从预览）。
     ignored_exts = {
         ".pyc",
         ".pyo",
         ".egg",
         ".whl",
-        ".jpg",
-        ".jpeg",
-        ".png",
-        ".gif",
-        ".ico",
-        ".svg",
-        ".webp",
         ".mp4",
         ".mp3",
         ".wav",
         ".ogg",
+        ".flac",
+        ".avi",
+        ".mov",
         ".pdf",
         ".zip",
+        ".tar",
+        ".gz",
         ".tar.gz",
+        ".7z",
+        ".rar",
+        ".exe",
+        ".dll",
+        ".so",
+        ".dylib",
+        ".bin",
+        ".woff",
+        ".woff2",
+        ".ttf",
+        ".otf",
     }
 
     items = []
@@ -353,6 +423,8 @@ async def handle_file_tree(request):
             if entry.is_file():
                 ext = entry.suffix.lower()
                 item["ext"] = ext
+                # 预览类型：前端据此决定「可点击预览」与图标（image/text/binary）
+                item["kind"] = classify_file(name)[0]
                 try:
                     item["size"] = entry.stat().st_size
                 except OSError:
@@ -375,39 +447,102 @@ async def handle_file_tree(request):
 
 
 async def handle_file_read(request):
-    """GET /api/file?path=... — 读取单个文件内容。"""
-    import os as _os
-    from pathlib import Path as _Path
+    """GET /api/file?path=... — 读取单个文件内容（按类型分流）。
+
+    返回体始终含 ``kind``（``image``/``text``/``binary``）与 ``mime``，
+    前端据此选渲染方式：
+
+    - ``text``：返回 ``content`` 文本（超 :data:`_TEXT_READ_MAX` 截断）
+    - ``image``：**不**当文本读（二进制读出来是乱码），只回 ``raw_url``
+      指向 :func:`handle_file_raw` 做内联渲染
+    - ``binary``：只回元信息与提示，不返回内容
+
+    ``format_hint`` 给出建议的格式化方式（json/markdown/code/none），
+    由前端决定是否套用——服务端不猜用户的展示偏好。
+    """
 
     file_path = request.query_params.get("path", "")
     if not file_path:
         return JSONResponse({"ok": False, "error": "需要 path 参数"}, status_code=400)
 
-    root = _os.getcwd()
-    target = (_Path(root) / file_path).resolve()
-    root_resolved = _Path(root).resolve()
-
-    # 安全检查
-    if not str(target).lower().startswith(str(root_resolved).lower()):
-        return JSONResponse({"ok": False, "error": "路径超出项目目录"}, status_code=403)
-
+    target, err = _resolve_in_root(file_path)
+    if err is not None:
+        return err
     if not target.is_file():
         return JSONResponse({"ok": False, "error": "文件不存在"}, status_code=404)
 
-    # 限制文件大小（5MB）
-    max_size = 5 * 1024 * 1024
-    if target.stat().st_size > max_size:
-        return JSONResponse({"ok": False, "error": "文件过大，无法预览"}, status_code=413)
-
     try:
-        content = target.read_text(encoding="utf-8", errors="replace")
-        return JSONResponse(
-            {
-                "ok": True,
-                "path": file_path,
-                "content": content,
-                "size": target.stat().st_size,
-            }
-        )
+        size = target.stat().st_size
+    except OSError:
+        size = 0
+
+    kind, mime = classify_file(target.name)
+    ext = target.suffix.lower()
+    base = {"ok": True, "path": file_path, "name": target.name, "ext": ext,
+            "size": size, "kind": kind, "mime": mime}
+
+    if kind == "image":
+        # 图片不做文本读取：交给 /api/file/raw 内联（正确 MIME，浏览器直接渲染）
+        base["raw_url"] = "/api/file/raw?path=" + urllib.parse.quote(file_path)
+        base["format_hint"] = "none"
+        return JSONResponse(base)
+
+    if kind == "binary":
+        base["format_hint"] = "none"
+        base["message"] = f"二进制文件（{ext or '无扩展名'}），不支持预览"
+        return JSONResponse(base)
+
+    # 文本：限流读取（超大文件截断而非拒绝——用户仍想看一眼开头）
+    truncated = size > _TEXT_READ_MAX
+    try:
+        with open(target, encoding="utf-8", errors="replace") as fh:
+            content = fh.read(_TEXT_READ_MAX)
     except Exception as e:
         return JSONResponse({"ok": False, "error": str(e)}, status_code=500)
+
+    base["content"] = content
+    base["truncated"] = truncated
+    if truncated:
+        base["message"] = f"文件较大（{size} 字节），仅显示前 {_TEXT_READ_MAX} 字节"
+    base["format_hint"] = "json" if ext in (".json", ".jsonl", ".ndjson") else (
+        "markdown" if ext in (".md", ".markdown") else "code")
+    return JSONResponse(base)
+
+
+async def handle_file_raw(request):
+    """GET /api/file/raw?path=... — 原样字节返回（图片内联预览用）。
+
+    与 ``/api/file`` 的区别同 ``/v1/preview`` vs ``/v1/download``：这里给
+    **正确 MIME + inline**，可直接作 ``<img src>``；``/api/file`` 是 JSON
+    文本接口，拿来当 img 源只会得到一坨 JSON。
+
+    安全：复用 :func:`_resolve_in_root`（防遍历，限定启动目录内）；
+    SVG 额外加 sandbox CSP —— SVG 可内嵌 ``<script>``，同源内联即存储型 XSS。
+    """
+
+    file_path = request.query_params.get("path", "")
+    if not file_path:
+        return JSONResponse({"ok": False, "error": "需要 path 参数"}, status_code=400)
+
+    target, err = _resolve_in_root(file_path)
+    if err is not None:
+        return err
+    if not target.is_file():
+        return JSONResponse({"ok": False, "error": "文件不存在"}, status_code=404)
+
+    ext = target.suffix.lower()
+    media = _IMAGE_MIME.get(ext)
+    if not media:
+        return JSONResponse(
+            {"ok": False, "error": f"不是可内联预览的类型: {ext or '(无扩展名)'}",
+             "previewable": sorted(_IMAGE_MIME)},
+            status_code=415,
+        )
+
+    headers = {
+        "X-Content-Type-Options": "nosniff",
+        "Cache-Control": "private, max-age=60",
+    }
+    if ext == ".svg":
+        headers["Content-Security-Policy"] = "default-src 'none'; style-src 'unsafe-inline'; sandbox"
+    return FileResponse(str(target), media_type=media, headers=headers)

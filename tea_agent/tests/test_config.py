@@ -176,7 +176,7 @@ class TestPathsConfig:
 class TestEmbeddingRemoved:
     """向量/嵌入配置已整体下线 —— 钉住「不得被半途重新引入」。
 
-    背景：``EmbeddingConfig``、config.yaml 的 ``embedding_model`` 段、
+    背景：``EmbeddingConfig``、历史的 ``embedding_model`` 段、
     ``EmbeddingEngine``、``VectorStore`` / ``SemanticSearch`` 与 msg_vectors /
     symbol_vectors 在本次一并移除，检索改由关键词（中文 bigram + 英文词）与
     grep/符号名匹配承担。
@@ -324,7 +324,7 @@ class TestLoadSaveConfig:
         cfg1.main_model.ref_model = "m1"
         save_config(cfg1)
 
-        # 落盘目标即 provider.yaml，且不含任何独立 config.yaml
+        # 落盘目标即 provider.yaml，不产生任何其他配置文件
         assert not (tmp_path / "config.yaml").exists()
 
         cfg2 = load_config()
@@ -336,7 +336,7 @@ class TestLoadSaveConfig:
         assert pf.exists()
 
     def test_save_config_creates_no_yaml_file(self, tmp_path, monkeypatch):
-        """save_config 不再产生任何 config*.yaml 文件。"""
+        """save_config 只写 provider.yaml。"""
         from tea_agent.config import AgentConfig, save_config
 
         self._use_provider_file(tmp_path, monkeypatch, self._prov())
@@ -346,7 +346,7 @@ class TestLoadSaveConfig:
         assert not any(f.startswith("config") and f.endswith((".yaml", ".yml")) for f in created), created
 
     def test_create_default_config_removed(self):
-        """create_default_config 已随 config.yaml 一并删除。"""
+        """create_default_config 已随历史配置文件机制一并删除。"""
         import tea_agent.config as cm
 
         assert not hasattr(cm, "create_default_config")

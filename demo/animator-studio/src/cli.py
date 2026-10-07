@@ -29,8 +29,6 @@ def main():
     parser.add_argument("--no-tts", action="store_true", help="禁用语音")
     parser.add_argument("--no-play", action="store_true", help="生成后不播放")
     parser.add_argument("--llm", action="store_true", help="使用 LLM 模式（AI 生成动画脚本）")
-    parser.add_argument("--config", type=str, default=None,
-                        help="LLM 配置文件路径 (YAML)")
     parser.add_argument("--serve", action="store_true", help="启动 Web 服务")
     parser.add_argument("--host", default=config.host, help="Web 服务地址")
     parser.add_argument("--port", type=int, default=config.port, help="Web 服务端口")
@@ -65,8 +63,7 @@ def main():
             text=desc,
             duration=args.duration or 8,
             tts=not args.no_tts,
-            config_path=args.config,
-        )
+                    )
     else:
         print("=" * 50)
         print("🎯 关键词模式 — 匹配动画类型")

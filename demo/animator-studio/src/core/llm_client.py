@@ -15,25 +15,30 @@ from typing import Optional, List, Dict, Any, Callable
 import httpx
 
 
-# ── 默认配置路径 ──
-_DEFAULT_CONFIG_PATH = Path.home() / ".tea_agent" / "config_ds_flash.yaml"
+# ── 配置来源：~/.tea_agent/provider.yaml（唯一事实源）──
+_PROVIDER_FILE = Path.home() / ".tea_agent" / "provider.yaml"
 
 
-def _load_config(config_path: Optional[str] = None) -> dict:
-    """加载 tea_agent 配置"""
-    path = Path(config_path) if config_path else _DEFAULT_CONFIG_PATH
-    if not path.exists():
-        # 回退：尝试查找其他 config
-        alt = Path.home() / ".tea_agent"
-        if alt.exists():
-            for f in alt.glob("config*.yaml"):
-                path = f
-                break
-    if not path.exists():
-        raise FileNotFoundError(f"LLM 配置未找到: {path}")
+def _load_config() -> dict:
+    """加载 tea_agent 配置（provider.yaml：roles + providers）。"""
+    if not _PROVIDER_FILE.exists():
+        raise FileNotFoundError(f"LLM 配置未找到: {_PROVIDER_FILE}")
 
-    with open(path, "r", encoding="utf-8") as f:
-        cfg = yaml.safe_load(f)
+    with open(_PROVIDER_FILE, "r", encoding="utf-8") as f:
+        cfg = yaml.safe_load(f) or {}
+
+    # roles.main → providers.<name> 解析出 api_url / api_key（与 tea_agent 同源）
+    roles = cfg.get("roles") or {}
+    main = roles.get("main") or {}
+    pname = str(main.get("provider") or "").strip()
+    mname = str(main.get("model") or "").strip()
+    pentry = (cfg.get("providers") or {}).get(pname) or {}
+    if pentry:
+        cfg["main_model"] = {
+            "api_key": pentry.get("api_key", ""),
+            "api_url": pentry.get("api_url", ""),
+            "model_name": mname or pentry.get("default_model", ""),
+        }
     return cfg
 
 
@@ -55,9 +60,8 @@ def _get_model_config(cfg: dict, key: str = "main_model") -> dict:
 class LLMClient:
     """LLM API 客户端 — 支持同步/流式调用"""
 
-    def __init__(self, config_path: Optional[str] = None,
-                 model_key: str = "main_model"):
-        cfg = _load_config(config_path)
+    def __init__(self, model_key: str = "main_model"):
+        cfg = _load_config()
         mc = _get_model_config(cfg, model_key)
 
         self.api_key = mc["api_key"]

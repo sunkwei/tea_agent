@@ -4,7 +4,7 @@
 与 provider.yaml 等形成多份互相覆盖的事实源。现已收敛到 provider.yaml，
 本模块只做 API 名转发，**不再读写任何 JSON 文件**。
 
-本文件钉住该契约：转发不落盘、scan_config_profiles 已停用、roles 存 provider.yaml。
+本文件钉住该契约：转发不落盘、roles 存 provider.yaml。
 隔离：TEA_PROVIDER_FILE + tmp 目录，绝不触碰真实 ~/.tea_agent。
 """
 
@@ -17,7 +17,6 @@ from tea_agent.model_config import (
     clean_model_config,
     get_model_config_store,
     guess_model_config,
-    scan_config_profiles,
 )
 
 
@@ -92,12 +91,6 @@ def test_panel_shape(store):
 
 
 # ── 已停用能力 ────────────────────────────────────────────
-
-
-def test_scan_config_profiles_disabled():
-    """config*.yaml 不再是提供商来源：恒返回空。"""
-    assert scan_config_profiles() == {}
-    assert scan_config_profiles("/tmp") == {}
 
 
 # ── 纯函数 ────────────────────────────────────────────────

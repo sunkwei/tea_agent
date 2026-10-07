@@ -63,32 +63,30 @@ def _reset_module_globals():
 
 class TestBuildRestartArgs:
     def test_both_empty_produces_no_flag(self):
-        args = srv._build_restart_args("127.0.0.1", 8282, None, None)
+        args = srv._build_restart_args("127.0.0.1", 8282, None)
         assert _dangling_flags(args) == []
         assert "--config" not in args
         assert "--api-key" not in args
 
     def test_config_only(self):
-        args = srv._build_restart_args("127.0.0.1", 8282, "C:/x/config.yaml", None)
+        args = srv._build_restart_args("127.0.0.1", 8282, None)
         assert _dangling_flags(args) == []
-        assert args[args.index("--config") + 1] == "C:/x/config.yaml"
         assert "--api-key" not in args
 
     def test_api_key_only(self):
-        args = srv._build_restart_args("127.0.0.1", 8282, None, "sk-abc")
+        args = srv._build_restart_args("127.0.0.1", 8282, "sk-abc")
         assert _dangling_flags(args) == []
         assert args[args.index("--api-key") + 1] == "sk-abc"
         assert "--config" not in args
 
     def test_both_present(self):
-        args = srv._build_restart_args("0.0.0.0", 9001, "C:/x/config.yaml", "sk-abc")
+        args = srv._build_restart_args("0.0.0.0", 9001, "sk-abc")
         assert _dangling_flags(args) == []
-        assert args[args.index("--config") + 1] == "C:/x/config.yaml"
         assert args[args.index("--api-key") + 1] == "sk-abc"
 
     def test_empty_string_treated_as_absent(self):
         """空串等价于未提供：不得留下悬空 flag（旧实现正是在此崩掉）。"""
-        args = srv._build_restart_args("127.0.0.1", 8282, "", "")
+        args = srv._build_restart_args("127.0.0.1", 8282, "")
         assert _dangling_flags(args) == []
 
     def test_offset_with_real_argparse(self):
@@ -97,10 +95,9 @@ class TestBuildRestartArgs:
         parser.add_argument("--host", default="127.0.0.1")
         parser.add_argument("--port", type=int, default=8282)
         parser.add_argument("--api-key", default="")
-        parser.add_argument("--config", default=None)
         # 去掉 "-m tea_agent.server" 前缀，模拟 main() 解析
-        for cfg, key in ((None, None), ("C:/x/config.yaml", None), (None, "sk-abc")):
-            args = srv._build_restart_args("127.0.0.1", 9000, cfg, key)[2:]
+        for key in (None, "sk-abc"):
+            args = srv._build_restart_args("127.0.0.1", 9000, key)[2:]
             ns = parser.parse_args(args)  # 解析失败会抛 SystemExit → 测试失败
             assert ns.host == "127.0.0.1"
             assert ns.port == 9000
@@ -109,7 +106,7 @@ class TestBuildRestartArgs:
         """阳性对照：复现旧实现，证明上面的检测手段确实能发现问题。"""
         legacy = [m for m in ["-m", "tea_agent.server", "--host", "127.0.0.1", "--port", "8282", "--config", "", "--api-key", ""] if m]
         assert _dangling_flags(legacy) == ["--config"]  # 旧实现必然悬空
-        assert srv._build_restart_args("127.0.0.1", 8282, None, None) != legacy
+        assert srv._build_restart_args("127.0.0.1", 8282, None) != legacy
 
 
 # ── 2. 端口工具 ────────────────────────────────────────────────

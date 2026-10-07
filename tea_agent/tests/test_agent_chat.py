@@ -19,6 +19,7 @@ import time
 from unittest.mock import MagicMock, patch
 
 import pytest
+from tests._provider_yaml import write_provider_yaml
 
 
 @contextlib.contextmanager
@@ -52,55 +53,19 @@ def tmp_dir():
 
 
 @pytest.fixture
-def tmp_yaml_config(tmp_dir):
-    """创建临时配置文件"""
-    config_path = os.path.join(tmp_dir, "config.yaml")
-    return config_path
-
-
-@pytest.fixture
 def tmp_db_path(tmp_dir):
     """获取临时数据库路径"""
     return os.path.join(tmp_dir, "test.db")
 
 
 def _write_config(path, **overrides):
-    """写最小测试配置"""
-    db_path = overrides.get("db_path", ":memory:")
-    toolkit_dir = overrides.get("toolkit_dir", "./tools")
-    kb_dir = overrides.get("kb_dir", "./kb")
-
-    import yaml as _yaml
-
-    config = {
-        "main_model": {
-            "api_key": "sk-test",
-            "api_url": "https://api.test.com/v1",
-            "model_name": "test-model",
-            "options": {
-                "supports_vision": False,
-                "supports_reasoning": False,
-            },
-        },
-        "cheap_model": {
-            "api_key": "",
-            "api_url": "",
-            "model_name": "",
-        },
-        "paths": {
-            "toolkit_dir": toolkit_dir,
-            "kb_dir": kb_dir,
-            "db_path": db_path,
-        },
-        "max_history": 10,
-        "max_iterations": 50,
-        "keep_turns": 5,
-        "max_tool_output": 131072,
-        "max_assistant_content": 131072,
-        "memory_extraction_threshold": 2,
-    }
-    with open(path, "w", encoding="utf-8") as f:
-        _yaml.dump(config, f, allow_unicode=True, default_flow_style=False)
+    """写最小 provider.yaml（唯一事实源）。"""
+    write_provider_yaml(
+        path,
+        db_path=overrides.get("db_path", ":memory:"),
+        toolkit_dir=overrides.get("toolkit_dir", "./tools"),
+        kb_dir=overrides.get("kb_dir", "./kb"),
+    )
 
 
 class TestAgentChatIntegration:
@@ -126,7 +91,7 @@ class TestAgentChatIntegration:
             mock_client.chat.completions.create.return_value = mock_response
             MockOpenAI.return_value = mock_client
 
-            agent = Agent(mode="lightweight", config_path=tmp_yaml_config)
+            agent = Agent(mode="lightweight")
             result = agent.chat("Hello")
 
             assert isinstance(result, list)
@@ -157,7 +122,7 @@ class TestAgentChatIntegration:
             mock_client.chat.completions.create.return_value = mock_response
             MockOpenAI.return_value = mock_client
 
-            agent = Agent(mode="full", config_path=tmp_yaml_config)
+            agent = Agent(mode="full")
             # 创建测试主题
             topic_id = agent._db.create_topic("Test Topic")
 
@@ -193,7 +158,7 @@ class TestAgentChatIntegration:
             mock_client.chat.completions.create.return_value = mock_response
             MockOpenAI.return_value = mock_client
 
-            agent = Agent(mode="lightweight", config_path=tmp_yaml_config, callback=callback)
+            agent = Agent(mode="lightweight", callback=callback)
             agent.chat("Hello")
 
             # 验证回调被调用
@@ -212,7 +177,7 @@ class TestAgentChatIntegration:
             mock_client = MagicMock()
             MockOpenAI.return_value = mock_client
 
-            agent = Agent(mode="lightweight", config_path=tmp_yaml_config)
+            agent = Agent(mode="lightweight")
             agent._generating = True  # 模拟正在生成
 
             with pytest.raises(RuntimeError, match="正在生成中"):
@@ -241,7 +206,7 @@ class TestAgentChatIntegration:
             mock_client.chat.completions.create.return_value = mock_response
             MockOpenAI.return_value = mock_client
 
-            agent = Agent(mode="lite", config_path=tmp_yaml_config)
+            agent = Agent(mode="lite")
             result = agent.chat("Hello")
 
             # Lite 模式返回 dict
@@ -261,7 +226,7 @@ class TestAgentChatIntegration:
             mock_client = MagicMock()
             MockOpenAI.return_value = mock_client
 
-            agent = Agent(mode="full", config_path=tmp_yaml_config)
+            agent = Agent(mode="full")
             topic_id = agent._db.create_topic("Pipeline Test")
 
             # 测试 _post_chat_pipeline
@@ -284,7 +249,7 @@ class TestAgentChatIntegration:
             mock_client = MagicMock()
             MockOpenAI.return_value = mock_client
 
-            agent = Agent(mode="full", config_path=tmp_yaml_config)
+            agent = Agent(mode="full")
             topic_id = agent._db.create_topic("History Test")
 
             # 添加一些对话
@@ -314,7 +279,7 @@ class TestAgentChatErrorHandling:
             mock_client.chat.completions.create.side_effect = Exception("API Error")
             MockOpenAI.return_value = mock_client
 
-            agent = Agent(mode="lightweight", config_path=tmp_yaml_config)
+            agent = Agent(mode="lightweight")
 
             # lightweight 模式下 API 异常会被 session 捕获，返回含 error 的 dict
             result = agent.chat("Hello")

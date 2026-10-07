@@ -188,7 +188,7 @@ class TestResolveExtraHeaders:
 
 
 class TestConfigDrivenInjection:
-    """config.yaml 的 api_headers / opencode_session_header"""
+    """API header 覆盖：api_headers / opencode_session_header"""
 
     def _patch_config(self, monkeypatch, **attrs):
         cfg = MagicMock()

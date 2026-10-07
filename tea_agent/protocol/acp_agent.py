@@ -137,12 +137,11 @@ class AcpAgent:
 
     def __init__(
         self,
-        config_path: str | None = None,
         api_key: str | None = None,
         agent_name: str = "tea-agent",
         agent_version: str = "0.3.0",
     ):
-        self._config_path = self._ensure_acp_config(config_path)
+        self._setup_acp_db()
         self._api_key = api_key or os.environ.get("TEA_API_KEY", "")
         self._agent_name = agent_name
         self._agent_version = agent_version
@@ -152,7 +151,7 @@ class AcpAgent:
             from tea_agent.config import load_config as _load_config
             from tea_agent.store import Storage as _Storage
 
-            _acp_cfg = _load_config(self._config_path)
+            _acp_cfg = _load_config()
             self._acp_storage = _Storage(db_path=_acp_cfg.paths.db_path_abs)
             logger.info(f"ACP storage initialized: {_acp_cfg.paths.db_path_abs}")
         except Exception as e:
@@ -191,25 +190,14 @@ class AcpAgent:
     # ── ACP Config ──────────────────────────────────────────────────────────
 
     @staticmethod
-    def _ensure_acp_config(config_path: str | None = None) -> str | None:
-        """Ensure the ACP-specific config file exists.
+    def _setup_acp_db() -> None:
+        """隔离 ACP 会话库。
 
-        ``config.yaml`` 已删除：不再有可派生的配置文件。ACP 与主进程共用
-        provider.yaml（唯一事实源），仅通过 ``TEA_DB_PATH`` 环境变量把会话库
-        隔离为 ``chat_acp.db``。
-
-        Returns:
-            config_path（用户显式指定时原样返回），否则 None
+        身份三元组/运行时参数统一来自 provider.yaml（唯一事实源），ACP 与主进程
+        共用；仅通过 ``TEA_DB_PATH`` 环境变量把会话库隔离为 ``chat_acp.db``。
         """
-        if config_path:
-            return config_path
-
-        # config.yaml 已删除：不再派生 config_acp.yaml。
-        # 身份三元组/运行时参数统一来自 provider.yaml；ACP 只需独立会话库，
-        # 用 TEA_DB_PATH 环境变量隔离（见 PathsConfig.resolve）。
         home_dir = Path.home()
         os.environ.setdefault("TEA_DB_PATH", str(home_dir / ".tea_agent" / "chat_acp.db"))
-        return None
 
     # ── public API ─────────────────────────────────────────────────────────
 
@@ -356,7 +344,7 @@ class AcpAgent:
         try:
             from tea_agent.config import get_config
 
-            config = get_config(self._config_path)
+            config = get_config()
             providers = []
 
             # Try to discover configured models
@@ -1236,7 +1224,7 @@ class AcpAgent:
         try:
             from tea_agent.config import get_config
 
-            config = get_config(self._config_path)
+            config = get_config()
             return {"key": key, "value": getattr(config, key, None)}
         except Exception as e:
             return {"error": str(e)}
@@ -1248,7 +1236,7 @@ class AcpAgent:
         try:
             from tea_agent.config import get_config
 
-            config = get_config(self._config_path)
+            config = get_config()
             setattr(config, key, value)
             config.save()
             return {"success": True, "key": key, "value": value}
@@ -1391,7 +1379,7 @@ class AcpAgent:
 
         from tea_agent.agent import Agent as _Agent
 
-        agent = _Agent(mode="lightweight", config_path=self._config_path)
+        agent = _Agent(mode="lightweight")
         agent.current_topic_id = session_id
         # Ensure storage has this topic
         storage = self._acp_storage
@@ -1418,7 +1406,7 @@ class AcpAgent:
                 return self._global_agent
             from tea_agent.agent import Agent as _Agent
 
-            self._global_agent = _Agent(mode="lightweight", config_path=self._config_path)
+            self._global_agent = _Agent(mode="lightweight")
             return self._global_agent
 
     def _extract_text_content(self, message: dict) -> str:

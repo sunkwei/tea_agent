@@ -21,7 +21,7 @@ from . import tlk
 from .agent_background import start_scheduler
 from .agent_evolution import EvolutionActor, EvolutionAnalyzer, EvolutionEvaluator
 from .agent_pipeline import do_async_summaries
-from .config import load_config, resolve_config_path
+from .config import load_config
 from .litesession import LiteSession
 from .logging_setup import setup_logging
 from .memory import PRIORITY_MEDIUM
@@ -83,8 +83,6 @@ class Agent:
     def __init__(
         self,
         mode: str = "lightweight",
-        config_path: str | None = None,
-        config_fname: str | None = None,
         callback: Callable[[dict], None] | None = None,
         use_tools: bool = True,
         enable_thinking: bool = True,
@@ -102,7 +100,6 @@ class Agent:
         self.disable_summary = disable_summary
         self.no_stream_chunk = no_stream_chunk
         self._use_cheap_model = use_cheap_model
-        self._config_fname = config_fname
         setup_logging(debug=debug)
 
         self._callback = callback
@@ -115,8 +112,7 @@ class Agent:
         self._db = None
         self._pending_cheap_tokens = {}
 
-        self._config_path = config_path
-        self._cfg = self._load_config(config_path)
+        self._cfg = self._load_config()
         self._init_toolkit()
         if self.behavior.use_storage:
             self._init_storage()
@@ -133,26 +129,16 @@ class Agent:
     def _load_topic_history_into_session(self, topic_id: str) -> None:
         return self.load_topic_history(topic_id)
 
-    def _load_config(self, config_path: str | None) -> "AgentConfig":
-        """优先级: config_path > config_fname > 默认路径。
-
-        Args:
-            config_path: 配置文件路径，如果为None则使用默认路径
+    def _load_config(self) -> "AgentConfig":
+        """从 provider.yaml 加载配置（唯一事实源）。
 
         Returns:
             AgentConfig: 加载的配置对象
 
         Raises:
-            FileNotFoundError: 配置文件不存在
             ValueError: 配置不完整
         """
-        if self._config_fname and not config_path:
-            config_path = str(Path.home() / ".tea_agent" / self._config_fname)
-
-        # config.yaml 已删除：路径参数不再指向任何真实文件，一律交给
-        # load_config 从 provider.yaml 构建（显式路径不再报错）。
-        actual_path = resolve_config_path(config_path)
-        cfg = load_config(actual_path)
+        cfg = load_config()
 
         main_m = cfg.main_model
         if not main_m.is_configured:
@@ -162,11 +148,10 @@ class Agent:
                 f"  api_url: {'✓' if main_m.api_url else '✗'}\n"
                 f"  model:   {'✓' if main_m.model_name else '✗'}\n"
                 f"  请运行 python -m tea_agent.setup_wizard --provider 或在 Web 供应商页完成配置\n"
-                f"  config:  {actual_path or '(身份三元组取自 provider.yaml，config.yaml 已移除)'}"
+                f"  config:  (身份三元组取自 provider.yaml)"
             )
 
-        self._config_path = actual_path
-        logger.info(f"配置加载: {actual_path or 'provider.yaml 兜底'} | 模型: {main_m.model_name}")
+        logger.info(f"配置加载: provider.yaml | 模型: {main_m.model_name}")
         return cfg
 
     def _init_toolkit(self) -> None:
@@ -925,7 +910,6 @@ class Agent:
 
 
 def TeaAgent(  # noqa: N802 — 公开 API 名，沿用 TeaAgent 驼峰约定
-    config_path: str | None = None,
     callback: Callable[[dict], None] | None = None,
     use_tools: bool = False,
     enable_thinking: bool = False,
@@ -934,7 +918,6 @@ def TeaAgent(  # noqa: N802 — 公开 API 名，沿用 TeaAgent 驼峰约定
     """TeaAgent 向后兼容工厂函数。返回 lightweight 模式的 Agent。"""
     return Agent(
         mode="lightweight",
-        config_path=config_path,
         callback=callback,
         use_tools=use_tools,
         enable_thinking=enable_thinking,

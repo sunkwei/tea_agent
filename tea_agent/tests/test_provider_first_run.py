@@ -1,16 +1,16 @@
-"""首启流程回归 — provider.yaml 中心化（config.yaml 不再是启动前提）。
+"""首启流程回归 — provider.yaml 中心化（唯一事实源）。
 
 钉住的行为契约：
 1. load_config 在 main_model 缺失/全空时，用 provider.yaml 第一个提供商
    （**文档序**，非字母序）的第一个模型（default_model → models 键序首）补位；
-2. config.yaml 提供了有效 main_model 时被尊重，不被兜底覆盖；
+2. provider.yaml roles.main 已绑定角色时被尊重，不被兜底覆盖；
 3. needs_provider_setup：文件缺失（bootstrap 迁移后）或 providers 为空 → True；
 4. run_provider_setup_wizard：选提供商 → 选模型 → 输 key 写 provider.yaml，
    可循环多家，所选模型置 models 首位；未写入即取消 → False；
-5. agent._load_config：默认路径无 config.yaml 不再 FileNotFoundError（身份三元组
-   由 provider.yaml 兜底）；全空才 ValueError；显式路径缺失仍报错；
+5. agent._load_config：无用户配置不再 FileNotFoundError（身份三元组由 provider.yaml
+   兜底）；全空才 ValueError；不再接受路径参数；
 6. server.main：无 provider.yaml 且非 TTY → 打印指引但继续启动到 run_server
-   （不退出）；--config 指向缺失文件 → exit(1) 且不启动。
+   （不退出）；--config 已下线 → argparse 直接拒绝。
 """
 
 from __future__ import annotations
@@ -30,11 +30,8 @@ from tea_agent.provider_store import ProviderStore
 
 
 def _isolate_config(monkeypatch, yaml_path: str | None = None) -> None:
-    """隔离 config 全局状态：路径解析返回 yaml_path（None=无配置文件）。"""
-    monkeypatch.setattr(config_mod, "_last_config_path", None)
-    monkeypatch.setattr(config_mod, "_active_config_path", None)
+    """隔离 config 全局状态（yaml_path 仅为历史签名兼容，已不再使用）。"""
     monkeypatch.setattr(config_mod, "_config_cache", None)
-    monkeypatch.setattr(config_mod, "resolve_config_path", lambda p=None: yaml_path)
 
 
 def _use_provider_file(monkeypatch, tmp_path: Path, providers: dict, roles: dict | None = None, settings: dict | None = None) -> Path:
@@ -160,7 +157,7 @@ def test_provider_empty_main_not_configured(monkeypatch, tmp_path):
 
 
 def test_paths_resolved_without_config_file(monkeypatch, tmp_path):
-    """无 config.yaml 时 paths 必须仍被解析（否则 data_dir_abs 为空串）。"""
+    """无用户配置文件时 paths 必须仍被解析（否则 data_dir_abs 为空串）。"""
     _isolate_config(monkeypatch, yaml_path=None)
     _use_provider_file(monkeypatch, tmp_path, {"P": _prov(["pm"], default="pm")})
 
@@ -174,7 +171,7 @@ def test_paths_resolved_without_config_file(monkeypatch, tmp_path):
 
 
 def test_needs_setup_true_when_file_missing_and_no_migration_source(tmp_path):
-    """文件缺失 + 无任何 config*.yaml 迁移源 → bootstrap 空 providers → 需要引导。"""
+    """文件缺失且无可用提供商 → bootstrap 空 providers → 需要引导。"""
     store = ProviderStore(tmp_path / "provider.yaml", agent_dir=tmp_path / "empty")
     (tmp_path / "empty").mkdir()
 
@@ -277,17 +274,12 @@ def _bare_agent():
     """跳过重构造，仅取实例调 _load_config。"""
     from tea_agent.agent import Agent
 
-    agent = Agent.__new__(Agent)
-    agent._config_fname = None
-    return agent
+    return Agent.__new__(Agent)
 
 
 def test_agent_load_config_no_config_file(monkeypatch, tmp_path):
-    """默认路径无 config.yaml → 不再 FileNotFoundError，provider.yaml 兜底成功。"""
-    import tea_agent.agent as agent_mod
-
-    _isolate_config(monkeypatch, yaml_path=None)
-    monkeypatch.setattr(agent_mod, "resolve_config_path", lambda p=None: None)
+    """无用户配置时不再 FileNotFoundError：provider.yaml 兜底成功。"""
+    _isolate_config(monkeypatch)
     _use_provider_file(
         monkeypatch,
         tmp_path,
@@ -296,33 +288,34 @@ def test_agent_load_config_no_config_file(monkeypatch, tmp_path):
         },
     )
 
-    agent = _bare_agent()
-    cfg = agent._load_config(None)
+    cfg = _bare_agent()._load_config()
 
     assert cfg.main_model.is_configured
     assert cfg.main_model.model_name == "pm1"
 
 
 def test_agent_load_config_all_empty_raises_value_error(monkeypatch, tmp_path):
-    """config 与 provider 全空 → 仍 ValueError，文案指向向导/配置页。"""
-    import tea_agent.agent as agent_mod
-
-    _isolate_config(monkeypatch, yaml_path=None)
-    monkeypatch.setattr(agent_mod, "resolve_config_path", lambda p=None: None)
+    """provider 全空 → 仍 ValueError，文案指向向导/配置页。"""
+    _isolate_config(monkeypatch)
     _use_provider_file(monkeypatch, tmp_path, {})
 
     agent = _bare_agent()
     with pytest.raises(ValueError, match="setup_wizard"):
-        agent._load_config(None)
+        agent._load_config()
 
 
-def test_agent_load_config_explicit_path_ignored(monkeypatch, tmp_path):
-    """config.yaml 已删除：显式路径不再报错，一律由 provider.yaml 构建。"""
-    _isolate_config(monkeypatch, yaml_path=None)
+def test_agent_load_config_ignores_legacy_path(monkeypatch, tmp_path):
+    """_load_config 不再接受路径参数：显式路径已从签名移除。"""
+    import inspect
+
+    from tea_agent.agent import Agent
+
+    params = list(inspect.signature(Agent._load_config).parameters)
+    assert params == ["self"], f"应只接受 self，实际 {params}"
+
+    _isolate_config(monkeypatch)
     _use_provider_file(monkeypatch, tmp_path, {"P": _prov(["pm"], default="pm")})
-    agent = _bare_agent()
-
-    cfg = agent._load_config("/nonexistent/config.yaml")
+    cfg = _bare_agent()._load_config()
 
     assert cfg.main_model.model_name == "pm"
 
@@ -346,7 +339,7 @@ def _run_server_main(monkeypatch, argv_extra: list[str], *, needs: bool):
 
     monkeypatch.setattr(server_mod, "run_server", _fake_run_server)
     monkeypatch.setattr(wizard_mod, "needs_provider_setup", lambda store=None: needs)
-    monkeypatch.setattr(config_mod, "load_config", lambda p=None, **kw: _fake_cfg(configured=True))
+    monkeypatch.setattr(config_mod, "load_config", lambda **kw: _fake_cfg(configured=True))
     monkeypatch.setattr(sys, "argv", ["tea_agent", *argv_extra])
     monkeypatch.setattr(sys, "stdin", io.StringIO(""))  # isatty()=False
 
@@ -369,9 +362,11 @@ def test_server_main_missing_provider_nontty_starts_with_warning(monkeypatch):
     assert len(calls) == 1, "非交互环境不得因缺 provider.yaml 而拒绝启动"
 
 
-def test_server_main_deprecated_config_flag_still_starts(monkeypatch, capsys):
-    """--config 已废弃（config.yaml 删除）→ 仅告警，不退出，照常启动。"""
-    calls, _ = _run_server_main(monkeypatch, ["--config", "/no/such/config.yaml"], needs=False)
+def test_server_main_rejects_unknown_config_flag(monkeypatch, capsys):
+    """--config 已下线：argparse 直接拒绝（不再是"打了没反应"的静默悬空）。"""
+    import pytest as _pytest
 
-    assert len(calls) == 1, "废弃的 --config 不应阻断启动"
-    assert "deprecated" in capsys.readouterr().out.lower()
+    with _pytest.raises(SystemExit):
+        _run_server_main(monkeypatch, ["--config", "/no/such/config.yaml"], needs=False)
+
+    assert "unrecognized arguments" in capsys.readouterr().err.lower()

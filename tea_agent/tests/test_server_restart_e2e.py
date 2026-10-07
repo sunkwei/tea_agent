@@ -4,7 +4,7 @@
 端口等待）。而实测发现的两个缺陷（悬空 flag / 端口竞态）恰恰只在**真实拉起
 子进程**时才暴露 —— 旧实现单测全绿，实际重启却从未成功。故此处必须起真进程。
 
-隔离性：使用独立端口 + 临时 config/db，绝不影响正在运行的 server。
+隔离性：使用独立端口 + 临时 provider.yaml/db，绝不影响正在运行的 server。
 覆盖：POST /api/restart?mode=immediate → 端口被新进程重新监听（PID 变化）。
 """
 
@@ -20,6 +20,7 @@ import urllib.error
 import urllib.request
 
 import pytest
+from tests._provider_yaml import write_provider_yaml
 
 PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
@@ -101,14 +102,15 @@ def test_restart_replaces_process_e2e(tmp_path):
     argparse 退出，端口竞态使其 bind 失败）。
     """
     port = _free_port()
-    cfg = tmp_path / "config.yaml"
-    cfg.write_text("main_model:\n  provider: DeepSeek\n  model: deepseek-v4-flash\n", encoding="utf-8")
+    # provider.yaml 是唯一事实源：写入临时副本并让子进程指向它（隔离真实用户配置）
+    provider_file = write_provider_yaml(tmp_path / "provider.yaml")
 
     env = dict(os.environ)
     env["TEA_SERVER_STATE_DB"] = str(tmp_path / "server_state.db")
+    env["TEA_PROVIDER_FILE"] = str(provider_file)
 
     proc = subprocess.Popen(
-        [sys.executable, "-m", "tea_agent.server", "--host", "127.0.0.1", "--port", str(port), "--config", str(cfg)],
+        [sys.executable, "-m", "tea_agent.server", "--host", "127.0.0.1", "--port", str(port)],
         cwd=PROJECT_ROOT,
         env=env,
         stdout=subprocess.DEVNULL,
@@ -173,12 +175,13 @@ def test_inflight_events_survive_restart_no_loss_no_dup(tmp_path):
     assert ts.read_snapshot(topic)["status"] == "active", "快照应处于在途状态"
 
     port = _free_port()
-    cfg = tmp_path / "config.yaml"
-    cfg.write_text("main_model:\n  provider: DeepSeek\n  model: deepseek-v4-flash\n", encoding="utf-8")
+    # provider.yaml 是唯一事实源：写入临时副本并让子进程指向它（隔离真实用户配置）
+    provider_file = write_provider_yaml(tmp_path / "provider.yaml")
     env = dict(os.environ)
     env["TEA_SERVER_STATE_DB"] = str(db)
+    env["TEA_PROVIDER_FILE"] = str(provider_file)
     subprocess.Popen(
-        [sys.executable, "-m", "tea_agent.server", "--host", "127.0.0.1", "--port", str(port), "--config", str(cfg)],
+        [sys.executable, "-m", "tea_agent.server", "--host", "127.0.0.1", "--port", str(port)],
         cwd=PROJECT_ROOT,
         env=env,
         stdout=subprocess.DEVNULL,

@@ -1,9 +1,8 @@
-"""Web 配置与模型切换：读取/更新配置、配置列表与创建、模型信息、模型热切换、配置上传、根页面。
+"""Web 配置与模型切换：读取/更新配置、模型信息、模型热切换、根页面。
 
 由 route_handlers.py 拆分而来（逐字搬运，函数体未改写）。
 """
 
-import contextlib
 from pathlib import Path
 
 from starlette.responses import HTMLResponse, JSONResponse, Response
@@ -32,76 +31,6 @@ async def handle_web_update_config(request):
     return JSONResponse(result, status_code=status)
 
 
-async def handle_web_list_configs(request):
-    """GET /api/configs"""
-    server = get_server()
-    # ⚠️ 必须先获取 active_config_path，再调用 list_config_files！
-    # list_config_files 内部遍历所有 yaml 文件并调用 load_config()，
-    # 这会污染全局 _last_config_path，导致后续 get_agent() 获取错误的配置路径。
-    active_config_path = ""
-    active_config_filename = ""
-    try:
-        agent = server.get_agent()
-        if agent and agent._config_path:
-            active_config_path = agent._config_path
-            active_config_filename = Path(active_config_path).name
-    except Exception:
-        pass
-    result = server.list_config_files(check_valid=True)
-    configs = result["configs"]
-    any_valid = result["any_valid"]
-    return JSONResponse(
-        {
-            "configs": configs,
-            "count": len(configs),
-            "any_valid": any_valid,
-            "active_config_path": active_config_path,
-            "active_config_filename": active_config_filename,
-        }
-    )
-
-
-async def handle_web_create_config(request):
-    """POST /api/config/create"""
-    body = await request.json()
-    filename = (body.get("filename") or "").strip()
-    main_model_name = (body.get("main_model_name") or "").strip()
-    main_api_url = (body.get("main_api_url") or "").strip()
-    main_api_key = (body.get("main_api_key") or "").strip()
-    cheap_model_name = (body.get("cheap_model_name") or "").strip()
-    cheap_api_url = (body.get("cheap_api_url") or "").strip()
-    cheap_api_key = (body.get("cheap_api_key") or "").strip()
-
-    errors = []
-    if not filename:
-        errors.append("filename required")
-    if not main_model_name:
-        errors.append("main_model_name required")
-    if not main_api_url:
-        errors.append("main_api_url required")
-    if not main_api_key:
-        errors.append("main_api_key required")
-    if errors:
-        return JSONResponse({"ok": False, "errors": errors}, status_code=400)
-
-    server = get_server()
-    try:
-        fpath = server.create_config_file(
-            filename=filename,
-            main_model_name=main_model_name,
-            main_api_url=main_api_url,
-            main_api_key=main_api_key,
-            cheap_model_name=cheap_model_name,
-            cheap_api_url=cheap_api_url,
-            cheap_api_key=cheap_api_key,
-        )
-        server.switch_config(fpath)
-        return JSONResponse({"ok": True, "config_path": fpath, "filename": filename})
-    except Exception as e:
-        logger.exception("create_config_file failed")
-        return JSONResponse({"ok": False, "error": str(e)}, status_code=500)
-
-
 async def handle_web_model_info(request):
     """GET /api/model"""
     try:
@@ -128,7 +57,7 @@ def _writeback_provider_yaml(server, wb: dict, agent) -> None:
         else:
             from tea_agent.config import load_config
 
-            c = load_config(server.get_config_path() or None)
+            c = load_config()
             mc, cm = c.main_model, c.cheap_model
 
         def _pname(m) -> str:
@@ -191,7 +120,7 @@ async def handle_web_model_switch(request):
     else:
         from tea_agent.config import load_config as _load_cfg0
 
-        _cfg0 = _load_cfg0(server.get_config_path() or None)
+        _cfg0 = _load_cfg0()
         _mcfg, _ccfg = _cfg0.main_model, _cfg0.cheap_model
 
     api_key = (body.get("api_key") or _mcfg.api_key or "").strip()
@@ -261,8 +190,8 @@ async def handle_web_model_switch(request):
             from .modules.agent_module import AgentModule
 
             if agent is not None:
-                save_config(agent._cfg, server.get_config_path())
-            AgentModule.invalidate_config_cache(server.get_config_path())
+                save_config(agent._cfg)
+            AgentModule.invalidate_config_cache()
         except Exception as e:
             logger.warning("persist/invalidate after model switch failed: %s", e)
         # 参数写回 provider.yaml（模型属性唯一事实源）：仅回写本次显式提交的
@@ -292,92 +221,6 @@ async def handle_web_model_switch(request):
     except Exception as e:
         logger.exception("model_switch failed")
         return JSONResponse({"ok": False, "error": str(e)}, status_code=500)
-
-
-async def handle_web_model_config(request):
-    """POST /api/model/config - switch config from file."""
-    body = await request.json()
-    config_path = (body.get("config_path") or "").strip()
-    if not config_path:
-        return JSONResponse({"error": "config_path required"}, status_code=400)
-    server = get_server()
-    result = server.switch_config(config_path)
-    if not result.get("ok"):
-        return JSONResponse(result, status_code=400)
-    return JSONResponse(result)
-
-
-async def handle_web_upload_config(request):
-    """POST /api/config/upload - upload a .yaml config file."""
-    form = await request.form()
-    file = form.get("file")
-    if not file:
-        return JSONResponse({"ok": False, "error": "请选择文件"}, status_code=400)
-
-    filename = file.filename or ""
-    if not filename.endswith((".yaml", ".yml")):
-        return JSONResponse({"ok": False, "error": "仅支持 .yaml / .yml 文件"}, status_code=400)
-
-    content = await file.read()
-    if not content or not content.strip():
-        return JSONResponse({"ok": False, "error": "文件内容为空"}, status_code=400)
-
-    server = get_server()
-    configs_dir = server._get_configs_dir()
-    configs_dir.mkdir(parents=True, exist_ok=True)
-    dest_path = configs_dir / filename
-
-    if dest_path.exists():
-        from datetime import datetime
-
-        stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        name_stem = dest_path.stem
-        dest_path = configs_dir / f"{name_stem}_{stamp}.yaml"
-
-    try:
-        if isinstance(content, bytes):
-            dest_path.write_bytes(content)
-        else:
-            dest_path.write_text(content, encoding="utf-8")
-    except Exception as e:
-        return JSONResponse({"ok": False, "error": f"保存文件失败: {e}"}, status_code=500)
-
-    from tea_agent.config import load_config
-
-    try:
-        cfg = load_config(str(dest_path))
-    except Exception as e:
-        with contextlib.suppress(Exception):
-            dest_path.unlink()
-        return JSONResponse({"ok": False, "error": f"配置解析失败: {e}"}, status_code=400)
-
-    main_m = cfg.main_model
-    if not main_m.is_configured:
-        with contextlib.suppress(Exception):
-            dest_path.unlink()
-        return JSONResponse(
-            {
-                "ok": False,
-                "error": "配置无效：必须包含 main_model 的 api_url、api_key 和 model_name",
-            },
-            status_code=400,
-        )
-
-    try:
-        switch_result = server.switch_config(str(dest_path))
-        if not switch_result.get("ok"):
-            logger.warning(f"Auto-switch config after upload failed: {switch_result.get('error', '')}")
-    except Exception as e:
-        logger.warning(f"Auto-switch config after upload exception: {e}")
-
-    return JSONResponse(
-        {
-            "ok": True,
-            "filename": dest_path.name,
-            "path": str(dest_path),
-            "is_valid": True,
-        }
-    )
 
 
 async def handle_web_root(request):

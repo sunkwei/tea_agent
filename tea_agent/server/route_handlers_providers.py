@@ -66,10 +66,10 @@ async def handle_reload_routes(request):
 
 
 def _model_service():
-    """获取 ProviderService 单例（绑定 server 当前配置路径）。"""
+    """获取 ProviderService 单例（provider.yaml 唯一事实源）。"""
     from tea_agent.model_manager import get_provider_service
 
-    return get_provider_service(get_server().get_config_path())
+    return get_provider_service()
 
 
 def _provider_error_response(e) -> JSONResponse:
@@ -164,7 +164,6 @@ async def handle_provider_apply(request):
             api_key=api_key,
             model=(body.get("model") or "").strip(),
             role=role,
-            config_path=get_server().get_config_path(),
             temperature=body.get("temperature"),
             max_tokens=body.get("max_tokens"),
             top_p=body.get("top_p"),
@@ -178,7 +177,7 @@ async def handle_provider_apply(request):
             try:
                 from .modules.agent_module import AgentModule
 
-                AgentModule.invalidate_config_cache(get_server().get_config_path())
+                AgentModule.invalidate_config_cache()
             except Exception as e:
                 logger.warning("invalidate config cache failed: %s", e)
         # 会话续用切换：配置已落盘（apply_provider 含逐模型配置注入），
@@ -190,7 +189,7 @@ async def handle_provider_apply(request):
 
                 from .modules.agent_module import AgentModule
 
-                mc = load_config(get_server().get_config_path() or None).main_model
+                mc = load_config().main_model
                 AgentModule.request_model_switch(
                     mc.api_key,
                     mc.api_url,

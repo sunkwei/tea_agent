@@ -30,11 +30,11 @@ def _mc_error_response(e) -> JSONResponse:
 
 async def handle_model_config_get(request):
     """GET /api/model-config — 面板全量视图：providers→models→逐模型配置 + roles + active + pending_switch。"""
-    server = get_server()
+    get_server()
     try:
         from .modules.agent_module import AgentModule
 
-        data = _model_store().panel(config_path=server.get_config_path() or "")
+        data = _model_store().panel()
         data["pending_switch"] = AgentModule.get_pending_switch()
         # 标注「当前使用中」：提供商 api_url 与 main_model 一致 → is_configured（面板高亮）
         main = (data.get("active") or {}).get("main") or {}
@@ -112,13 +112,13 @@ async def handle_model_config_switch(request):
            temperature?, max_tokens?, top_p?, max_context_tokens?, options?}
     流程：
       1. apply_provider → 逐模型配置自动注入（最大输出/最大上下文/思考/视觉），
-         落盘 roles 回写 provider.yaml（config.yaml 已删除）；
+         落盘 roles 回写 provider.yaml；
       2. role=main 且 continue_session → AgentModule.request_model_switch：
          空闲立即热切（主题历史保留）；对话进行中→挂起，本轮结束自动应用；
          无长驻 Agent→下一条消息自然生效。
     """
     body = await request.json() if request.headers.get("content-length") else {}
-    server = get_server()
+    get_server()
     role = (body.get("role") or "main").strip()
     continue_session = bool(body.get("continue_session", True))
 
@@ -137,7 +137,6 @@ async def handle_model_config_switch(request):
             api_key=(body.get("api_key") or "").strip(),
             model=(body.get("model") or "").strip(),
             role=role,
-            config_path=server.get_config_path(),
             temperature=_num("temperature", float),
             max_tokens=_num("max_tokens", int),
             top_p=_num("top_p", float),
@@ -158,14 +157,14 @@ async def handle_model_config_switch(request):
         try:
             from .modules.agent_module import AgentModule
 
-            AgentModule.invalidate_config_cache(server.get_config_path())
+            AgentModule.invalidate_config_cache()
         except Exception as e:
             logger.warning("invalidate config cache failed: %s", e)
         if role == "main" and continue_session:
             try:
                 from tea_agent.config import load_config
 
-                mc = load_config(server.get_config_path() or None).main_model
+                mc = load_config().main_model
                 switch = AgentModule.request_model_switch(
                     mc.api_key,
                     mc.api_url,
@@ -261,12 +260,12 @@ async def handle_model_options(request):
     返回 provider.yaml 全部 provider+model 组合 + 当前 active config 的
     main/cheap 各自选中值。前端据此填充主模型/便宜模型两个 <select>。
     """
-    server = get_server()
+    get_server()
     try:
         from tea_agent.config import load_config
 
         options = _provider_option_list()
-        cfg = load_config(server.get_config_path() or None)
+        cfg = load_config()
         main_sel = _role_selection(cfg.main_model)
         cheap_sel = _role_selection(cfg.cheap_model)
         _ensure_selected_option(options, main_sel)
@@ -277,7 +276,6 @@ async def handle_model_options(request):
                 "options": options,
                 "main": main_sel,
                 "cheap": cheap_sel,
-                "active_config_path": server.get_config_path() or "",
             }
         )
     except Exception as e:
@@ -303,7 +301,7 @@ async def handle_model_select(request):
     model = (body.get("model") or "").strip()
     if not model:
         return JSONResponse({"ok": False, "error": "model required", "code": "BAD_REQUEST"}, status_code=400)
-    server = get_server()
+    get_server()
     try:
         from tea_agent.config import load_config, save_config
         from tea_agent.provider_store import get_provider_store
@@ -314,8 +312,7 @@ async def handle_model_select(request):
         resolved = store.resolve(provider, model)
         if resolved is None:
             return JSONResponse({"ok": False, "error": f"provider '{provider}' not found", "code": "NOT_FOUND"}, status_code=404)
-        cfg_path = server.get_config_path() or ""
-        cfg = load_config(cfg_path)
+        cfg = load_config()
         target = {"main": cfg.main_model, "cheap": cfg.cheap_model}[role]
         target.provider = resolved["provider"]
         target.ref_model = resolved["model"]
@@ -331,13 +328,13 @@ async def handle_model_select(request):
         if resolved.get("reasoning_effort"):
             opts["reasoning_effort"] = resolved["reasoning_effort"]
         target.options = opts
-        save_config(cfg, cfg_path)
+        save_config(cfg)
 
-        AgentModule.invalidate_config_cache(cfg_path)
+        AgentModule.invalidate_config_cache()
         switch = {"mode": "config_only"}
         if role == "main":
             try:
-                mc = load_config(cfg_path or None).main_model
+                mc = load_config().main_model
                 switch = AgentModule.request_model_switch(
                     mc.api_key,
                     mc.api_url,
@@ -357,9 +354,7 @@ async def handle_model_select(request):
         except Exception as e:
             logger.debug("model-select role binding skipped: %s", e)
 
-        return JSONResponse(
-            {"ok": True, "role": role, "provider": resolved["provider"], "model": resolved["model"], "config_path": cfg_path, "switch": switch}
-        )
+        return JSONResponse({"ok": True, "role": role, "provider": resolved["provider"], "model": resolved["model"], "switch": switch})
     except Exception as e:
         logger.exception("model-select failed")
         return JSONResponse({"ok": False, "error": str(e)}, status_code=500)
@@ -562,9 +557,8 @@ async def handle_provider_store_apply(request):
         resolved = store.resolve(name, model)
         if resolved is None:
             return JSONResponse({"ok": False, "error": f"provider '{name}' not found", "code": "NOT_FOUND"}, status_code=404)
-        server = get_server()
-        cfg_path = server.get_config_path() or ""
-        cfg = load_config(cfg_path)
+        get_server()
+        cfg = load_config()
         target = {"main": cfg.main_model, "cheap": cfg.cheap_model}[role]
         # 记录引用来源 → save_config 以引用式写回（provider + model），密钥不落 config
         target.provider = resolved["provider"]
@@ -580,16 +574,16 @@ async def handle_provider_store_apply(request):
         if resolved.get("reasoning_effort"):
             opts["reasoning_effort"] = resolved["reasoning_effort"]
         target.options = opts
-        saved = save_config(cfg, cfg_path)
+        save_config(cfg)
         # 配置已落盘 → 必须失效 config_cache，否则下一轮 create_session
         # 命中旧缓存，切换在同一进程内永不生效（与其他 apply 入口对齐）
         try:
             from .modules.agent_module import AgentModule
 
-            AgentModule.invalidate_config_cache(cfg_path)
+            AgentModule.invalidate_config_cache()
         except Exception as e:
             logger.warning("invalidate config cache after provider-store apply failed: %s", e)
-        return JSONResponse({"ok": True, "role": role, "provider": name, "model": model, "config_path": saved})
+        return JSONResponse({"ok": True, "role": role, "provider": name, "model": model})
     except Exception as e:
         logger.exception("provider-store apply failed: %s", name)
         return JSONResponse({"ok": False, "error": str(e)}, status_code=500)

@@ -4,12 +4,10 @@
 两个隔离的 TeaAgent 实例 A、B，互相传递 LLM 回复作为输入，循环 10 轮。
 
 用法:
-    python tests/test_tea_agent_dual.py [config_path]
+    python tests/test_tea_agent_dual.py
 
 注意: 此文件没有 pytest 测试函数，仅作为脚本使用。
 """
-
-import sys
 
 __test__ = False  # 标记跳过 pytest 扫描，防止超时
 
@@ -32,21 +30,20 @@ def _format_content(text: str, max_len: int = 120) -> str:
 
 def main():
     """main 辅助函数。"""
-    config_path = sys.argv[1] if len(sys.argv) > 1 else None
 
     from tea_agent import TeaAgent
 
     print("=" * 60)
     print("TeaAgent 双实例对话测试")
-    print(f"配置: {config_path or '默认'}")
+    print("配置: provider.yaml")
     print("=" * 60)
 
     # ── 创建两个 isolate 实例 ──
     print("\n创建实例 A ...")
-    agent_a = TeaAgent(config_path=config_path, use_tools=False, enable_thinking=False)
+    agent_a = TeaAgent(use_tools=False, enable_thinking=False)
 
     print("创建实例 B ...")
-    agent_b = TeaAgent(config_path=config_path, use_tools=False, enable_thinking=False)
+    agent_b = TeaAgent(use_tools=False, enable_thinking=False)
 
     TOTAL_ROUNDS = 10  # noqa: N806
 

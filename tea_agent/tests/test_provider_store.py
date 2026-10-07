@@ -2,7 +2,7 @@
 
 隔离：TEA_PROVIDER_FILE → tmp_path，绝不触碰真实 ~/.tea_agent。
 覆盖：
-  1. bootstrap：内置目录 ⊕ config*.yaml 迁移（同 url 多 key 保留一个，主 config 优先）
+  1. bootstrap：内置目录 ⊕ 显式种入的提供商
   2. 供应商 CRUD（upsert/remove/掩码/list/get）
   3. 模型目录 CRUD（upsert_model/delete_model/sync_models 启发式默认）
   4. resolve：p_name + m_name → ModelConfig 可直接套用的扁平元数据
@@ -20,7 +20,7 @@ DS_MAIN = "sk-main-key-000111-abcdef"
 
 @pytest.fixture
 def agent_dir(tmp_path: pathlib.Path):
-    """伪造 ~/.tea_agent：config.yaml（DeepSeek 主）+ config_ds.yaml（同 url 不同 key）。"""
+    """伪造 ~/.tea_agent：放入历史配置文件（不得再派生提供商）。"""
     d = tmp_path / "agent"
     d.mkdir()
     (d / "config.yaml").write_text(
@@ -48,7 +48,7 @@ def pstore(tmp_path: pathlib.Path, monkeypatch, agent_dir):
 
     monkeypatch.setattr(ps, "_store", None, raising=False)
     s = ps.get_provider_store(f, agent_dir=agent_dir)
-    # config*.yaml 不再派生提供商 → 显式种入 DeepSeek（若干用例曾依赖 config 扫描）
+    # 历史配置文件不再派生提供商 → 显式种入 DeepSeek
     s.ensure_provider(
         "DeepSeek",
         {

@@ -3,7 +3,7 @@
 
 配置来源：``~/.tea_agent/provider.yaml`` **唯一事实源**
 （``roles`` 段 = 主/便宜模型绑定；``settings`` 段 = 运行时参数），
-代码内默认值兜底。config.yaml 已删除，不再读写任何 YAML 配置文件。
+代码内默认值兜底。本模块不读写任何其他 YAML 配置文件。
 """
 
 from __future__ import annotations
@@ -40,8 +40,6 @@ __all__ = [
     "save_config",
     "get_config",
     "ensure_config_dir",
-    "set_active_config_path",
-    "get_active_config_path",
 ]
 
 # reasoning_effort 合法取值（OpenAI o 系列 / DeepSeek 兼容端点）。
@@ -103,7 +101,7 @@ class ModelConfig:
     # 支持键: reminder_threshold / reminder_message_template /
     #         guidance_message / fallback_buffer_tokens / auto_compact_fallback_prompt
     token_budget: dict[str, Any] = field(default_factory=dict)
-    # 引用式来源（config*.yaml 只存 p_name + m_name 组合时记录；空=传统完整内嵌块）
+    # 引用式来源（provider.yaml 的 provider + model 组合；空=传统完整内嵌块）
     provider: str = ""  # p_name（provider.yaml 中的供应商名）
     ref_model: str = ""  # m_name（provider.yaml 中该供应商下的模型 id）
 
@@ -135,7 +133,7 @@ class ModelConfig:
 
 @dataclass
 class PathsConfig:
-    """路径配置。相对路径相对于 config.yaml 所在目录。
+    """路径配置。相对路径相对于用户配置目录（~/.tea_agent）。
 
     存储作用域（storage_scope，取值 auto/project/user，默认 auto）：
     - 主题/会话/记忆库（db_path）默认落在「启动目录 .tea_agent_run/chat_history.db」；
@@ -486,37 +484,17 @@ class AgentConfig:
         return data
 
 
-_last_config_path = None
-# RLock 可重入：get_config 持锁后调用 load_config → resolve_config_path/_update_config_cache
+# RLock 可重入：get_config 持锁后调用 load_config → _update_config_cache
 # 会再次取锁，普通 Lock 会导致首次 get_config() 死锁
 _config_lock = threading.RLock()
 
-# ── 全局活跃配置路径（Web / ACP / 渠道等各入口共享） ──
-_active_config_path: str | None = None
 
-
-def set_active_config_path(config_path: str) -> None:
-    """设置全局活跃配置路径（Web 切换配置时调用）。"""
-    global _active_config_path
-    with _config_lock:
-        _active_config_path = os.path.abspath(config_path)
-
-
-def get_active_config_path() -> str | None:
-    """获取全局活跃配置路径。优先返回此值，None 时回退到 _last_config_path。"""
-    with _config_lock:
-        return _active_config_path or _last_config_path
-
-
-def load_config(config_path: str | None = None) -> AgentConfig:
+def load_config() -> AgentConfig:
     """加载配置。
 
-    config.yaml 已删除：身份三元组（main/cheap）与运行时参数**全部**来自
+    身份三元组（main/cheap）与运行时参数**全部**来自
     ``~/.tea_agent/provider.yaml``（各自的 ``roles`` / ``settings`` 段），
     代码内默认值兜底。不再读取任何 YAML 配置文件。
-
-    Args:
-        config_path: 忽略（保留签名以兼容既有调用方）
 
     Returns:
         AgentConfig 实例
@@ -582,37 +560,21 @@ def load_config(config_path: str | None = None) -> AgentConfig:
         cfg.paths.resolve(str(Path.home() / ".tea_agent"))
 
     # 步骤4: 更新全局缓存
-    _update_config_cache(cfg, None)
+    _update_config_cache(cfg)
 
     return cfg
 
 
-def resolve_config_path(config_path: str | None = None) -> str | None:
-    """解析配置文件路径（兼容保留；config.yaml 已删除）。
-
-    config.yaml 不再存在：本函数恒返回 None，身份三元组与运行时参数
-    一律由 provider.yaml 提供。保留符号供 agent/server 等历史调用点使用。
-    """
-    return None
-
-
-def _update_config_cache(cfg: AgentConfig, yaml_path: str | None) -> None:
+def _update_config_cache(cfg: AgentConfig) -> None:
     """更新全局配置缓存。
 
     Args:
         cfg: AgentConfig实例
-        yaml_path: 配置文件路径（config.yaml 已删除，恒为 None）
     """
-    global _config_cache, _active_config_path
+    global _config_cache
 
     with _config_lock:
         _config_cache = cfg
-        if yaml_path:
-            src = os.path.abspath(yaml_path)
-            _active_config_path = src
-            _last_config_path = src
-            # 记录配置来源，供 get_config 检测路径切换并自动重载
-            cfg._config_source = src
 
 
 def _main_block_usable(data: dict) -> bool:
@@ -827,7 +789,7 @@ def _parse_paths_config(cfg: AgentConfig, data: dict, yaml_path: str) -> None:
         cfg.paths.kb_dir = str(paths_data.get("kb_dir", cfg.paths.kb_dir))
         cfg.paths.skills_dir = str(paths_data.get("skills_dir", cfg.paths.skills_dir))
 
-    # 解析路径：相对于 config.yaml 所在目录
+    # 解析路径：相对于用户配置目录（~/.tea_agent）
     if yaml_path:
         cfg.paths.resolve(os.path.dirname(os.path.abspath(yaml_path)))
 
@@ -905,20 +867,6 @@ def _parse_control_params(cfg: AgentConfig, data: dict) -> None:
     cfg.api_sleep_recovery_wait = float(data.get("api_sleep_recovery_wait", cfg.api_sleep_recovery_wait))
 
 
-def _resolve_save_path(config_path: str | None) -> str:
-    """解析配置文件保存路径。
-
-    Args:
-        config_path: 指定的保存路径
-
-    Returns:
-        实际保存路径
-    """
-    global _last_config_path
-
-    return config_path or _last_config_path or str(Path.home() / ".tea_agent" / "config.yaml")
-
-
 def ensure_config_dir() -> Path:
     """确保数据目录存在（从 config 读取，回退 ~/.tea_agent），返回路径"""
     try:
@@ -930,15 +878,14 @@ def ensure_config_dir() -> Path:
     return cfg_dir
 
 
-def save_config(cfg: AgentConfig, config_path: str | None = None) -> str:
+def save_config(cfg: AgentConfig) -> str:
     """保存配置 → 写入 provider.yaml（roles + settings 段）。
 
-    config.yaml 已删除：不再产生任何 YAML 配置文件。角色绑定（main/cheap）
-    与运行时参数分别在 provider.yaml 的 ``roles`` / ``settings`` 段。
+    角色绑定（main/cheap）与运行时参数分别在 provider.yaml 的
+    ``roles`` / ``settings`` 段。
 
     Args:
         cfg: AgentConfig 实例
-        config_path: 忽略（保留签名以兼容既有调用方）
 
     Returns:
         写入的目标文件路径（provider.yaml）；失败返回空串
@@ -972,7 +919,7 @@ def save_config(cfg: AgentConfig, config_path: str | None = None) -> str:
 
 
 def _prepare_settings_data(cfg: AgentConfig) -> dict:
-    """导出运行时参数（原 config.yaml 顶层标量 + paths + interruption）。
+    """导出运行时参数（provider.yaml settings 段的顶层标量 + paths + interruption）。
 
     Args:
         cfg: AgentConfig 实例
@@ -1155,21 +1102,14 @@ def get_config(reload: bool = False) -> AgentConfig:
     """
     获取全局配置单例。
 
-    检测 _last_config_path 是否已由 load_config(config_path) 更新，
-    若缓存路径与 _last_config_path 不一致则自动重载。
-    确保后续所有 get_config() 调用都返回与 load_config() 一致的配置。
-
     Args:
         reload: 强制重新加载
 
     Returns:
         AgentConfig 实例
     """
-    global _config_cache, _last_config_path, _active_config_path
+    global _config_cache
     with _config_lock:
-        current = _last_config_path or _active_config_path
-        cached_src = getattr(_config_cache, "_config_source", None) if _config_cache else None
-        path_changed = bool(current and cached_src and os.path.abspath(current) != os.path.abspath(cached_src))
-        if _config_cache is None or reload or path_changed:
+        if _config_cache is None or reload:
             _config_cache = load_config()
         return _config_cache

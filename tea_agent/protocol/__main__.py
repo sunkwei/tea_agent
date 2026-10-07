@@ -33,11 +33,6 @@ def main():
         help="HTTP bind port (default: 8082)",
     )
     parser.add_argument(
-        "--config",
-        default=None,
-        help="Path to config file",
-    )
-    parser.add_argument(
         "--verbose",
         "-v",
         action="store_true",
@@ -73,14 +68,13 @@ def main():
         run_server(
             host=args.host,
             port=args.port,
-            config_path=args.config,
         )
     else:
         # ACP stdio JSON-RPC mode (default)
         try:
             from tea_agent.protocol.acp_agent import AcpAgent
 
-            agent = AcpAgent(config_path=args.config)
+            agent = AcpAgent()
             agent.run()
         except KeyboardInterrupt:
             logging.getLogger("acp.agent").info("Shutting down")

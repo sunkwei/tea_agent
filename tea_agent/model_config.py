@@ -1,15 +1,14 @@
 """兼容层：ModelConfigStore → ProviderStore（provider.yaml 唯一事实源）。
 
 历史：本模块曾把「供应商 / 逐模型能力 / 角色绑定」持久化到
-``~/.tea_agent/model_config.json``，与 provider.yaml、custom_providers.yaml、
-config*.yaml 形成四份互相覆盖的事实源（谁后写谁生效，极难排查）。
+``~/.tea_agent/model_config.json``，与 provider.yaml、custom_providers.yaml
+形成多份互相覆盖的事实源（谁后写谁生效，极难排查）。
 
 现统一收敛到 ``~/.tea_agent/provider.yaml``：本模块**不再读写任何 JSON 文件**，
 只把历史 API 名称转发给 :mod:`tea_agent.provider_store`，供既有调用方平滑过渡。
 新代码请直接使用 ``tea_agent.provider_store.get_provider_store()``。
 
 停用能力（调用方需注意）：
-  - ``scan_config_profiles()`` — config*.yaml 不再是提供商来源，恒返回空
   - ``roles`` 绑定 — 存放于 provider.yaml 的 ``roles`` 段
 """
 
@@ -43,11 +42,6 @@ def get_model_config_store(path=None, agent_dir=None):
     from tea_agent.provider_store import get_provider_store
 
     return get_provider_store(path, agent_dir)
-
-
-def scan_config_profiles(agent_dir=None) -> dict[str, dict]:
-    """已停用：config*.yaml 不再派生提供商（provider.yaml 唯一事实源）。"""
-    return {}
 
 
 def guess_model_config(model_id: str, provider_caps: dict | None = None) -> dict:

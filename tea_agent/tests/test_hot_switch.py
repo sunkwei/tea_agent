@@ -15,7 +15,7 @@ import pytest
 def hot_switch_env(tmp_path, monkeypatch):
     """临时 provider.yaml：旧模型 deepseek-chat（roles.main 绑定）。
 
-    config.yaml 已删除 → 热切换的"磁盘配置"就是 provider.yaml 的 roles 段。
+    热切换的"磁盘配置"就是 provider.yaml 的 roles 段。
     同时重置 config.py 模块级全局与 config_cache，避免跨测试残留。
     """
     import yaml
@@ -51,20 +51,17 @@ def hot_switch_env(tmp_path, monkeypatch):
     monkeypatch.setattr(ps_mod, "_store", None)
     monkeypatch.setattr(mm_mod, "_service", None, raising=False)
     import tea_agent.config as cfg_mod
-    from tea_agent.server.modules.agent_module import AgentModule
     from tea_agent.server.modules.state import config_cache
 
     config_cache.clear()
     monkeypatch.setattr(cfg_mod, "_config_cache", None, raising=False)
-    # AgentModule._config_path 跨测试残留会读到上一个测试的配置
-    AgentModule._config_path = ""
     return pf
 
 
 def _session_model():
     from tea_agent.server.modules.agent_module import AgentModule
 
-    sess, _ = AgentModule.create_session(None)
+    sess, _ = AgentModule.create_session()
     if hasattr(sess.context, "model"):
         return sess.context.model
     return sess.model
@@ -141,17 +138,13 @@ def test_api_model_switch_persists_and_invalidates(hot_switch_env, monkeypatch):
 
 
 def test_invalidate_config_cache_removes_keys(tmp_path, monkeypatch):
-    """invalidate 应清除所有相关缓存 key（默认/显式/实例路径）。"""
+    """invalidate 应清除默认缓存 key。"""
     from tea_agent.server.modules import agent_module as am
     from tea_agent.server.modules.state import config_cache
 
     config_cache.clear()
-    cfg_path = str(tmp_path / "x.yaml")
     config_cache["__default__"] = {"dummy": 1}
-    config_cache[cfg_path] = {"dummy": 2}
-    am.AgentModule._config_path = cfg_path
 
-    am.AgentModule.invalidate_config_cache(cfg_path)
+    am.AgentModule.invalidate_config_cache()
 
     assert "__default__" not in config_cache
-    assert cfg_path not in config_cache

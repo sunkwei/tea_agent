@@ -1,10 +1,9 @@
-"""provider.yaml 唯一事实源：config*.yaml profile 派生已停用。
+"""provider.yaml 唯一事实源：不再有任何 profile 派生。
 
-历史：本文件曾测试「扫描 config_*.yaml 派生提供商」的整套机制
-（scan_config_profiles / profile 密钥内存回读 / profile 删除后角色重绑）。
-该机制已整体移除 —— provider.yaml 是供应商、逐模型能力与角色绑定的唯一来源。
+历史：本文件曾测试「扫描 config_*.yaml 派生提供商」的整套机制，该机制已整体移除
+—— provider.yaml 是供应商、逐模型能力与角色绑定的唯一来源。
 
-本文件改为钉住「已停用」契约：存在 config.yaml 也不再产生任何提供商。
+本文件钉住契约：即便目录里存在历史配置文件，也不产生任何提供商。
 隔离：TEA_PROVIDER_FILE + tmp 目录，绝不触碰真实 ~/.tea_agent。
 """
 
@@ -15,13 +14,12 @@ import yaml
 
 import tea_agent.model_config as mc
 import tea_agent.provider_store as ps
-from tea_agent.model_config import scan_config_profiles
 from tea_agent.provider_store import ProviderStore
 
 
 @pytest.fixture
 def agent_dir(tmp_path):
-    """伪造 ~/.tea_agent：放两份 config*.yaml（旧机制会据此派生提供商）。"""
+    """伪造 ~/.tea_agent：放入历史配置文件（不得再派生提供商）。"""
     d = tmp_path / "agent"
     d.mkdir()
     (d / "config.yaml").write_text(
@@ -48,13 +46,8 @@ def pstore(tmp_path, monkeypatch, agent_dir):
 # ── 已停用契约 ────────────────────────────────────────────
 
 
-def test_scan_config_profiles_is_disabled(agent_dir):
-    """即便 config*.yaml 存在，也不再派生任何提供商。"""
-    assert scan_config_profiles(agent_dir) == {}
-
-
 def test_config_profiles_do_not_seed_providers(pstore, agent_dir):
-    """bootstrap 不得把 config*.yaml 里的供应商/密钥并进 provider.yaml。"""
+    """bootstrap 不得把历史配置文件里的供应商/密钥并进 provider.yaml。"""
     data = pstore.load()
     api_urls = {p.get("api_url") for p in data.get("providers", {}).values()}
     assert "https://api.deepseek.com" not in api_urls

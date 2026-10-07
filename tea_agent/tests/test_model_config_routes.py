@@ -1,11 +1,11 @@
 """统一模型配置面板 API（/api/model-config*）集成测试。
 
-隔离：TEA_CONFIG + TEA_PROVIDER_FILE → tmp_path，绝不触碰真实用户配置。
+隔离：TEA_PROVIDER_FILE → tmp_path，绝不触碰真实用户配置。
 覆盖：
   1. 面板全量视图（providers→models→逐模型配置 + roles + active 掩码）
   2. 模型配置保存（PUT）/新增（POST）/删除（DELETE）+ 校验 400
   3. 在线模型同步入库（sync，新模型启发式默认）
-  4. 切换并继续会话：落盘 config.yaml + roles 绑定 + 逐模型注入 options
+  4. 切换并继续会话：落盘 provider.yaml + roles 绑定 + 逐模型注入 options
   5. 会话进行中：挂起切换（pending_next_turn）→ 本轮结束自动应用
 """
 
@@ -18,7 +18,7 @@ import pytest
 
 @pytest.fixture
 def env(tmp_path, monkeypatch):
-    """config.yaml 已删除：身份/能力/roles 全部来自 provider.yaml。"""
+    """身份/能力/roles 全部来自 provider.yaml。"""
     cfg = tmp_path / "provider.yaml"
     monkeypatch.setenv("TEA_PROVIDER_FILE", str(cfg))
 
@@ -77,17 +77,14 @@ def env(tmp_path, monkeypatch):
     state.config_cache.clear()
     state.active_sessions.clear()
     state.background_sessions.clear()
-    cfg_mod._active_config_path = None
-    cfg_mod._last_config_path = None
+    monkeypatch.setattr(cfg_mod, "_config_cache", None, raising=False)
     monkeypatch.setattr(AgentModule, "_pending_switch", None, raising=False)
 
     from starlette.testclient import TestClient
 
     from tea_agent.server.server import create_app
 
-    # 显式传 config_path：避免 create_app 默认空路径导致 apply/save 走
-    # config.py 模块级粘滞全局（_last_config_path），跨测试互相污染
-    client = TestClient(create_app(config_path=str(cfg)))
+    client = TestClient(create_app())
     yield client, cfg, state, AgentModule
     state.active_sessions.clear()
     state.background_sessions.clear()
@@ -108,7 +105,7 @@ def test_panel_full_view(env):
     cfgm = m["config"]
     for key in ("max_context_tokens", "max_output_tokens", "supports_thinking", "supports_vision"):
         assert key in cfgm, key
-    # active：读 config.yaml 实时值；api_key 必须掩码
+    # active：读 provider.yaml 实时值；api_key 必须掩码
     assert d["active"]["main"]["model"] == "deepseek-chat"
     assert "sk-test1234567890" not in r.text
     assert d["pending_switch"] is None
@@ -214,7 +211,7 @@ def test_switch_persists_and_binds_role(env):
     assert r.status_code == 200
     d = r.json()
     assert d["ok"] and d["model"] == "deepseek-reasoner"
-    # 1) provider.yaml roles 落盘（config.yaml 已删除）
+    # 1) provider.yaml roles 落盘
     from pathlib import Path
 
     disk = yaml.safe_load(Path(os.environ["TEA_PROVIDER_FILE"]).read_text(encoding="utf-8"))
@@ -229,7 +226,7 @@ def test_switch_persists_and_binds_role(env):
     # 5) 下一条消息读到新模型（config_cache 已失效）
     from tea_agent.server.modules.agent_module import AgentModule
 
-    sess, _ = AgentModule.create_session(str(cfg))
+    sess, _ = AgentModule.create_session()
     model = getattr(sess.context, "model", None) or getattr(sess, "model", "")
     assert "deepseek-reasoner" in str(model)
 
@@ -286,7 +283,7 @@ def test_session_continue_deferred_switch(env, monkeypatch):
 def _next_turn_models(env):
     """模拟下一轮对话：create_session 读到的 main/cheap 模型。"""
     _client, cfg, _state, am = env
-    sess, _ = am.create_session(str(cfg))
+    sess, _ = am.create_session()
     ctx = sess.context
     return str(getattr(ctx, "model", "")), str(getattr(ctx, "cheap_model", ""))
 

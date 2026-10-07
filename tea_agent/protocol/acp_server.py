@@ -46,8 +46,8 @@ class ACPProtocolServer:
     and session management.
     """
 
-    def __init__(self, config_path: str | None = None, api_key: str = ""):
-        self._config_path = self._ensure_acp_config(config_path)
+    def __init__(self, api_key: str = ""):
+        self._setup_acp_db()
         self._api_key = api_key or os.environ.get("TEA_API_KEY", "")
         self._lock = threading.Lock()
         self._agent_id = "tea-agent"
@@ -56,20 +56,14 @@ class ACPProtocolServer:
         self._agent: Agent | None = None
 
     @staticmethod
-    def _ensure_acp_config(config_path: str | None = None) -> str | None:
-        """Ensure the ACP-specific config file exists.
+    def _setup_acp_db() -> None:
+        """隔离 ACP 会话库。
 
-        Same logic as :meth:`AcpAgent._ensure_acp_config`.
+        身份三元组/运行时参数统一来自 provider.yaml；ACP 只需独立会话库，
+        用 TEA_DB_PATH 环境变量隔离（见 PathsConfig.resolve）。
         """
-        if config_path:
-            return config_path
-
-        # config.yaml 已删除：不再派生 config_acp.yaml。
-        # 身份三元组/运行时参数统一来自 provider.yaml；ACP 只需独立会话库，
-        # 用 TEA_DB_PATH 环境变量隔离（见 PathsConfig.resolve）。
         home_dir = Path.home()
         os.environ.setdefault("TEA_DB_PATH", str(home_dir / ".tea_agent" / "chat_acp.db"))
-        return None
 
     def _get_storage(self) -> Storage:
         """Lazy-init storage backend."""
@@ -123,7 +117,7 @@ class ACPProtocolServer:
         try:
             from tea_agent.agent import Agent
 
-            agent = Agent(mode="lightweight", config_path=self._config_path)
+            agent = Agent(mode="lightweight")
             tools = []
             for name, meta in agent.toolkit.meta_map.items():
                 fn = meta.get("function", {})
@@ -149,7 +143,7 @@ class ACPProtocolServer:
         from tea_agent.agent import Agent
 
         if self._agent is None:
-            self._agent = Agent(mode="lightweight", config_path=self._config_path)
+            self._agent = Agent(mode="lightweight")
         if session_id:
             self._agent.current_topic_id = session_id
         elif not self._agent.current_topic_id:
@@ -515,9 +509,9 @@ async def handle_get_messages(request):
     return JSONResponse(get_server().get_messages(request.path_params.get("session_id", ""), int(request.query_params.get("limit", 50))))
 
 
-def create_app(config_path=None):
+def create_app():
     global _server_instance
-    _server_instance = ACPProtocolServer(config_path=config_path)
+    _server_instance = ACPProtocolServer()
     routes = [
         Route("/health", endpoint=handle_health),
         Route("/v1/agents", endpoint=handle_discover_agents),
@@ -533,12 +527,12 @@ def create_app(config_path=None):
     return Starlette(debug=False, routes=routes)
 
 
-def run_server(host="127.0.0.1", port=8082, config_path=None):
+def run_server(host="127.0.0.1", port=8082):
     try:
         import uvicorn
     except ImportError:
         raise ImportError("pip install uvicorn") from None
-    app = create_app(config_path=config_path)
+    app = create_app()
     logger.info(f"ACP Server: http://{host}:{port}")
     uvicorn.run(app, host=host, port=port, log_level="info")
 
@@ -549,9 +543,8 @@ def main():
     p = argparse.ArgumentParser()
     p.add_argument("--host", default="127.0.0.1")
     p.add_argument("--port", type=int, default=8082)
-    p.add_argument("--config", default=None)
     args = p.parse_args()
-    run_server(host=args.host, port=args.port, config_path=args.config)
+    run_server(host=args.host, port=args.port)
 
 
 if __name__ == "__main__":

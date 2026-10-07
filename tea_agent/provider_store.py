@@ -2,7 +2,7 @@
 
 Tea Agent 供应商→模型 目录的统一持久化层。所有供应商、逐模型能力与
 角色绑定（main/cheap）**只存本文件**，不再有 model_config.json 等第二份存储；
-config*.yaml 也不再是提供商来源（仅作运行期角色引用的可选载体）。
+提供商来源仅剩 provider.yaml 与内置注册表。
 
 provider.yaml schema (v1):
     version: 1
@@ -335,7 +335,7 @@ class ProviderStore:
                         self._merge_provider(data, name, self._convert_custom(info), source="custom")
         except Exception as e:
             logger.debug("custom_providers.yaml merge skipped: %s", e)
-        # config*.yaml 扫描与 model_config.json 合并均已停用：
+        # 历史 config 扫描与 model_config.json 合并均已移除：
         # provider.yaml 是所有供应商/模型/角色信息的唯一事实源。
         return {"version": SCHEMA_VERSION, "providers": data, "roles": {}}
 
@@ -840,12 +840,12 @@ class ProviderStore:
             logger.info("pruned unconfigured builtin placeholders: %s", removed)
         return {"removed": removed}
 
-    # ── 运行时参数（settings 段）— 取代已删除的 config.yaml ────
+    # ── 运行时参数（settings 段）—— agent 行为调参的唯一落点 ────
 
     def get_settings(self) -> dict:
-        """运行时参数（agent 行为调参）。原 config.yaml 的顶层标量字段。
+        """运行时参数（agent 行为调参）。
 
-        config.yaml 已删除：运行时参数与 roles 一并存 provider.yaml，
+        运行时参数与 roles 一并存 provider.yaml，
         使「一个用户级配置文件」成为唯一事实源。
         """
         return dict(self.load().get("settings") or {})
@@ -909,7 +909,7 @@ class ProviderStore:
         """在线模型列表写回（仅新增，不动既有条目）。"""
         return self.sync_models(provider, model_ids)
 
-    def panel(self, config_path: str = "") -> dict:
+    def panel(self) -> dict:
         """模型管理面板全量视图：providers（含逐模型配置）+ roles + active。
 
         models 行沿用历史契约（``{"id", "config": {...}, "is_default"}``），

@@ -63,7 +63,6 @@ def run_benchmark_v2(
     task_name: str,
     task: dict,
     runs: int,
-    config_path: str | None = None,
     fair_mode: bool = False,
 ) -> list[BenchmarkResult]:
     """v2.0: 执行基准测试并采集 L1-L5 指标。"""
@@ -88,7 +87,6 @@ def run_benchmark_v2(
         try:
             agent = Agent(
                 mode="full",
-                config_path=config_path,
                 enable_thinking=enable_thinking,
             )
             agent._db.create_topic(f"{task_title} #{run_idx}", topic_id)
@@ -303,7 +301,6 @@ def cmd_run(args) -> None:
         task_name=args.task,
         task=task,
         runs=runs,
-        config_path=args.config,
         fair_mode=fair_mode,
     )
 
@@ -331,7 +328,7 @@ def cmd_run_all(args) -> None:
         print(f"### {task.get('name', name)}")
         print(f"{'#'*60}")
 
-        results = run_benchmark_v2(name, task, runs, args.config, fair_mode)
+        results = run_benchmark_v2(name, task, runs, fair_mode)
         cat = task.get("category", TASK_CATEGORIES.get(name, "通用"))
         summary = summarize_runs(results, task_name=task.get("name", name),
                                  task_category=cat)
@@ -410,7 +407,7 @@ def cmd_regression(args) -> None:
         runs = task.get("runs", 5)
         fair_mode = task.get("fair_mode", False)
         results = run_benchmark_v2(name, task, runs,
-                                   config_path=args.config, fair_mode=fair_mode)
+                                   fair_mode=fair_mode)
         cat = task.get("category", TASK_CATEGORIES.get(name, "通用"))
         current_summaries[name] = summarize_runs(
             results, task_name=task.get("name", name), task_category=cat)
@@ -629,12 +626,10 @@ def main():
     p_run = sub.add_parser("run", help="执行单个基准任务")
     p_run.add_argument("task", help="任务名")
     p_run.add_argument("--runs", type=int, help="运行次数")
-    p_run.add_argument("--config", help="配置文件路径")
     p_run.add_argument("--fair", action="store_true", help="公平模式 (t=0, no-thinking)")
 
     p_all = sub.add_parser("run-all", help="运行全部基准任务")
     p_all.add_argument("--runs", type=int, help="运行次数")
-    p_all.add_argument("--config", help="配置文件路径")
     p_all.add_argument("--fair", action="store_true", help="公平模式")
 
     p_rep = sub.add_parser("report", help="查看最新报告")
@@ -642,7 +637,6 @@ def main():
     p_rep.add_argument("--all", action="store_true", help="查看全体报告")
 
     p_reg = sub.add_parser("regression", help="L5 回归检测")
-    p_reg.add_argument("--config", help="配置文件路径")
 
     p_diff = sub.add_parser("diff", help="对比两个基准结果文件，量化差异")
     p_diff.add_argument("baseline", help="基线结果 JSON 文件路径")

@@ -209,23 +209,6 @@ class TelegramAdapter:
             logger.warning(f"API POST {path} 失败: {e}")
             return None
 
-    def _list_configs(self) -> list[dict]:
-        """获取可用配置列表。"""
-        data = self._api_get("/api/configs")
-        if data:
-            return data.get("configs", [])
-        return []
-
-    def _get_current_config_info(self) -> dict:
-        """获取当前配置信息。"""
-        data = self._api_get("/v1/config")
-        return data or {}
-
-    def _switch_config(self, config_path: str) -> dict:
-        """切换配置。"""
-        result = self._api_post("/v1/config/switch", {"config_path": config_path})
-        return result or {"ok": False, "error": "API 无响应"}
-
     def _list_sessions(self, limit: int = 10) -> list[dict]:
         """获取会话列表。"""
         data = self._api_get(f"/v1/sessions?limit={limit}")
@@ -236,19 +219,6 @@ class TelegramAdapter:
     def _get_session_info(self, topic_id: str) -> dict | None:
         """获取单个会话信息。"""
         return self._api_get(f"/v1/sessions/{topic_id}")
-
-    def _format_configs(self, configs: list, active_filename: str = "") -> str:
-        """格式化配置列表为可读文本。"""
-        lines = ["📋 *可用配置：*"]
-        for cfg in configs:
-            name = cfg.get("filename", "?")
-            valid = "✅" if cfg.get("is_valid") else "⚠️"
-            model = cfg.get("main_model", {}).get("model_name", "?") or "?"
-            active_flag = " ◀ 当前" if name == active_filename else ""
-            lines.append(f"  {valid} `{name}`  →  {model}{active_flag}")
-        lines.append("")
-        lines.append("💡 使用 `/config <文件名>` 切换")
-        return "\n".join(lines)
 
     # ── Telegram 消息处理 ──
 
@@ -296,7 +266,6 @@ class TelegramAdapter:
             "已连接到 tea_agent AI 助手，直接发送消息即可对话。\n\n"
             "📋 *命令*\n"
             "/start - 显示帮助\n"
-            "/config - 查看/切换配置文件\n"
             "/topics - 列出最近会话\n"
             "/topic - 查看/切换当前话题\n"
             "/new - 开始新话题\n"
@@ -337,54 +306,6 @@ class TelegramAdapter:
             "`手机 → Telegram → Bot(出站轮询) → tea_agent API`"
         )
         await update.message.reply_text(about_text, parse_mode="Markdown")
-
-    # ── 新命令：/config ──
-
-    async def _handle_config(self, update, context):
-        """处理 /config 命令 - 显示/切换配置。"""
-        parts = context.args
-        configs = self._list_configs()
-        # 获取当前配置文件名
-        active_filename = ""
-        config_info = self._get_current_config_info()
-        if config_info:
-            api_url = config_info.get("api_url", "")
-            model = config_info.get("model", "")
-        else:
-            api_url = ""
-            model = ""
-
-        if parts:
-            # 尝试切换配置
-            filename = parts[0]
-            target = None
-            for cfg in configs:
-                if cfg.get("filename") == filename or cfg.get("path") == filename:
-                    target = cfg.get("path")
-                    break
-                if filename.casefold() in cfg.get("filename", "").casefold():
-                    target = cfg.get("path")
-                    break
-            if not target:
-                msg = f"❌ 未找到配置 `{filename}`\n\n"
-                msg += self._format_configs(configs)
-                await update.message.reply_text(msg, parse_mode="Markdown")
-                return
-            result = self._switch_config(target)
-            if result.get("ok"):
-                await update.message.reply_text(f"✅ 已切换到配置 `{Path(target).name}`\n   🔄 新会话将使用新配置", parse_mode="Markdown")
-            else:
-                await update.message.reply_text(f"❌ 切换失败: {result.get('error', '未知错误')}")
-        else:
-            # 显示当前配置 + 可用配置列表
-            msg = "📌 *当前配置*\n"
-            if model:
-                msg += f"  模型: `{model}`\n"
-            if api_url:
-                msg += f"  API: `{api_url}`\n"
-            msg += "\n"
-            msg += self._format_configs(configs, active_filename=active_filename)
-            await update.message.reply_text(msg, parse_mode="Markdown")
 
     # ── 新命令：/topics ──
 

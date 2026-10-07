@@ -15,36 +15,12 @@ Agent 类测试 — 验证三种模式 + TeaAgent 工厂 + 生命周期。
 import os
 
 import pytest
+from tests._provider_yaml import write_provider_yaml
 
 
 def _write_config(path, **overrides):
-    """写最小测试配置，支持覆盖 db_path 等字段。"""
-    db_path = overrides.get("db_path", ":memory:")
-    content = f"""
-main_model:
-  api_key: "sk-test"
-  api_url: "https://api.test.com"
-  model_name: "test-model"
-  options:
-    supports_vision: false
-    supports_reasoning: false
-cheap_model:
-  api_key: ""
-  api_url: ""
-  model_name: ""
-paths:
-  toolkit_dir: "./tools"
-  kb_dir: "./kb"
-  db_path: "{db_path}"
-max_history: 10
-max_iterations: 50
-keep_turns: 5
-max_tool_output: 131072
-max_assistant_content: 131072
-memory_extraction_threshold: 2
-"""
-    with open(path, "w") as f:
-        f.write(content)
+    """写最小 provider.yaml（唯一事实源），支持覆盖 db_path 等字段。"""
+    write_provider_yaml(path, db_path=overrides.get("db_path", ":memory:"))
 
 
 class TestAgentCreation:
@@ -56,7 +32,7 @@ class TestAgentCreation:
 
         _write_config(tmp_yaml_config)
 
-        agent = Agent(mode="lightweight", config_path=tmp_yaml_config)
+        agent = Agent(mode="lightweight")
         assert agent.mode == "lightweight"
         assert agent.db is None
         assert agent.toolkit is not None
@@ -71,7 +47,7 @@ class TestAgentCreation:
         os.makedirs(os.path.dirname(tmp_db_path) or ".", exist_ok=True)
         _write_config(tmp_yaml_config, db_path=tmp_db_path.replace("\\", "/"))
 
-        agent = Agent(mode="full", config_path=tmp_yaml_config)
+        agent = Agent(mode="full")
         assert agent.mode == "full"
         assert agent.db is not None
         assert agent.toolkit is not None
@@ -84,7 +60,7 @@ class TestAgentCreation:
 
         _write_config(tmp_yaml_config)
 
-        agent = Agent(mode="lite", config_path=tmp_yaml_config)
+        agent = Agent(mode="lite")
         assert agent.mode == "lite"
         assert agent.db is None
         assert agent.toolkit is not None
@@ -98,7 +74,7 @@ class TestAgentCreation:
         _write_config(tmp_yaml_config)
 
         with pytest.raises(ValueError, match="mode 必须是"):
-            Agent(mode="invalid", config_path=tmp_yaml_config)
+            Agent(mode="invalid")
 
 
 class TestTeaAgentFactory:
@@ -110,7 +86,7 @@ class TestTeaAgentFactory:
 
         _write_config(tmp_yaml_config)
 
-        agent = TeaAgent(config_path=tmp_yaml_config)
+        agent = TeaAgent()
         assert isinstance(agent, Agent)
         assert agent.mode == "lightweight"
         agent.close()
@@ -125,7 +101,7 @@ class TestAgentLifecycle:
 
         _write_config(tmp_yaml_config)
 
-        with Agent(mode="lightweight", config_path=tmp_yaml_config) as agent:
+        with Agent(mode="lightweight") as agent:
             assert agent.sess is not None
         assert agent.sess is None
         assert agent.toolkit is None
@@ -136,7 +112,7 @@ class TestAgentLifecycle:
 
         _write_config(tmp_yaml_config)
 
-        agent = Agent(mode="lightweight", config_path=tmp_yaml_config)
+        agent = Agent(mode="lightweight")
         assert agent.sess is not None
         agent.close()
         assert agent.sess is None
@@ -148,10 +124,12 @@ class TestAgentProperties:
     """Agent 属性访问"""
 
     def test_config_property(self, tmp_yaml_config):
-        """config 属性返回配置对象（config.yaml 已删除 → 身份由 provider.yaml 提供）"""
+        """config 属性返回配置对象（身份由 provider.yaml 提供）"""
         from tea_agent.agent import Agent
 
-        agent = Agent(mode="lightweight", config_path=tmp_yaml_config)
+        _write_config(tmp_yaml_config)
+
+        agent = Agent(mode="lightweight")
         assert agent.config is not None
         assert agent.config.main_model is not None
         agent.close()
@@ -162,7 +140,7 @@ class TestAgentProperties:
 
         _write_config(tmp_yaml_config)
 
-        agent = Agent(mode="lightweight", config_path=tmp_yaml_config)
+        agent = Agent(mode="lightweight")
         assert agent.session is agent.sess
         agent.close()
 
@@ -172,6 +150,6 @@ class TestAgentProperties:
 
         _write_config(tmp_yaml_config)
 
-        agent = Agent(mode="lightweight", config_path=tmp_yaml_config)
+        agent = Agent(mode="lightweight")
         assert agent.current_topic_id == ""
         agent.close()

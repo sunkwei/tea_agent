@@ -119,8 +119,7 @@ def _mask_key(api_key: str) -> str:
 class ProviderService:
     """模型管理服务（合并注册表 + 动态查询 + 自定义 CRUD + 配置应用）。"""
 
-    def __init__(self, config_path: str = ""):
-        self._config_path = config_path or ""
+    def __init__(self):
         self._custom_cache: dict[str, dict] | None = None
         self._custom_mtime: float = 0.0
         self._lock = threading.Lock()
@@ -197,7 +196,7 @@ class ProviderService:
     def _load_cfg(self):
         """加载配置（失败时返回默认空配置，避免服务不可用）。"""
         try:
-            return load_config(self._config_path or None)
+            return load_config()
         except Exception:
             from tea_agent.config import AgentConfig
 
@@ -635,7 +634,6 @@ class ProviderService:
         api_key: str = "",
         model: str = "",
         role: str = "main",
-        config_path: str = "",
         temperature: float | None = None,
         max_tokens: int | None = None,
         top_p: float | None = None,
@@ -661,8 +659,7 @@ class ProviderService:
 
         api_url = provider.get("api_url", "")
 
-        cfg_path = config_path or self._config_path or None
-        cfg = load_config(cfg_path)
+        cfg = load_config()
         target = {"main": cfg.main_model, "cheap": cfg.cheap_model}[role]
         if not api_key:
             api_key = getattr(target, "api_key", "") or ""
@@ -719,14 +716,14 @@ class ProviderService:
             merged_options["supports_reasoning"] = bool(provider.get("supports_thinking", False) or model_thinking)
         target.options = merged_options
 
-        save_config(cfg, cfg_path)
+        save_config(cfg)
         # 角色绑定回写统一配置中心（面板展示“当前使用”的单一事实源）
         if store is not None:
             try:
                 store.set_role(role, provider["name"], model, api_url=target.api_url)
             except Exception as e:
                 logger.debug("role binding to model_config skipped: %s", e)
-        logger.info("applied provider %s → %s/%s (config=%s)", name, role, model, cfg_path or "default")
+        logger.info("applied provider %s → %s/%s", name, role, model)
         return {
             "ok": True,
             "role": role,
@@ -738,13 +735,11 @@ class ProviderService:
             "supports_vision": merged_options["supports_vision"],
             "supports_reasoning": merged_options["supports_reasoning"],
             "options": merged_options,
-            "config_path": str(Path(cfg_path).resolve()) if cfg_path else "",
         }
 
-    def _existing_key(self, role: str, config_path: str = "") -> str:
+    def _existing_key(self, role: str) -> str:
         """读取某角色现有的 api_key（掩码前）。"""
-        cfg_path = config_path or self._config_path or None
-        cfg = load_config(cfg_path)
+        cfg = load_config()
         target = {"main": cfg.main_model, "cheap": cfg.cheap_model}[role]
         return getattr(target, "api_key", "") or ""
 
@@ -807,12 +802,10 @@ def _default_cfg():
     return AgentConfig()
 
 
-def get_provider_service(config_path: str = "") -> ProviderService:
-    """获取 ProviderService 单例；config_path 变化时自动更新。"""
+def get_provider_service() -> ProviderService:
+    """获取 ProviderService 单例（provider.yaml 唯一事实源）。"""
     global _service
     with _service_lock:
         if _service is None:
-            _service = ProviderService(config_path)
-        elif config_path and _service._config_path != config_path:
-            _service._config_path = config_path
+            _service = ProviderService()
         return _service

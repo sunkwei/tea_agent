@@ -570,7 +570,7 @@ class TestM4InjectionConfig:
 
     @pytest.fixture(autouse=True)
     def _restore_config(self, monkeypatch):
-        # 钉住 config 单例：跨文件全局态（_last_config_path/_config_cache）可能
+        # 钉住 config 单例：跨文件全局态（_config_cache）可能
         # 让 get_config() 重新加载，导致本用例对 interruption 的修改被丢弃。
         import tea_agent.config as cfg_mod
 
@@ -611,7 +611,7 @@ class TestM4AnchorConfig:
 
     @pytest.fixture(autouse=True)
     def _restore_config(self, monkeypatch):
-        # 钉住 config 单例：跨文件全局态（_last_config_path/_config_cache）可能
+        # 钉住 config 单例：跨文件全局态（_config_cache）可能
         # 让 get_config() 重新加载，导致本用例对 interruption 的修改被丢弃。
         import tea_agent.config as cfg_mod
 

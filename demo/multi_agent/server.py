@@ -60,34 +60,15 @@ class DebateServer:
     def __init__(self):
         self._debates: dict[str, "DebateSession"] = {}
 
-    def create_session(self, config_path: Optional[str] = None) -> Agent:
+    def create_session(self) -> Agent:
         """为辩论方创建独立的 Agent"""
         agent = Agent(
             mode="lightweight",
-            config_path=config_path,
             use_tools=False,
             disable_summary=True,
         )
         logger.info(f"Session created: {agent._cfg.main_model.model_name}")
         return agent
-
-    def list_config_files(self):
-        """扫描可用的配置文件"""
-        configs_dir = Path.home() / ".tea_agent"
-        if not configs_dir.exists():
-            return []
-        results = []
-        for fpath in sorted(configs_dir.glob("*.yaml")):
-            try:
-                cfg = _load_config(str(fpath))
-                results.append({
-                    "path": str(fpath),
-                    "filename": fpath.name,
-                    "model": cfg.main_model.model_name or "unknown",
-                })
-            except Exception:
-                pass
-        return results
 
     def run_debate_sync(self, debate_id: str, queue: asyncio.Queue, event_loop):
         """运行辩论主循环（同步版本，在独立线程中执行）"""
@@ -274,23 +255,6 @@ async def handle_root(request):
     return HTMLResponse("<h1>Multi-Agent Debate</h1><p>index.html not found</p>")
 
 
-async def handle_configs(request):
-    """GET /api/configs — 列出可用配置"""
-    configs = get_server().list_config_files()
-    # 也检查默认配置
-    from tea_agent.config import load_config
-    try:
-        default_cfg = load_config(None)
-        configs.insert(0, {
-            "path": "",
-            "filename": "(默认配置)",
-            "model": default_cfg.main_model.model_name or "unknown",
-        })
-    except Exception:
-        pass
-    return JSONResponse({"configs": configs})
-
-
 async def handle_start_debate(request):
     """POST /api/debate/start — 启动辩论"""
     body = await request.json()
@@ -364,7 +328,6 @@ def create_app():
     static_dir = str(Path(__file__).parent / "static")
     routes = [
         Route("/", endpoint=handle_root),
-        Route("/api/configs", endpoint=handle_configs),
         Route("/api/debate/start", endpoint=handle_start_debate, methods=["POST"]),
         Route("/api/debate/cancel", endpoint=handle_cancel, methods=["POST"]),
         Mount("/static", app=StaticFiles(directory=static_dir), name="static"),

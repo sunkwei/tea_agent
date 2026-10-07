@@ -1,4 +1,4 @@
-"""配置向导测试（config.yaml 已删除 → provider.yaml 唯一事实源）。"""
+"""配置向导测试（provider.yaml 唯一事实源）。"""
 
 import os
 
@@ -64,15 +64,16 @@ class TestRunProviderSetupWizard:
         assert run_setup_wizard(input_fn=_fake_input(["q"])) is None
         assert not isolated_store.exists()
 
-    def test_wizard_config_path_ignored(self, isolated_store, tmp_path):
-        """config_path 参数已废弃：不产生任何 config.yaml。"""
+    def test_wizard_writes_only_provider_yaml(self, isolated_store, tmp_path):
+        """向导只写 provider.yaml，不产生任何其他配置文件。"""
         from tea_agent.setup_wizard import run_setup_wizard
 
-        target = tmp_path / "config.yaml"
-        saved = run_setup_wizard(str(target), input_fn=_fake_input(["1", "", "sk-x", "n"]))
+        saved = run_setup_wizard(input_fn=_fake_input(["1", "", "sk-x", "n"]))
 
         assert saved == str(isolated_store)
-        assert not target.exists(), "不应再生成 config.yaml"
+        # provider.yaml 本身即目标产物：目录中不得出现任何**其他**配置文件
+        written = sorted(q.name for q in tmp_path.glob("*.yaml"))
+        assert written == [isolated_store.name], written
 
     def test_end_to_end_via_provider_wizard(self, isolated_store):
         """provider 向导直连入口同样写 provider.yaml。"""
@@ -84,12 +85,12 @@ class TestRunProviderSetupWizard:
 
 
 def test_build_config_removed():
-    """_build_config / _collect_answers 为 config.yaml 专属，已随其删除。"""
+    """_build_config / _collect_answers 属历史配置文件机制，已随其删除。"""
     import tea_agent.setup_wizard as w
 
     assert not hasattr(w, "_build_config")
     assert not hasattr(w, "_collect_answers")
-    assert not os.path.exists(os.path.join(os.path.dirname(w.__file__), "config.yaml"))
+    assert not [p for p in os.listdir(os.path.dirname(w.__file__)) if p.endswith(".yaml")]
 
 
 if __name__ == "__main__":

@@ -3,10 +3,10 @@
 
 **首启主路径（推荐）**：``run_provider_setup_wizard()`` —— 当 `~/.tea_agent/provider.yaml`
 缺失或没有任何提供商时，各入口（server / ACP / 渠道）引导用户「选服务商 → 选模型 → 填 Key」，
-结果写入 provider.yaml（密钥与模型能力的唯一事实源）。`config.yaml` **不再是启动前提**，
+结果写入 provider.yaml（密钥与模型能力、运行时参数的唯一事实源），
 缺失时由 `load_config` 兜底 provider.yaml 首个提供商的第一个模型。
 
-``config.yaml`` 已**彻底删除**：身份三元组、逐模型能力与运行时参数全部落在
+身份三元组、逐模型能力与运行时参数全部落在
 ``provider.yaml``（``roles`` / ``settings`` 段）。``run_setup_wizard()`` 保留为
 兼容别名，直接委托 ``run_provider_setup_wizard()``。
 
@@ -61,7 +61,7 @@ PROVIDER_BANNER = r"""
   ┌───────────────────────────────────────────────┐
   │   🍵 Tea Agent 首启提供商配置（provider.yaml） │
   │   选服务商 → 选模型 → 输入 API Key（可多家）   │
-  │   config.yaml 不再是前提，随时可 Ctrl+C 取消   │
+  │   随时可 Ctrl+C 取消                          │
   └───────────────────────────────────────────────┘
 """
 
@@ -170,7 +170,7 @@ def _pick_model(provider_name: str, input_fn: Callable[[str], str]) -> str:
 def run_provider_setup_wizard(input_fn: Callable[[str], str] | None = None, store=None) -> bool:
     """首启提供商引导：选供应商 → 选模型 → 输入 api_key，可循环添加多个。
 
-    结果写入 provider.yaml（不生成 config.yaml —— 身份三元组唯一事实源 = provider.yaml）。
+    结果写入 provider.yaml（身份三元组唯一事实源 = provider.yaml）。
     首个完成的条目即启动默认主模型：文档序第一个提供商，default_model = 所选模型，
     且所选模型置于 models 首位（两条「第一个」口径都指向本次选择）。
 
@@ -263,13 +263,10 @@ def run_provider_setup_wizard(input_fn: Callable[[str], str] | None = None, stor
     return True
 
 
-def run_setup_wizard(config_path: str | None = None, input_fn: Callable[[str], str] | None = None) -> str | None:
+def run_setup_wizard(input_fn: Callable[[str], str] | None = None) -> str | None:
     """兼容别名：委托 ``run_provider_setup_wizard()``（写 provider.yaml）。
 
-    config.yaml 已彻底删除，本函数不再生成任何配置文件。
-
     Args:
-        config_path: 忽略（历史签名兼容）
         input_fn: 输入函数（测试注入用）
 
     Returns:
@@ -283,11 +280,10 @@ def run_setup_wizard(config_path: str | None = None, input_fn: Callable[[str], s
 
 
 def main() -> None:
-    """独立运行入口: python -m tea_agent.setup_wizard [--config PATH | --provider]"""
+    """独立运行入口: python -m tea_agent.setup_wizard [--provider]"""
     import argparse
 
     parser = argparse.ArgumentParser(description="Tea Agent 配置向导")
-    parser.add_argument("--config", type=str, default=None, help="已废弃（config.yaml 已删除，仅保留签名兼容）")
     parser.add_argument("--provider", action="store_true", help="提供商引导（写 provider.yaml，唯一事实源）")
     parser.parse_args()
     saved = run_setup_wizard()

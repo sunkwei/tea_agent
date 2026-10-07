@@ -66,17 +66,15 @@ _restart_requested = False
 _RESTART_LOCK_TTL = 600.0
 
 
-def _build_restart_args(host: str, port: int, config_path: str | None = None, api_key: str | None = None) -> list[str]:
+def _build_restart_args(host: str, port: int, api_key: str | None = None) -> list[str]:
     """构建重启子进程的参数列表（成对构建，避免空值留下悬空 flag）。
 
     回归背景（实测）：旧实现用
-    ``[m for m in [... "--config", config_path or "", "--api-key", api_key or ""] if m]``
-    过滤空串 —— flag 被保留而值被丢弃，config/api_key 为空时产生
-    ``--config --api-key``，新进程 argparse 直接报错退出，重启静默失效。
+    ``[m for m in [... "--api-key", api_key or ""] if m]``
+    过滤空串 —— flag 被保留而值被丢弃，api_key 为空时产生
+    ``--api-key`` 悬空，新进程 argparse 直接报错退出，重启静默失效。
     """
     args = ["-m", "tea_agent.server", "--host", str(host), "--port", str(port)]
-    if config_path:
-        args += ["--config", str(config_path)]
     if api_key:
         args += ["--api-key", str(api_key)]
     return args
@@ -270,9 +268,8 @@ def restart_server(graceful: bool = True, wait_seconds: float = 120.0) -> dict:
 class MinimalServer:
     """Minimal HTTP API Server — delegates all business to modules."""
 
-    def __init__(self, api_key="", config_path=""):
+    def __init__(self, api_key=""):
         self._api_key = (api_key or os.environ.get("TEA_API_KEY", "")).strip()
-        self._config_path = config_path or ""
         self._registry = get_registry()
         self._loaded = False
         self._app = None  # Starlette app reference, set by create_app()
@@ -280,18 +277,9 @@ class MinimalServer:
     def load_modules(self):
         if self._loaded:
             return {}
-        # 必须在 load_all 之前 set_config_path：AgentModule._load 在 load_all 内部执行，
-        # 此刻 _config_path 若为空，它会退回项目记忆的 last_config.json，导致命令行
-        # --config 被记忆配置覆盖（表现为：指定了配置文件，Agent 却用了另一个）。
-        if self._config_path:
-            _early_agent = self._registry.get("agent")
-            if _early_agent is not None:
-                _early_agent.set_config_path(self._config_path)
         results = load_all(self._registry)
         self._loaded = True
         agent_mod = self._registry.get_loaded("agent")
-        if agent_mod and self._config_path:
-            agent_mod.set_config_path(self._config_path)
         if agent_mod:
             agent_mod._server_version = __version__
         return results
@@ -330,9 +318,6 @@ class MinimalServer:
         self._registry.stop_watcher()
         return {"ok": True}
 
-    def get_config_path(self):
-        return self._config_path
-
     # ── Delegation methods (compat: route_handlers calls get_server().xxx()) ──
 
     def list_tasks(self):
@@ -361,21 +346,6 @@ class MinimalServer:
 
         return AgentModule.update_config(updates)
 
-    def switch_config(self, config_path):
-        from .modules.agent_module import AgentModule
-
-        return AgentModule.switch_config(config_path)
-
-    def list_config_files(self, check_valid=False):
-        from .modules.agent_module import AgentModule
-
-        return AgentModule.list_config_files(check_valid)
-
-    def create_config_file(self, **kwargs):
-        from .modules.agent_module import AgentModule
-
-        return AgentModule.create_config_file(**kwargs)
-
     def _get_storage(self):
         from .modules.storage_module import StorageModule
 
@@ -395,7 +365,7 @@ class MinimalServer:
         """ProviderService 单例（模型管理：提供商/模型查询/自定义供应商）。"""
         from tea_agent.model_manager import get_provider_service
 
-        return get_provider_service(self.get_config_path())
+        return get_provider_service()
 
     def list_sessions(self, limit=20):
         from .modules.storage_module import StorageModule
@@ -477,10 +447,10 @@ class MinimalServer:
 
         return ToolkitModule.run_tool(tool_name, arguments)
 
-    def create_session(self, config_path=None):
+    def create_session(self):
         from .modules.agent_module import AgentModule
 
-        return AgentModule.create_session(config_path)
+        return AgentModule.create_session()
 
     def chat_completion(self, *args, **kwargs):
         from .modules.agent_module import AgentModule
@@ -528,7 +498,7 @@ class MinimalServer:
         return {"ok": True, "route_count": len(routes)}
 
 
-def create_app(api_key=None, config_path=None):
+def create_app(api_key=None):
     """Create the Starlette application (thin — logic in modules)."""
     logging.getLogger("uvicorn.access").setLevel(logging.WARNING)
     logging.getLogger("uvicorn.error").setLevel(logging.WARNING)
@@ -563,7 +533,7 @@ def create_app(api_key=None, config_path=None):
     logging.getLogger("api_server").setLevel(logging.INFO)
 
     global _server_instance
-    _server_instance = MinimalServer(api_key=api_key or "", config_path=config_path or "")
+    _server_instance = MinimalServer(api_key=api_key or "")
     results = _server_instance.load_modules()
     ok_count = sum(1 for v in results.values() if v)
     logger.info(f"Modules loaded: {ok_count}/{len(results)}")
@@ -613,23 +583,21 @@ def get_server():
     return _server_instance
 
 
-def run_server(host="127.0.0.1", port=8282, api_key=None, config_path=None, open_browser=False):
+def run_server(host="127.0.0.1", port=8282, api_key=None, open_browser=False):
     try:
         import uvicorn
     except ImportError:
         raise ImportError("pip install starlette uvicorn") from None
 
-    actual_config = config_path or os.environ.get("TEA_CONFIG", "")
-    if not actual_config:
-        # config.yaml 已删除：身份/参数来自 provider.yaml
-        try:
-            from tea_agent.provider_store import get_provider_store
+    # 身份/参数唯一事实源 = provider.yaml
+    try:
+        from tea_agent.provider_store import get_provider_store
 
-            actual_config = str(get_provider_store().file_path)
-        except Exception:
-            actual_config = "(built-in default)"
+        config_file = str(get_provider_store().file_path)
+    except Exception:
+        config_file = "(built-in default)"
 
-    app = create_app(api_key=api_key, config_path=config_path)
+    app = create_app(api_key=api_key)
 
     server_url = f"http://{host}:{port}"
     # banner 是 server 唯一终端输出；flush=True 确保非 TTY（管道/重定向）下立即可见
@@ -637,7 +605,7 @@ def run_server(host="127.0.0.1", port=8282, api_key=None, config_path=None, open
     print(f"  Tea Agent Server v{__version__}", flush=True)
     print(f"  Listening on:  {server_url}", flush=True)
     print(f"  API Docs:      {server_url}/docs", flush=True)
-    print(f"  Config file:   {actual_config}", flush=True)
+    print(f"  Provider:      {config_file}", flush=True)
     print(f"  API Key:       {'ENABLED' if api_key else 'DISABLED'}", flush=True)
     print("  Hot-Reload:    ENABLED  (/api/modules)", flush=True)
     print("=" * 56, flush=True)
@@ -652,7 +620,7 @@ def run_server(host="127.0.0.1", port=8282, api_key=None, config_path=None, open
     config = uvicorn.Config(app, host=host, port=port, log_level="warning")
     global _uvicorn_server, _restart_args
     _uvicorn_server = uvicorn.Server(config)
-    _restart_args = _build_restart_args(host, port, config_path, api_key)
+    _restart_args = _build_restart_args(host, port, api_key)
 
     # 启动恢复：上次崩溃/重启时仍在途的回合 → 重建缓冲区供前端续读；
     # 已排队但未开始的消息 → 重新入队，避免重启丢消息
@@ -704,16 +672,10 @@ def main():
     parser.add_argument("--host", type=str, default="127.0.0.1")
     parser.add_argument("--port", type=int, default=8282)
     parser.add_argument("--api-key", type=str, default="")
-    parser.add_argument("--config", type=str, default=None)
     parser.add_argument("--browser", action="store_true")
     args = parser.parse_args()
 
-    # config.yaml 已删除：--config 仅保留签名兼容，不再解析配置文件
-    config_path = args.config or ""
-    if args.config:
-        print("Warning: --config is deprecated (config.yaml removed); use ~/.tea_agent/provider.yaml instead.")
-
-    # ── 首启判定：以 provider.yaml 为唯一事实源（config.yaml 不再是启动前提）──
+    # ── 首启判定：以 provider.yaml 为唯一事实源 ──
     # 存在且非空 → 直接启动（默认用第一个提供商的第一个模型）；
     # 缺失/为空 → TTY 下交互引导写 provider.yaml，非 TTY 打印指引不阻塞
     from tea_agent.setup_wizard import needs_provider_setup, run_provider_setup_wizard
@@ -732,8 +694,7 @@ def main():
     from tea_agent.config import load_config
 
     try:
-        # config 文件可能不存在：load_config 容忍缺失，身份三元组由 provider.yaml 提供
-        cfg = load_config(config_path if os.path.isfile(config_path) else None)
+        cfg = load_config()
     except Exception as e:
         print(f"Error: Failed to load config: {e}")
         sys.exit(1)
@@ -744,7 +705,7 @@ def main():
             "   请运行 `python -m tea_agent.setup_wizard --provider` 或在配置页完成配置。\n"
         )
 
-    run_server(host=args.host, port=args.port, api_key=args.api_key or None, config_path=config_path, open_browser=args.browser)
+    run_server(host=args.host, port=args.port, api_key=args.api_key or None, open_browser=args.browser)
 
 
 if __name__ == "__main__":

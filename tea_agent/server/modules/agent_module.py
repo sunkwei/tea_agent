@@ -12,7 +12,6 @@ import asyncio
 import contextlib
 import json
 import logging
-import os
 import threading
 import time
 import uuid
@@ -136,7 +135,7 @@ def _get_main_provider_name(session: Any = None) -> str:
        **同源同生命周期**。状态栏把二者并排展示（「主模型: <prov> · <model>」），
        必须来自同一对象，否则会出现「旧提供商 · 新模型」的错配。
        真实事故：早期实现固定读长驻 Agent 的 ``config.main_model.provider``，
-       而 ``switch_model`` / ``switch_config`` 只更新 api_url/api_key/model_name，
+               而 ``switch_model`` 只更新 api_url/api_key/model_name，
        从不更新 provider —— 于是模型面板切换后，provider 永久停留在进程首次
        加载配置文件时的值。
     2. 长驻 Agent 的 ``config.main_model.provider``（无会话时的兜底）。
@@ -237,7 +236,6 @@ class AgentModule(HotReloadModule):
     dependencies: list[str] = ["toolkit", "storage"]
 
     _instance: Any = None
-    _config_path: str = ""
     _start_time: float = 0.0
     _server_version: str = ""
 
@@ -276,14 +274,7 @@ class AgentModule(HotReloadModule):
         from tea_agent.agent import Agent
 
         cls._start_time = time.time()
-        cfg_path = cls._config_path or os.environ.get("TEA_CONFIG", "")
-        if not cfg_path:
-            # 无显式 config / 无 TEA_CONFIG → 使用项目记忆的最后 config（若有）
-            cfg_path = cls._load_last_config() or ""
-            if cfg_path:
-                logger.info(f"Using remembered config: {cfg_path}")
-        cls._instance = Agent(mode="full", config_path=cfg_path or None)
-        cls._config_path = cfg_path or getattr(cls._instance, "_config_path", "")
+        cls._instance = Agent(mode="full")
         logger.info(f"Agent loaded | model={cls._get_model_name()}")
         return True
 
@@ -308,85 +299,32 @@ class AgentModule(HotReloadModule):
             return ""
 
     @classmethod
-    def set_config_path(cls, config_path: str) -> None:
-        cls._config_path = config_path
-
-    # ── 最后使用 config 记忆（项目 .tea_agent_run/last_config.json）──
-    _LAST_CONFIG_FILENAME = "last_config.json"
-
-    @classmethod
-    def _remember_last_config(cls, config_path: str) -> None:
-        """把最后成功使用的 config 路径记入项目 .tea_agent_run/last_config.json。
-
-        下次启动（AgentModule._load）未显式指定 config 时默认使用该配置。
-        项目运行目录不可用（如启动目录=用户主目录）时静默跳过。
-        """
-        if not config_path:
-            return
-        try:
-            from tea_agent.storage_scope import project_run_dir
-
-            run_dir = project_run_dir()
-            if not run_dir:
-                return
-            target = os.path.join(run_dir, cls._LAST_CONFIG_FILENAME)
-            with open(target, "w", encoding="utf-8") as f:
-                json.dump({"config_path": os.path.abspath(config_path)}, f, ensure_ascii=False, indent=2)
-            logger.debug(f"remember last config: {config_path}")
-        except Exception:
-            logger.debug(f"remember last config failed: {config_path}", exc_info=True)
-
-    @classmethod
-    def _load_last_config(cls) -> str | None:
-        """读取项目记忆的最后 config 路径；文件缺失/已删除返回 None。"""
-        try:
-            from tea_agent.storage_scope import project_run_dir
-
-            run_dir = project_run_dir()
-            if not run_dir:
-                return None
-            target = os.path.join(run_dir, cls._LAST_CONFIG_FILENAME)
-            if not os.path.isfile(target):
-                return None
-            with open(target, encoding="utf-8") as f:
-                data = json.load(f)
-            p = ((data or {}).get("config_path") or "").strip()
-            return p if p and os.path.isfile(p) else None
-        except Exception:
-            return None
-
-    @classmethod
-    def _load_config_cached(cls, config_path: str | None = None):
-        key = config_path or "__default__"
-        if key not in config_cache:
+    def _load_config_cached(cls):
+        if "__default__" not in config_cache:
             from tea_agent.config import load_config
 
-            config_cache[key] = load_config(config_path)
-        return config_cache[key]
+            config_cache["__default__"] = load_config()
+        return config_cache["__default__"]
 
     @classmethod
-    def invalidate_config_cache(cls, config_path: str | None = None):
+    def invalidate_config_cache(cls):
         """使会话配置缓存失效（模型 apply/switch 后调用）。
 
         配置被外部修改（如 /api/providers/{name}/apply 落盘新模型）后，
         必须清除 config_cache 才能让 create_session 读到最新配置；
         否则缓存永久命中启动时的旧配置，聊天会话始终使用老模型。
         """
-        if config_path:
-            config_cache.pop(config_path, None)
         config_cache.pop("__default__", None)
-        if getattr(cls, "_config_path", None):
-            config_cache.pop(cls._config_path, None)
 
     # ── 会话创建 ──
 
     @classmethod
-    def create_session(cls, config_path: str | None = None):
+    def create_session(cls):
         """为流式请求创建独立 Session。"""
         from tea_agent import tlk
         from tea_agent.onlinesession import OnlineToolSession
 
-        cfg = cls._load_config_cached(config_path or cls._config_path)
+        cfg = cls._load_config_cached()
         tk = tlk.toolkit
         main_m = cfg.main_model
         cheap_m = cfg.cheap_model
@@ -530,9 +468,9 @@ class AgentModule(HotReloadModule):
         }
 
     @classmethod
-    async def chat_completion_stream(cls, model, messages, temperature=0.7, max_tokens=None, topic_id="", config_path=None):
+    async def chat_completion_stream(cls, model, messages, temperature=0.7, max_tokens=None, topic_id=""):
         """流式对话完成。每请求创建独立 Session。"""
-        session, _storage = cls.create_session(config_path)
+        session, _storage = cls.create_session()
         user_msg = cls._extract_user_message(messages)
         queue = asyncio.Queue()
         event_loop = asyncio.get_running_loop()
@@ -1130,45 +1068,6 @@ class AgentModule(HotReloadModule):
                 return None
             return {"model_name": p["model_name"], "api_url": p["api_url"], "at": p["at"]}
 
-    @classmethod
-    def switch_config(cls, config_path: str) -> dict:
-        if not os.path.exists(config_path):
-            return {"ok": False, "error": f"Config not found: {config_path}"}
-        from tea_agent.config import AgentConfig, load_config
-
-        new_cfg = load_config(config_path)
-        if not new_cfg.main_model.is_configured:
-            return {"ok": False, "error": "main_model not complete"}
-        cm = new_cfg.main_model
-        cc = new_cfg.cheap_model
-        cls.switch_model(
-            cm.api_key,
-            cm.api_url,
-            cm.model_name,
-            provider=cm.provider,
-            ref_model=cm.ref_model,
-            cheap_api_key=(cc.api_key or "") if cc else "",
-            cheap_api_url=(cc.api_url or "") if cc else "",
-            cheap_model_name=(cc.model_name or "") if cc else "",
-            temperature=cm.temperature,
-            max_tokens=cm.max_tokens,
-            top_p=cm.top_p,
-            max_context_tokens=cm.max_context_tokens,
-            options=cm.options,
-        )
-        agent = cls._instance
-        if agent and hasattr(agent, "_cfg"):
-            cfg = agent._cfg
-            for key in AgentConfig._RUNTIME_CONFIG_KEYS:
-                setattr(cfg, key, getattr(new_cfg, key))
-            cfg.mode_params = new_cfg.mode_params
-        cls._config_path = config_path
-        if agent and hasattr(agent, "_config_path"):
-            agent._config_path = config_path
-        # 记住最后成功使用的 config（下次启动默认使用）
-        cls._remember_last_config(config_path)
-        return {"ok": True, "config_path": config_path}
-
     # ── 配置信息 ──
 
     @classmethod
@@ -1260,119 +1159,6 @@ class AgentModule(HotReloadModule):
     @classmethod
     def _get_configs_dir(cls):
         return Path.home() / ".tea_agent"
-
-    @classmethod
-    def list_config_files(cls, check_valid: bool = False):
-        """Scan ~/.tea_agent/*.yaml and return parsed config summaries."""
-        from tea_agent.config import load_config
-
-        configs_dir = cls._get_configs_dir()
-        if not configs_dir.exists():
-            return {"configs": [], "any_valid": False} if check_valid else []
-        results = []
-        any_valid = False
-        for fpath in sorted(configs_dir.glob("*.yaml")):
-            try:
-                cfg = load_config(str(fpath))
-                main_m = cfg.main_model
-                cheap_m = cfg.cheap_model
-                is_valid = main_m.is_configured
-                if is_valid:
-                    any_valid = True
-                results.append(
-                    {
-                        "filename": fpath.name,
-                        "path": str(fpath),
-                        "is_valid": is_valid,
-                        "main_model": {
-                            "model_name": main_m.model_name or "",
-                            "api_url": main_m.api_url or "",
-                            "api_key_masked": ((main_m.api_key[:6] + "..." + main_m.api_key[-4:]) if len(main_m.api_key) > 12 else "***")
-                            if main_m.api_key
-                            else "",
-                        },
-                        "cheap_model": {
-                            "model_name": cheap_m.model_name or "",
-                            "api_url": cheap_m.api_url or "",
-                            "api_key_masked": ((cheap_m.api_key[:6] + "..." + cheap_m.api_key[-4:]) if len(cheap_m.api_key) > 12 else "***")
-                            if cheap_m and cheap_m.api_key
-                            else "",
-                        }
-                        if cheap_m and cheap_m.model_name
-                        else None,
-                    }
-                )
-            except Exception as e:
-                results.append(
-                    {
-                        "filename": fpath.name,
-                        "path": str(fpath),
-                        "is_valid": False,
-                        "error": str(e),
-                    }
-                )
-        if check_valid:
-            return {"configs": results, "any_valid": any_valid}
-        return results
-
-    @classmethod
-    def create_config_file(
-        cls,
-        filename: str,
-        main_model_name: str,
-        main_api_url: str,
-        main_api_key: str,
-        cheap_model_name: str = "",
-        cheap_api_url: str = "",
-        cheap_api_key: str = "",
-    ):
-        """Create a new config file in ~/.tea_agent/."""
-        configs_dir = cls._get_configs_dir()
-        configs_dir.mkdir(parents=True, exist_ok=True)
-
-        if not filename.endswith(".yaml"):
-            filename += ".yaml"
-        fpath = configs_dir / filename
-
-        lines = []
-        lines.append("main_model:")
-        lines.append("  api_key: " + main_api_key)
-        lines.append("  api_url: " + main_api_url)
-        lines.append('  model_name: "' + main_model_name + '"')
-        lines.append("  temperature: 0.65")
-        lines.append("  max_tokens: 131072")
-        lines.append("  options:")
-        lines.append("    supports_vision: false")
-        lines.append("    supports_reasoning: true")
-        lines.append("")
-
-        if cheap_model_name and cheap_api_url:
-            lines.append("cheap_model:")
-            lines.append("  api_key: " + (cheap_api_key or main_api_key))
-            lines.append("  api_url: " + cheap_api_url)
-            lines.append('  model_name: "' + cheap_model_name + '"')
-            lines.append("  max_tokens: 8192")
-            lines.append("  options:")
-            lines.append("    supports_vision: false")
-            lines.append("    supports_reasoning: true")
-            lines.append("")
-
-        lines.append("max_history: 10")
-        lines.append("max_iterations: 100")
-        lines.append("enable_thinking: true")
-        lines.append("keep_turns: 10")
-        lines.append("max_tool_output: 128000")
-        lines.append("max_assistant_content: 128000")
-        lines.append("memory_extraction_threshold: 2")
-        lines.append("memory_dedup_threshold: 0.3")
-        lines.append("chat_page_size: 50")
-        lines.append("history_l2_max: 0  # 0=自动（L2 条数上限 = keep_turns + batch）")
-        lines.append("history_l3_batch: 0  # 0=自动（keep_turns//2）")
-
-        content = "\n".join(lines) + "\n"
-        fpath.write_text(content, encoding="utf-8")
-        logger.info("Created config: " + str(fpath))
-        return str(fpath)
 
 
 class _ChatAgentProxy:

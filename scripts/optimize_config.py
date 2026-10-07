@@ -50,7 +50,6 @@ def analyze_config_py():
     
     print("\n优化建议:")
     print("1. 将load_config拆分成多个子函数:")
-    print("   - _resolve_config_path: 解析配置文件路径")
     print("   - _load_yaml_data: 加载YAML数据")
     print("   - _parse_model_configs: 解析模型配置")
     print("   - _parse_embedding_config: 解析嵌入模型配置")

@@ -12,7 +12,7 @@ PROVIDERS 仅作「新装引导/面板端点参考」：
 需在 provider.yaml 显式配置（tool_profile 分档等据此保守处理）。
 
 兼容说明：model_entries()/get_model() 仍接受外部传入的富条目 dict
-（来自 provider.yaml / custom / config profile 迁移），以支持历史数据；
+（来自 provider.yaml / custom 迁移），以支持历史数据；
 但内置 PROVIDERS 自身不再携带富条目。
 """
 
@@ -569,7 +569,6 @@ def generate_config(provider_name: str, api_key: str, model: str = "", use_as_ch
 
 
 def switch_provider(
-    config_path: str,
     provider_name: str,
     api_key: str,
     model: str = "",
@@ -580,10 +579,7 @@ def switch_provider(
 ) -> dict:
     """切换配置到指定 Provider（写 provider.yaml roles 段）。
 
-    config.yaml 已删除：config_path 仅保留签名兼容，不再用于读写。
-
     Args:
-        config_path: 忽略（历史签名兼容）
         provider_name: 主 Provider 名称
         api_key: 主 API Key
         model: 主模型 id（留空用 default_model）
@@ -597,7 +593,7 @@ def switch_provider(
     """
     from tea_agent.config import load_config, save_config
 
-    cfg = load_config(config_path)
+    cfg = load_config()
     provider = get_provider(provider_name)
     if not provider:
         return {"ok": False, "error": f"Unknown provider: {provider_name}"}
@@ -613,7 +609,7 @@ def switch_provider(
             cmeta = get_model(PROVIDERS[cp["name"]], cheap_model) or {}
             _apply_model_into(cfg.cheap_model, cp, cheap_model, cheap_api_key or api_key, cmeta)
 
-    save_config(cfg, config_path)
+    save_config(cfg)
     return {"ok": True, "provider": provider_name, "model": cfg.main_model.model_name}
 
 

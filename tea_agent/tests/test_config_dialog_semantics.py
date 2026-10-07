@@ -7,8 +7,7 @@
    supports_vision=False（旧 upsert 过滤会把 False/0.0 当空值丢弃）；
 4. provider_store.upsert_model：0.0/False 可写入，未显式提供的键不被 blank 覆盖。
 
-隔离：TEA_CONFIG + TEA_PROVIDER_FILE + TEA_PROVIDER_FILE → tmp_path，
-绝不触碰真实用户配置。
+隔离：TEA_PROVIDER_FILE → tmp_path，绝不触碰真实用户配置。
 """
 
 from __future__ import annotations
@@ -20,20 +19,6 @@ import pytest
 def env(tmp_path, monkeypatch):
     import yaml
 
-    cfg = tmp_path / "config.yaml"
-    cfg.write_text(
-        "main_model:\n"
-        "  api_key: sk-main-1234567890\n"
-        "  api_url: https://api.deepseek.com\n"
-        '  model_name: "deepseek-chat"\n'
-        "cheap_model:\n"
-        "  api_key: sk-cheap-1234567890\n"
-        "  api_url: https://api.deepseek.com\n"
-        '  model_name: "deepseek-flash"\n',
-        encoding="utf-8",
-    )
-    monkeypatch.setenv("TEA_CONFIG", str(cfg))
-    monkeypatch.setenv("TEA_PROVIDER_FILE", str(tmp_path / "provider.yaml"))
     provider_file = tmp_path / "provider.yaml"
     provider_file.write_text(
         yaml.safe_dump(
@@ -73,7 +58,7 @@ def env(tmp_path, monkeypatch):
         ),
         encoding="utf-8",
     )
-    # config.yaml 已删除 → 角色绑定由 provider.yaml roles 提供
+    # 角色绑定由 provider.yaml roles 提供
     data = yaml.safe_load(provider_file.read_text(encoding="utf-8"))
     data["roles"] = {
         "main": {"provider": "DeepSeek", "model": "deepseek-chat"},
@@ -95,17 +80,15 @@ def env(tmp_path, monkeypatch):
     state.config_cache.clear()
     state.active_sessions.clear()
     state.background_sessions.clear()
-    cfg_mod._active_config_path = None
-    cfg_mod._last_config_path = None
-    AgentModule._config_path = ""
+    monkeypatch.setattr(cfg_mod, "_config_cache", None, raising=False)
     monkeypatch.setattr(AgentModule, "_pending_switch", None, raising=False)
 
     from starlette.testclient import TestClient
 
     from tea_agent.server.server import create_app
 
-    client = TestClient(create_app(config_path=str(cfg)))
-    yield client, cfg, provider_file, AgentModule
+    client = TestClient(create_app())
+    yield client, provider_file, AgentModule
     state.active_sessions.clear()
     state.background_sessions.clear()
 
@@ -130,7 +113,7 @@ def test_apply_without_url_key_keeps_identity(env):
     """不提交 url/key/模型名 → 兑底当前值，身份三元组不变；参数全部生效。"""
     import yaml
 
-    client, cfg, _pf, _am = env
+    client, _pf, _am = env
 
     r = client.post("/api/model", json=_dialog_payload())
     assert r.status_code == 200, r.text
@@ -163,7 +146,7 @@ def test_apply_writes_back_provider_yaml(env):
     """参数写回 provider.yaml：main + cheap 条目（窗口/输出/采样/能力/effort）。"""
     import yaml
 
-    client, _cfg, pf, _am = env
+    client, pf, _am = env
 
     r = client.post("/api/model", json=_dialog_payload())
     assert r.status_code == 200, r.text
@@ -192,7 +175,7 @@ def test_upsert_model_zero_false_and_unspecified(env):
     """upsert_model：0.0/False 是有效值可写；未显式提供的键不被 blank 覆盖。"""
     from tea_agent.provider_store import get_provider_store
 
-    client, _cfg, _pf, _am = env
+    client, _pf, _am = env
     store = get_provider_store()
 
     store.upsert_model("DeepSeek", "deepseek-chat", {"max_context_tokens": 131072, "supports_vision": True, "temperature": 0.7})

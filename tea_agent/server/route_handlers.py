@@ -68,7 +68,6 @@ from .route_handlers_basic import (
     handle_openapi,
     handle_run_tool,
     handle_search,
-    handle_switch_config,
 )
 from .route_handlers_dag import (
     handle_dag_image,
@@ -155,14 +154,10 @@ from .route_handlers_topics import (
 from .route_handlers_webconfig import (
     _writeback_provider_yaml,
     handle_web_config,
-    handle_web_create_config,
-    handle_web_list_configs,
-    handle_web_model_config,
     handle_web_model_info,
     handle_web_model_switch,
     handle_web_root,
     handle_web_update_config,
-    handle_web_upload_config,
 )
 
 
@@ -251,7 +246,6 @@ async def handle_web_chat(request):
     body = await request.json()
     message = body.get("message", "").strip()
     topic_id = body.get("topic_id", "")
-    config_path = body.get("config_path") or None
     images_b64 = body.get("images", [])
 
     if not message and not images_b64:
@@ -288,7 +282,7 @@ async def handle_web_chat(request):
     image_paths = _images_to_data_urls(images_b64, label="Image")
 
     server = get_server()
-    session, storage = server.create_session(config_path)
+    session, storage = server.create_session()
     queue: asyncio.Queue = asyncio.Queue()
 
     async def event_stream():
@@ -715,17 +709,13 @@ __all__ = [
     "handle_search",
     "handle_start_watcher",
     "handle_stop_watcher",
-    "handle_switch_config",
     "handle_upload",
     "handle_web_chat",
     "handle_web_chat_steering",
     "handle_web_config",
-    "handle_web_create_config",
     "handle_web_fork_topic",
     "handle_web_image",
     "handle_web_interruptions",
-    "handle_web_list_configs",
-    "handle_web_model_config",
     "handle_web_model_info",
     "handle_web_model_switch",
     "handle_web_new_topic",
@@ -744,7 +734,6 @@ __all__ = [
     "handle_web_topic_todos",
     "handle_web_topic_trajectory",
     "handle_web_update_config",
-    "handle_web_upload_config",
     "is_previewable_image",
     "json",
     "logger",

@@ -140,11 +140,8 @@ generator = Generator()
 # ── LLM 生成快捷入口 ──
 _LLM_CLIENT = None
 
-def _get_llm(config_path=None):
+def _get_llm():
     global _LLM_CLIENT
-    if config_path:
-        from src.core.llm_client import LLMClient
-        return LLMClient(config_path=config_path)
     if _LLM_CLIENT is None:
         from src.core.llm_client import llm as _llm
         _LLM_CLIENT = _llm
@@ -153,7 +150,7 @@ def _get_llm(config_path=None):
 
 def llm_generate(text: str, duration: float = 8,
                  tts: bool = True, max_retries: int = 2,
-                 config_path: str = None) -> dict:
+                 ) -> dict:
     """
     使用 LLM 生成动画（一站式接口）
 
@@ -177,7 +174,7 @@ def llm_generate(text: str, duration: float = 8,
     from src.core.animation_dsl import validate_dsl
     from src.core.script_engine import engine
 
-    client = _get_llm(config_path)
+    client = _get_llm()
 
     # 调用 LLM
     messages = [

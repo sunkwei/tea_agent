@@ -2,7 +2,7 @@
 
 覆盖：合并注册表 / 自定义供应商 CRUD / 模型查询 fallback / 配置应用 / 端点推断。
 
-测试隔离：通过 monkeypatch 将 custom_providers.yaml 与 config.yaml
+测试隔离：通过 monkeypatch 将 custom_providers.yaml 与落盘目标
 重定向到 pytest tmp_path，避免污染用户真实配置。
 """
 
@@ -83,7 +83,7 @@ def svc(tmp_path, monkeypatch):
     )
     monkeypatch.setenv("TEA_PROVIDER_FILE", str(pfile))
     monkeypatch.setattr(ps_mod, "_store", None)
-    svc = mm.ProviderService(config_path="")
+    svc = mm.ProviderService()
     svc._custom_cache = None
     svc._custom_mtime = 0.0
     return svc
@@ -336,15 +336,14 @@ def test_query_models_refresh_force(svc, monkeypatch):
 
 
 def test_apply_provider_main(svc, tmp_path, monkeypatch):
-    cfg_file = tmp_path / "config.yaml"
-    monkeypatch.setattr(mm, "load_config", lambda path: mm._default_cfg())
-    monkeypatch.setattr(mm, "save_config", lambda cfg, path: cfg_file.write_text("saved", encoding="utf-8"))
+    cfg_file = tmp_path / "saved.yaml"
+    monkeypatch.setattr(mm, "load_config", lambda: mm._default_cfg())
+    monkeypatch.setattr(mm, "save_config", lambda cfg: cfg_file.write_text("saved", encoding="utf-8"))
     result = svc.apply_provider(
         "DeepSeek",
         api_key="sk-1234567890123",
         model="deepseek-chat",
         role="main",
-        config_path=str(cfg_file),
         temperature=0.3,
     )
     assert result["ok"] is True
@@ -355,8 +354,8 @@ def test_apply_provider_main(svc, tmp_path, monkeypatch):
 
 
 def test_apply_provider_default_model(svc, monkeypatch):
-    monkeypatch.setattr(mm, "load_config", lambda path: mm._default_cfg())
-    monkeypatch.setattr(mm, "save_config", lambda cfg, path: None)
+    monkeypatch.setattr(mm, "load_config", lambda: mm._default_cfg())
+    monkeypatch.setattr(mm, "save_config", lambda cfg: None)
     result = svc.apply_provider("DeepSeek", api_key="sk-x", role="main")
     assert result["model"] == "deepseek-chat"  # 使用 default_model
 
@@ -375,10 +374,10 @@ def test_apply_provider_merges_capabilities(svc, monkeypatch):
     """apply 默认模型 deepseek-chat：能力来自该模型目录条目（思考 ✓ 视觉 ✗）。"""
     captured = {}
 
-    def fake_save(cfg, path):
+    def fake_save(cfg):
         captured["options"] = dict(cfg.main_model.options)
 
-    monkeypatch.setattr(mm, "load_config", lambda path: mm._default_cfg())
+    monkeypatch.setattr(mm, "load_config", lambda: mm._default_cfg())
     monkeypatch.setattr(mm, "save_config", fake_save)
     svc.apply_provider("DeepSeek", api_key="sk-x", role="main")
     # 模型级：deepseek-chat 思考模型，非视觉
@@ -393,12 +392,12 @@ def test_apply_provider_autofills_caps_from_catalog(svc, monkeypatch):
     """apply 未显式传窗口/输出时自动取目录内该模型上限写入配置。"""
     saved = {}
 
-    def fake_save(cfg, path):
+    def fake_save(cfg):
         saved["max_context_tokens"] = cfg.main_model.max_context_tokens
         saved["max_tokens"] = cfg.main_model.max_tokens
         saved["model_name"] = cfg.main_model.model_name
 
-    monkeypatch.setattr(mm, "load_config", lambda path: mm._default_cfg())
+    monkeypatch.setattr(mm, "load_config", lambda: mm._default_cfg())
     monkeypatch.setattr(mm, "save_config", fake_save)
     result = svc.apply_provider("DeepSeek", api_key="sk-x", model="deepseek-chat", role="main")
     assert result["max_context_tokens"] > 0
@@ -411,11 +410,11 @@ def test_apply_provider_explicit_caps_override_catalog(svc, monkeypatch):
     """显式传入 max_tokens / max_context_tokens 优先于目录默认。"""
     saved = {}
 
-    def fake_save(cfg, path):
+    def fake_save(cfg):
         saved["max_tokens"] = cfg.main_model.max_tokens
         saved["max_context_tokens"] = cfg.main_model.max_context_tokens
 
-    monkeypatch.setattr(mm, "load_config", lambda path: mm._default_cfg())
+    monkeypatch.setattr(mm, "load_config", lambda: mm._default_cfg())
     monkeypatch.setattr(mm, "save_config", fake_save)
     svc.apply_provider(
         "DeepSeek",
@@ -433,11 +432,11 @@ def test_apply_vision_model_merges_model_level_caps(svc, monkeypatch):
     """选视觉模型条目 → options.supports_vision=True（目录模型级能力）。"""
     captured = {}
 
-    def fake_save(cfg, path):
+    def fake_save(cfg):
         captured["options"] = dict(cfg.main_model.options)
         captured["model_name"] = cfg.main_model.model_name
 
-    monkeypatch.setattr(mm, "load_config", lambda path: mm._default_cfg())
+    monkeypatch.setattr(mm, "load_config", lambda: mm._default_cfg())
     monkeypatch.setattr(mm, "save_config", fake_save)
     svc.apply_provider("DeepSeek", api_key="sk-x", model="deepseek-v4-flash-vision-exp", role="main")
     assert captured["model_name"] == "deepseek-v4-flash-vision-exp"
@@ -470,9 +469,9 @@ def test_list_providers_emits_catalog(svc):
 def test_apply_provider_reuses_existing_key(svc, monkeypatch):
     cfg = mm._default_cfg()
     cfg.main_model.api_key = "sk-existing-key-123"
-    monkeypatch.setattr(mm, "load_config", lambda path: cfg)
+    monkeypatch.setattr(mm, "load_config", lambda: cfg)
     saved = {}
-    monkeypatch.setattr(mm, "save_config", lambda c, p: saved.update(api_key=c.main_model.api_key))
+    monkeypatch.setattr(mm, "save_config", lambda c: saved.update(api_key=c.main_model.api_key))
     result = svc.apply_provider("DeepSeek", api_key="", role="main")
     assert result["ok"] is True
     assert saved["api_key"] == "sk-existing-key-123"

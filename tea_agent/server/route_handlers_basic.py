@@ -50,12 +50,11 @@ async def handle_chat_completions(request):
     temperature = body.get("temperature", 0.7)
     max_tokens = body.get("max_tokens")
     topic_id = body.get("topic_id", "")
-    config_path = body.get("config_path") or None
     if not messages:
         return JSONResponse({"error": "messages required"}, status_code=400)
     server = get_server()
     if stream:
-        gen = server.chat_completion_stream(model, messages, temperature, max_tokens, topic_id, config_path)
+        gen = server.chat_completion_stream(model, messages, temperature, max_tokens, topic_id)
         return StreamingResponse(gen, media_type="text/event-stream")
     result = server.chat_completion(model, messages, False, temperature, max_tokens, topic_id)
     return JSONResponse(result)
@@ -151,17 +150,6 @@ async def handle_get_config(request):
         return JSONResponse(get_server().get_config_info())
     except Exception as e:
         return JSONResponse({"error": "Agent not configured", "detail": str(e)}, status_code=503)
-
-
-async def handle_switch_config(request):
-    body = await request.json()
-    config_path = (body.get("config_path") or "").strip()
-    if not config_path:
-        return JSONResponse({"error": "config_path required"}, status_code=400)
-    result = get_server().switch_config(config_path)
-    if not result.get("ok"):
-        return JSONResponse(result, status_code=400)
-    return JSONResponse(result)
 
 
 # ================================================================
@@ -267,10 +255,6 @@ OPENAPI_SPEC = {
                                     "stream": {"type": "boolean", "default": False},
                                     "temperature": {"type": "number", "default": 0.7},
                                     "topic_id": {"type": "string"},
-                                    "config_path": {
-                                        "type": "string",
-                                        "description": "Config file path, different instances can use different configs",
-                                    },
                                 },
                                 "required": ["messages"],
                             }
@@ -309,7 +293,6 @@ OPENAPI_SPEC = {
             },
         },
         "/v1/config": {"get": {"summary": "Get config", "tags": ["Config"], "responses": {"200": {"description": "OK"}}}},
-        "/v1/config/switch": {"post": {"summary": "Switch config", "tags": ["Config"], "responses": {"200": {"description": "OK"}}}},
         "/api/providers": {
             "get": {
                 "summary": "List providers (builtin + custom)",

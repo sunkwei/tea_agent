@@ -406,7 +406,7 @@ class OnlineToolSession(BaseChatSession):
                 self.context.thinking_strength = cfg.thinking_strength
                 self.context.reasoning_effort = cfg.reasoning_effort
 
-                # 保存到 provider.yaml（settings 段；config.yaml 已删除）
+                # 保存到 provider.yaml（settings 段）
                 save_config(cfg)
                 if True:
                     logger.info(

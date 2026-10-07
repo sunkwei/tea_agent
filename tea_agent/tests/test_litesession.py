@@ -17,6 +17,7 @@ import pytest
 
 # ── Fixtures ──
 
+
 @pytest.fixture
 def mock_toolkit():
     """模拟 Toolkit 实例"""
@@ -24,19 +25,11 @@ def mock_toolkit():
     tk.meta_map = {
         "toolkit_search": {
             "type": "function",
-            "function": {
-                "name": "toolkit_search",
-                "description": "搜索工具",
-                "parameters": {"type": "object", "properties": {}}
-            }
+            "function": {"name": "toolkit_search", "description": "搜索工具", "parameters": {"type": "object", "properties": {}}},
         },
         "toolkit_exec": {
             "type": "function",
-            "function": {
-                "name": "toolkit_exec",
-                "description": "执行命令",
-                "parameters": {"type": "object", "properties": {}}
-            }
+            "function": {"name": "toolkit_exec", "description": "执行命令", "parameters": {"type": "object", "properties": {}}},
         },
     }
     tk.call_tool.return_value = {"status": "ok", "output": "test_output"}
@@ -50,6 +43,7 @@ def lite_session(mock_toolkit):
         mock_client = MagicMock()
         mock_openai.return_value = mock_client
         from tea_agent.litesession import LiteSession
+
         session = LiteSession(
             toolkit=mock_toolkit,
             api_key="test-key",
@@ -65,6 +59,7 @@ def lite_session(mock_toolkit):
 
 # ── 初始化测试 ──
 
+
 class TestLiteSessionInit:
     """初始化测试"""
 
@@ -72,6 +67,7 @@ class TestLiteSessionInit:
         """基本参数传递"""
         with patch("tea_agent.litesession.OpenAI"):
             from tea_agent.litesession import LiteSession
+
             session = LiteSession(
                 toolkit=mock_toolkit,
                 api_key="test-key",
@@ -90,6 +86,7 @@ class TestLiteSessionInit:
         """自定义参数"""
         with patch("tea_agent.litesession.OpenAI"):
             from tea_agent.litesession import LiteSession
+
             session = LiteSession(
                 toolkit=mock_toolkit,
                 api_key="test-key",
@@ -109,6 +106,7 @@ class TestLiteSessionInit:
         """空 system_prompt 应使用默认值"""
         with patch("tea_agent.litesession.OpenAI"):
             from tea_agent.litesession import LiteSession
+
             session = LiteSession(
                 toolkit=mock_toolkit,
                 api_key="test-key",
@@ -122,6 +120,7 @@ class TestLiteSessionInit:
         """应创建 OpenAI 客户端（含 API 弹性参数：timeout + max_retries）"""
         with patch("tea_agent.litesession.OpenAI") as mock_openai:
             from tea_agent.litesession import LiteSession
+
             LiteSession(
                 toolkit=mock_toolkit,
                 api_key="custom-key",
@@ -139,6 +138,7 @@ class TestLiteSessionInit:
         """toolkit 为 None 时不应报错"""
         with patch("tea_agent.litesession.OpenAI"):
             from tea_agent.litesession import LiteSession
+
             session = LiteSession(
                 toolkit=None,
                 api_key="test-key",
@@ -151,6 +151,7 @@ class TestLiteSessionInit:
         """both filters deprecated; all tools available."""
         with patch("tea_agent.litesession.OpenAI"):
             from tea_agent.litesession import LiteSession
+
             session = LiteSession(
                 toolkit=mock_toolkit,
                 api_key="k",
@@ -167,6 +168,7 @@ class TestLiteSessionInit:
         """allowed_tools=None 应为不过滤"""
         with patch("tea_agent.litesession.OpenAI"):
             from tea_agent.litesession import LiteSession
+
             session = LiteSession(
                 toolkit=mock_toolkit,
                 api_key="k",
@@ -176,7 +178,10 @@ class TestLiteSessionInit:
                 denied_tools=None,
             )
             assert len(session.tools) == 2
+
+
 # ── 续写 test_litesession.py ──
+
 
 class TestDefaultSystemPrompt:
     """_default_system_prompt() 测试"""
@@ -224,6 +229,7 @@ class TestBuildTools:
         """toolkit 为 None 时返回空列表"""
         with patch("tea_agent.litesession.OpenAI"):
             from tea_agent.litesession import LiteSession
+
             session = LiteSession(
                 toolkit=None,
                 api_key="k",
@@ -239,6 +245,7 @@ class TestBuildTools:
         }
         with patch("tea_agent.litesession.OpenAI"):
             from tea_agent.litesession import LiteSession
+
             session = LiteSession(
                 toolkit=mock_toolkit,
                 api_key="k",
@@ -254,6 +261,7 @@ class TestBuildTools:
         }
         with patch("tea_agent.litesession.OpenAI"):
             from tea_agent.litesession import LiteSession
+
             session = LiteSession(
                 toolkit=mock_toolkit,
                 api_key="k",
@@ -273,13 +281,7 @@ class TestParseToolCalls:
 
     def test_valid_tool_call(self, lite_session):
         """有效的工具调用应被解析"""
-        data = {
-            0: {
-                "id": "call_123",
-                "name": "toolkit_search",
-                "arguments": '{"query": "hello"}'
-            }
-        }
+        data = {0: {"id": "call_123", "name": "toolkit_search", "arguments": '{"query": "hello"}'}}
         result = lite_session._parse_tool_calls(data)
         assert len(result) == 1
         assert result[0].id == "call_123"
@@ -297,29 +299,19 @@ class TestParseToolCalls:
 
     def test_invalid_json_arguments_skipped(self, lite_session):
         """无效 JSON 参数应跳过"""
-        data = {
-            0: {
-                "id": "call_1",
-                "name": "toolkit_search",
-                "arguments": "invalid json{{{"
-            }
-        }
+        data = {0: {"id": "call_1", "name": "toolkit_search", "arguments": "invalid json{{{"}}
         result = lite_session._parse_tool_calls(data)
         assert result == []
 
     def test_missing_id_skipped(self, lite_session):
         """缺少 id 应跳过"""
-        data = {
-            0: {"id": "", "name": "toolkit_search", "arguments": "{}"}
-        }
+        data = {0: {"id": "", "name": "toolkit_search", "arguments": "{}"}}
         result = lite_session._parse_tool_calls(data)
         assert result == []
 
     def test_missing_name_skipped(self, lite_session):
         """缺少 name 应跳过"""
-        data = {
-            0: {"id": "call_1", "name": "", "arguments": "{}"}
-        }
+        data = {0: {"id": "call_1", "name": "", "arguments": "{}"}}
         result = lite_session._parse_tool_calls(data)
         assert result == []
 
@@ -351,6 +343,7 @@ class TestExecuteTool:
     def test_execute_calls_toolkit(self, lite_session, mock_toolkit):
         """应调用 toolkit.call_tool"""
         from dataclasses import dataclass
+
         @dataclass
         class FakeCall:
             id: str = "call_1"
@@ -365,33 +358,33 @@ class TestExecuteTool:
         call_id, func_name, result = lite_session._execute_tool(call)
         assert call_id == "call_1"
         assert func_name == "toolkit_search"
-        mock_toolkit.call_tool.assert_called_once_with(
-            "toolkit_search", query="hello"
-        )
+        mock_toolkit.call_tool.assert_called_once_with("toolkit_search", query="hello")
 
     def test_execute_with_empty_args(self, lite_session, mock_toolkit):
         """空参数应传空 dict"""
         from dataclasses import dataclass
+
         @dataclass
         class FakeCall:
             id: str = "call_2"
             function: object = None
 
         call = FakeCall()
-        call.function = type('FakeFunc', (), {'name': 'toolkit_search', 'arguments': ''})()
+        call.function = type("FakeFunc", (), {"name": "toolkit_search", "arguments": ""})()
         lite_session._execute_tool(call)
         mock_toolkit.call_tool.assert_called_once_with("toolkit_search")
 
     def test_execute_with_invalid_json_args(self, lite_session, mock_toolkit):
         """无效 JSON 参数应传空 dict"""
         from dataclasses import dataclass
+
         @dataclass
         class FakeCall:
             id: str = "call_3"
             function: object = None
 
         call = FakeCall()
-        call.function = type('FakeFunc', (), {'name': 'toolkit_search', 'arguments': 'not json'})()
+        call.function = type("FakeFunc", (), {"name": "toolkit_search", "arguments": "not json"})()
         lite_session._execute_tool(call)
         mock_toolkit.call_tool.assert_called_once_with("toolkit_search")
 
@@ -399,13 +392,14 @@ class TestExecuteTool:
         """工具执行异常应返回错误字符串"""
         mock_toolkit.call_tool.side_effect = RuntimeError("工具崩溃")
         from dataclasses import dataclass
+
         @dataclass
         class FakeCall:
             id: str = "call_4"
             function: object = None
 
         call = FakeCall()
-        call.function = type('FakeFunc', (), {'name': 'toolkit_search', 'arguments': '{}'})()
+        call.function = type("FakeFunc", (), {"name": "toolkit_search", "arguments": "{}"})()
         call_id, func_name, result = lite_session._execute_tool(call)
         assert "工具执行错误" in result or "工具崩溃" in result
 
@@ -431,6 +425,7 @@ class TestInterruptAndClose:
             mock_client.close.side_effect = AttributeError("no close")
             mock_openai.return_value = mock_client
             from tea_agent.litesession import LiteSession
+
             session = LiteSession(
                 toolkit=mock_toolkit,
                 api_key="k",
@@ -473,8 +468,7 @@ class TestChatEdgeCases:
 
     def test_chat_api_error_returns_error(self, lite_session):
         """API 异常应返回 error 字段"""
-        lite_session.api.chat.completions.create.side_effect = \
-            Exception("API 连接失败")
+        lite_session.api.chat.completions.create.side_effect = Exception("API 连接失败")
         result = lite_session.chat("你好")
         assert result["error"] is not None
         assert "API 连接失败" in result["error"]
@@ -500,8 +494,10 @@ class TestChatEdgeCases:
     def test_chat_with_callback(self, lite_session):
         """callback 应被调用"""
         calls = []
+
         def cb(text):
             calls.append(text)
+
         mock_chunk = MagicMock()
         mock_chunk.choices = [MagicMock()]
         mock_chunk.choices[0].delta.content = "Hi"
@@ -524,6 +520,7 @@ class TestChatEdgeCases:
 
 
 # ── reasoning 字段兼容（vLLM 思考模式 `reasoning` 字段）──
+
 
 class TestReasoningFieldCompat:
     """思考字段兼容：vLLM 思考模式（Qwen3.8 等）返回 `reasoning`，
@@ -585,6 +582,7 @@ class TestReasoningFieldCompat:
 
 # ── _call_api reasoning_effort 值域钳制测试 ──
 
+
 class TestCallApiReasoningEffort:
     """_call_api reasoning_effort 值域钳制（400 回归：qwen3.8 仅接受 xhigh/medium/low）"""
 
@@ -595,14 +593,14 @@ class TestCallApiReasoningEffort:
 
             tk = MagicMock()
             tk.meta_map = {}
-            base = dict(
-                toolkit=tk,
-                api_key="test-key",
-                api_url="https://test.api.com/v1",
-                model="qwen3.8-27b",
-                enable_thinking=True,
-                supports_reasoning=True,
-            )
+            base = {
+                "toolkit": tk,
+                "api_key": "test-key",
+                "api_url": "https://test.api.com/v1",
+                "model": "qwen3.8-27b",
+                "enable_thinking": True,
+                "supports_reasoning": True,
+            }
             base.update(kwargs)
             return LiteSession(**base)
 

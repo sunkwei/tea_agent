@@ -34,6 +34,7 @@ from tea_agent.store._summaries import SummaryStore  # noqa: E402
 # 1. 纯策略：水位 / 批大小 / 溢出条数
 # ════════════════════════════════════════════════════════════
 
+
 class TestResolveKeep:
     def test_default_keep_turns_is_ten(self):
         """需求：keep_turns 默认值改为 10。"""
@@ -133,6 +134,7 @@ class TestUrgentRatio:
 
     def test_invalid_ratio_falls_back(self):
         """越界/非法阈值回落默认 0.75，不得变成"恒告急"。"""
+
         class _Ctx:
             l3_urgent_ratio = 0.0
 
@@ -153,6 +155,7 @@ class TestUrgentRatio:
 # ════════════════════════════════════════════════════════════
 # 2. store 层：push_to_level2 / trim_level2
 # ════════════════════════════════════════════════════════════
+
 
 class _L2Store(SummaryStore):
     """最小 L2 存储 stub：只覆盖 get/set_level2（不触碰 sqlite）。
@@ -278,18 +281,14 @@ class TestPushTrimShareWaterline:
         _push(a, n, keep_turns=10, max_level2_chars=0)
         state_before = list(a._l2)
 
-        _c, o_push, s_push = a.push_to_level2(
-            "t", "uX", "aX", keep_turns=10, max_level2_chars=0, thinking_max_chars=0
-        )
+        _c, o_push, s_push = a.push_to_level2("t", "uX", "aX", keep_turns=10, max_level2_chars=0, thinking_max_chars=0)
 
         # 对"push 前状态 + 同一新条目"做 trim → 结果必须逐项一致
         b = _L2Store()
         b._l2 = state_before + [{"user": "uX", "assistant": "aX"}]
         _cb, o_trim, s_trim = b.trim_level2("t", keep_turns=10, urgent=False)
 
-        assert (len(o_push), s_push) == (len(o_trim), s_trim), (
-            f"push 与 trim 判定漂移: push={(len(o_push), s_push)} trim={(len(o_trim), s_trim)}"
-        )
+        assert (len(o_push), s_push) == (len(o_trim), s_trim), f"push 与 trim 判定漂移: push={(len(o_push), s_push)} trim={(len(o_trim), s_trim)}"
         assert len(a._l2) == len(b._l2), "两条路径压回后的 L2 条数必须一致"
 
     @pytest.mark.parametrize("n", [11, 14, 16, 25])

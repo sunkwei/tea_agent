@@ -32,13 +32,11 @@ def agent_dir(tmp_path: pathlib.Path):
         f"  api_key: {DS_MAIN}\n"
         "  api_url: https://api.deepseek.com\n"
         '  model_name: "deepseek-v4-flash"\n',
-        encoding="utf-8")
+        encoding="utf-8",
+    )
     (d / "config_ds.yaml").write_text(
-        "main_model:\n"
-        "  api_key: sk-other-key-222333-xyz\n"
-        "  api_url: https://api.deepseek.com\n"
-        '  model_name: "deepseek-chat"\n',
-        encoding="utf-8")
+        'main_model:\n  api_key: sk-other-key-222333-xyz\n  api_url: https://api.deepseek.com\n  model_name: "deepseek-chat"\n', encoding="utf-8"
+    )
     return d
 
 
@@ -47,16 +45,20 @@ def pstore(tmp_path: pathlib.Path, monkeypatch, agent_dir):
     f = tmp_path / "provider.yaml"
     monkeypatch.setenv("TEA_PROVIDER_FILE", str(f))
     import tea_agent.provider_store as ps
+
     monkeypatch.setattr(ps, "_store", None, raising=False)
     s = ps.get_provider_store(f, agent_dir=agent_dir)
     # config*.yaml 不再派生提供商 → 显式种入 DeepSeek（若干用例曾依赖 config 扫描）
-    s.ensure_provider("DeepSeek", {
-        "api_url": "https://api.deepseek.com",
-        "api_key": DS_MAIN,
-        "default_model": "deepseek-v4-pro",
-        "source": "builtin",
-        "models": ["deepseek-v4-pro", "deepseek-v4-flash", "deepseek-chat"],
-    })
+    s.ensure_provider(
+        "DeepSeek",
+        {
+            "api_url": "https://api.deepseek.com",
+            "api_key": DS_MAIN,
+            "default_model": "deepseek-v4-pro",
+            "source": "builtin",
+            "models": ["deepseek-v4-pro", "deepseek-v4-flash", "deepseek-chat"],
+        },
+    )
     yield s
     monkeypatch.setattr(ps, "_store", None, raising=False)
 
@@ -64,9 +66,7 @@ def pstore(tmp_path: pathlib.Path, monkeypatch, agent_dir):
 def test_prune_unconfigured_builtins(pstore):
     """prune_unconfigured：删除无 key 的内置占位，保留已配置（带 key）条目。"""
     data = pstore.load()
-    data["providers"].setdefault("OpenAI", {
-        "api_url": "https://api.openai.com/v1", "api_key": "",
-        "source": "builtin", "models": {}})
+    data["providers"].setdefault("OpenAI", {"api_url": "https://api.openai.com/v1", "api_key": "", "source": "builtin", "models": {}})
     data["providers"]["DeepSeek"]["api_key"] = DS_MAIN
     pstore.save()
     res = pstore.prune_unconfigured()
@@ -84,13 +84,17 @@ def test_list_masks_key(pstore):
 
 # ── 供应商 CRUD ──────────────────────────────────────────
 
+
 def test_upsert_and_remove_provider(pstore):
-    pstore.upsert_provider("MyGate", {
-        "api_url": "https://g.example.com/v1",
-        "api_key": "sk-live-abcdefghijkl",
-        "default_model": "gpt-x",
-        "models": ["gpt-x"],
-    })
+    pstore.upsert_provider(
+        "MyGate",
+        {
+            "api_url": "https://g.example.com/v1",
+            "api_key": "sk-live-abcdefghijkl",
+            "default_model": "gpt-x",
+            "models": ["gpt-x"],
+        },
+    )
     p = pstore.get_provider("MyGate")
     assert p and p["api_url"] == "https://g.example.com/v1"
     assert pstore.remove_provider("MyGate") is True
@@ -98,11 +102,15 @@ def test_upsert_and_remove_provider(pstore):
 
 
 def test_model_crud_and_sync(pstore):
-    pstore.upsert_model("DeepSeek", "custom-model", {
-        "max_context_tokens": 200000,
-        "max_output_tokens": 16384,
-        "supports_vision": True,
-    })
+    pstore.upsert_model(
+        "DeepSeek",
+        "custom-model",
+        {
+            "max_context_tokens": 200000,
+            "max_output_tokens": 16384,
+            "supports_vision": True,
+        },
+    )
     m = pstore.get_model("DeepSeek", "custom-model")
     assert m and m["max_context_tokens"] == 200000 and m["supports_vision"] is True
     res = pstore.sync_models("DeepSeek", ["deepseek-chat", "brand-new-x"])
@@ -112,9 +120,11 @@ def test_model_crud_and_sync(pstore):
 
 def test_resolve_flat_metadata(pstore):
     # 属性来自 provider.yaml（先显式写入模型条目再 resolve；代码不内置属性）
-    pstore.upsert_model("DeepSeek", "deepseek-v4-pro", {
-        "max_context_tokens": 1_000_000, "max_output_tokens": 384_000,
-        "supports_vision": True, "supports_reasoning": True})
+    pstore.upsert_model(
+        "DeepSeek",
+        "deepseek-v4-pro",
+        {"max_context_tokens": 1_000_000, "max_output_tokens": 384_000, "supports_vision": True, "supports_reasoning": True},
+    )
     r = pstore.resolve("DeepSeek", "deepseek-v4-pro")
     assert r and r["provider"] == "DeepSeek"
     assert r["model"] == "deepseek-v4-pro"
@@ -122,5 +132,3 @@ def test_resolve_flat_metadata(pstore):
     assert r["api_key"] == DS_MAIN  # 主 config key 保留
     assert int(r["max_output_tokens"]) == 384_000  # 属性来自 provider.yaml 显式条目
     assert "supports_vision" in r and "supports_reasoning" in r
-
-

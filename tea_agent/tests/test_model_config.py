@@ -37,6 +37,7 @@ def store(tmp_path, monkeypatch):
 
 # ── 转发契约 ──────────────────────────────────────────────
 
+
 def test_get_model_config_store_returns_provider_store():
     """兼容名 get_model_config_store 返回 ProviderStore（不存在第二个存储）。"""
     from tea_agent.provider_store import ProviderStore
@@ -92,6 +93,7 @@ def test_panel_shape(store):
 
 # ── 已停用能力 ────────────────────────────────────────────
 
+
 def test_scan_config_profiles_disabled():
     """config*.yaml 不再是提供商来源：恒返回空。"""
     assert scan_config_profiles() == {}
@@ -99,6 +101,7 @@ def test_scan_config_profiles_disabled():
 
 
 # ── 纯函数 ────────────────────────────────────────────────
+
 
 def test_guess_model_config_neutral_without_caps():
     """无能力声明时给出中性默认（不做模型名启发）。"""

@@ -17,7 +17,8 @@ import pytest
 
 _TOOLKIT_EXEC_PATH = os.path.join(
     os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
-    "toolkit", "toolkit_exec.py",
+    "toolkit",
+    "toolkit_exec.py",
 )
 
 _SENSITIVE_KEYWORDS = ("KEY", "SECRET", "TOKEN", "PASSWORD", "PASSWD", "CREDENTIAL", "AUTH")
@@ -280,8 +281,7 @@ class TestEquivalentParamForms:
 
     def test_arguments_json_string_unwrapped(self, tk_exec):
         """arguments 是 JSON 字符串时也应展开。"""
-        r = tk_exec.toolkit_exec(
-            arguments='{"app": "echo", "args": ["str-unwrapped"]}', timeout=10)
+        r = tk_exec.toolkit_exec(arguments='{"app": "echo", "args": ["str-unwrapped"]}', timeout=10)
         assert r["ok"], r
         assert r["stdout"].strip() == "str-unwrapped"
 
@@ -383,8 +383,7 @@ class TestSafetyAfterNormalization:
 
     def test_elevation_refused_via_arguments_wrapper(self, tk_exec):
         """经 arguments 包装层传入的 sudo 仍被拒绝。"""
-        r = tk_exec.toolkit_exec(
-            arguments={"app": "sudo", "args": ["apt", "install", "-y", "nginx"]}, timeout=10)
+        r = tk_exec.toolkit_exec(arguments={"app": "sudo", "args": ["apt", "install", "-y", "nginx"]}, timeout=10)
         assert r["ok"] is False
         assert "手动执行" in r["error"], r["error"]
 

@@ -24,17 +24,17 @@ def _write_control_pkg(base: Path, pkg: str = "pkg") -> None:
     """合成包：含 2 处悬空符号导入 + 1 个悬空 __all__ 名 + 1 个悬空模块。"""
     p = base / pkg
     (p / "sub").mkdir(parents=True)
-    (p / "__init__.py").write_text(
-        'from .core import Foo\n__all__ = ["Foo", "Bar"]\n', encoding="utf-8")
+    (p / "__init__.py").write_text('from .core import Foo\n__all__ = ["Foo", "Bar"]\n', encoding="utf-8")
     (p / "core.py").write_text("def Foo():\n    return 1\n", encoding="utf-8")
     (p / "sub" / "__init__.py").write_text("", encoding="utf-8")
     (p / "mod.py").write_text(
-        "from . import sub\n"             # 合法：子模块
-        "from . import missing_mod\n"     # 悬空：无此子模块
-        "from .core import Foo\n"         # 合法
-        "from .core import NoSuchSym\n"   # 悬空：符号不存在
-        "from .nope import Anything\n",   # 悬空：目标模块不存在
-        encoding="utf-8")
+        "from . import sub\n"  # 合法：子模块
+        "from . import missing_mod\n"  # 悬空：无此子模块
+        "from .core import Foo\n"  # 合法
+        "from .core import NoSuchSym\n"  # 悬空：符号不存在
+        "from .nope import Anything\n",  # 悬空：目标模块不存在
+        encoding="utf-8",
+    )
 
 
 def test_control_detects_known_dangling_symbols():
@@ -47,16 +47,13 @@ def test_control_detects_known_dangling_symbols():
         # 复用合成包内容，但置于 tea_agent/ 下以适配扫描入口
         p = base / "tea_agent"
         (p / "sub").mkdir()
-        (p / "__init__.py").write_text(
-            'from .core import Foo\n__all__ = ["Foo", "Bar"]\n', encoding="utf-8")
+        (p / "__init__.py").write_text('from .core import Foo\n__all__ = ["Foo", "Bar"]\n', encoding="utf-8")
         (p / "core.py").write_text("def Foo():\n    return 1\n", encoding="utf-8")
         (p / "sub" / "__init__.py").write_text("", encoding="utf-8")
         (p / "mod.py").write_text(
-            "from . import sub\n"
-            "from . import missing_mod\n"
-            "from .core import Foo\n"
-            "from .core import NoSuchSym\n"
-            "from .nope import Anything\n", encoding="utf-8")
+            "from . import sub\nfrom . import missing_mod\nfrom .core import Foo\nfrom .core import NoSuchSym\nfrom .nope import Anything\n",
+            encoding="utf-8",
+        )
         n_import, n_all = _dangling_symbol_stats(str(base))
 
     assert n_import == 2, f"应对 2 处悬空符号（missing_mod/NoSuchSym），实得 {n_import}"
@@ -102,7 +99,8 @@ def test_lazy_getattr_exports_not_flagged():
             "\n"
             "def __getattr__(name):\n"
             "    return getattr(__import__('tea_agent.lazy'), name)\n",
-            encoding="utf-8")
+            encoding="utf-8",
+        )
         n_import, n_all = _dangling_symbol_stats(str(base))
 
     assert n_all == 0, f"惰性导出的 __all__ 被误报 {n_all} 个"

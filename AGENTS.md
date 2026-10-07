@@ -105,7 +105,7 @@ tea_agent/                          # 40 个顶层模块 + 14 个子包（截至
 ├── sdk/                            # 对外 SDK
 ├── demo/                           # 演示应用（辩论赛 / 钢琴 / DAG）
 │
-└── tests/                          # 125 个测试文件（大模块必须有对应 test_ 文件）
+└── tests/                          # 全部测试集中于此（大模块必须有对应 test_ 文件）
 ```
 
 > 注：`tea_agent_mini/` 是仓库根下的独立顶层子包（见「Mini 构建」），不在 `tea_agent/` 目录内。
@@ -374,7 +374,7 @@ toolkit_release_version(
 
 | 变量 | 作用 | 取值 / 默认 |
 |------|------|------------|
-| `TEA_CONFIG` | 指定 config.yaml 路径 | 默认 `~/.tea_agent/config.yaml` |
+| `TEA_CONFIG` | 兼容保留（config.yaml 已删除，恒无效果） | — |
 | `TEA_MODEL_CONFIG` | 模型配置覆盖文件 | 绝对/相对路径 |
 | `TEA_PROVIDER_FILE` | provider.yaml 路径（模型属性唯一来源） | 默认 `~/.tea_agent/provider.yaml` |
 | `TEA_AGENT_HOME` | 用户级数据根目录 | 默认 `~/.tea_agent` |

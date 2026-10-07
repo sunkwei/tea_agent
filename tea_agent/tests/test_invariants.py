@@ -77,23 +77,18 @@ class TestShieldInvariants:
 
     def test_observation_window_blocks_zero_use_shielding(self):
         usage = {"toolkit_x": {"uses": 0, "last_used": None}}
-        bad = _check_observation_window(
-            verdict={"shielded": {"toolkit_x": "r"}}, usage=usage, observation_full=False)
+        bad = _check_observation_window(verdict={"shielded": {"toolkit_x": "r"}}, usage=usage, observation_full=False)
         assert bad and "toolkit_x" in bad
         # 观测期已满 → 允许
-        assert _check_observation_window(
-            verdict={"shielded": {"toolkit_x": "r"}}, usage=usage, observation_full=True) is None
+        assert _check_observation_window(verdict={"shielded": {"toolkit_x": "r"}}, usage=usage, observation_full=True) is None
 
     def test_observation_window_exempts_manual_pin_off(self):
         usage = {"toolkit_x": {"uses": 0, "last_used": None, "pin": 0}}
-        assert _check_observation_window(
-            verdict={"shielded": {"toolkit_x": "手工屏蔽"}}, usage=usage,
-            observation_full=False) is None
+        assert _check_observation_window(verdict={"shielded": {"toolkit_x": "手工屏蔽"}}, usage=usage, observation_full=False) is None
 
     def test_self_heal_never_shielded(self):
         assert _check_self_heal_never_shielded(verdict={"shielded": {"toolkit_zzz": "r"}}) is None
-        bad = _check_self_heal_never_shielded(
-            verdict={"shielded": {"toolkit_exec": "r", "toolkit_save": "r"}})
+        bad = _check_self_heal_never_shielded(verdict={"shielded": {"toolkit_exec": "r", "toolkit_save": "r"}})
         assert bad and "toolkit_exec" in bad and "toolkit_save" in bad
 
     def test_self_heal_registered(self):
@@ -106,22 +101,23 @@ class TestShieldInvariants:
 # ═════════════ 闸门兜底（回归：闸门失效时本类用例必须变红）════════════
 class TestGuardFallback:
     def test_evaluate_passes_guard_untouched(self):
-        v = evaluate({"toolkit_cold": {"uses": 3, "pin": None,
-                                       "first_used": "2020-01-01T00:00:00+00:00",
-                                       "last_used": "2020-01-01T00:00:00+00:00"}},
-                     known_tools=["toolkit_cold"], idle_days=30)
+        v = evaluate(
+            {"toolkit_cold": {"uses": 3, "pin": None, "first_used": "2020-01-01T00:00:00+00:00", "last_used": "2020-01-01T00:00:00+00:00"}},
+            known_tools=["toolkit_cold"],
+            idle_days=30,
+        )
         assert "toolkit_cold" in v["shielded"], "闲置工具应正常屏蔽（闸门不干扰正常判定）"
 
     def test_violation_rolls_back_all_shielding(self, monkeypatch):
         from tea_agent import tool_shield
 
-        tool_shield._invariants.install(
-            "test.hostile", "tool_shield.evaluate", lambda **_: "故意违例")
+        tool_shield._invariants.install("test.hostile", "tool_shield.evaluate", lambda **_: "故意违例")
         try:
-            v = evaluate({"toolkit_cold": {"uses": 3, "pin": None,
-                                           "first_used": "2020-01-01T00:00:00+00:00",
-                                           "last_used": "2020-01-01T00:00:00+00:00"}},
-                         known_tools=["toolkit_cold", "toolkit_exec"], idle_days=30)
+            v = evaluate(
+                {"toolkit_cold": {"uses": 3, "pin": None, "first_used": "2020-01-01T00:00:00+00:00", "last_used": "2020-01-01T00:00:00+00:00"}},
+                known_tools=["toolkit_cold", "toolkit_exec"],
+                idle_days=30,
+            )
         finally:
             tool_shield._invariants.uninstall("test.hostile")
         assert v["shielded"] == {}, "违例时必须整体回退为不屏蔽"
@@ -136,10 +132,11 @@ class TestGuardFallback:
 
         tool_shield._invariants.install("test.boom", "tool_shield.evaluate", boom)
         try:
-            v = evaluate({"toolkit_cold": {"uses": 3, "pin": None,
-                                           "first_used": "2020-01-01T00:00:00+00:00",
-                                           "last_used": "2020-01-01T00:00:00+00:00"}},
-                         known_tools=["toolkit_cold"], idle_days=30)
+            v = evaluate(
+                {"toolkit_cold": {"uses": 3, "pin": None, "first_used": "2020-01-01T00:00:00+00:00", "last_used": "2020-01-01T00:00:00+00:00"}},
+                known_tools=["toolkit_cold"],
+                idle_days=30,
+            )
         finally:
             tool_shield._invariants.uninstall("test.boom")
         assert v["shielded"] == {}
@@ -147,14 +144,14 @@ class TestGuardFallback:
     def test_guard_logs_error_on_violation(self, caplog):
         from tea_agent import tool_shield
 
-        tool_shield._invariants.install(
-            "test.hostile", "tool_shield.evaluate", lambda **_: "故意违例")
+        tool_shield._invariants.install("test.hostile", "tool_shield.evaluate", lambda **_: "故意违例")
         try:
             with caplog.at_level(logging.ERROR, logger="tool_shield"):
-                evaluate({"toolkit_cold": {"uses": 1, "pin": None,
-                                           "first_used": "2020-01-01T00:00:00+00:00",
-                                           "last_used": "2020-01-01T00:00:00+00:00"}},
-                         known_tools=["toolkit_cold"], idle_days=30)
+                evaluate(
+                    {"toolkit_cold": {"uses": 1, "pin": None, "first_used": "2020-01-01T00:00:00+00:00", "last_used": "2020-01-01T00:00:00+00:00"}},
+                    known_tools=["toolkit_cold"],
+                    idle_days=30,
+                )
         finally:
             tool_shield._invariants.uninstall("test.hostile")
         assert "不变式违例" in caplog.text

@@ -217,10 +217,7 @@ class SummaryStore(StoreComponent):
         keep = resolve_l2_keep(keep_turns, max_level2)
         batch = resolve_l2_batch(keep_turns, l3_batch, max_level2)
 
-        total_chars = sum(
-            len(e.get("user", "") or "") + len(e.get("thinking", "") or "") + len(e.get("assistant", "") or "")
-            for e in level2
-        )
+        total_chars = sum(len(e.get("user", "") or "") + len(e.get("thinking", "") or "") + len(e.get("assistant", "") or "") for e in level2)
         over_chars = max_level2_chars > 0 and total_chars >= max_level2_chars
 
         # 条数水位（轮次）与总量水位（字符）都走同一批量闸门；告急则无视闸门。

@@ -26,10 +26,10 @@ from unittest.mock import MagicMock
 
 import pytest
 
-
 # ═══════════════════════════════════════════════════════════════
 # 背景一：provider 必须与会话 model 同源
 # ═══════════════════════════════════════════════════════════════
+
 
 class TestProviderFollowsSession:
     """usage.model_provider 与会话 context.provider 同源。"""
@@ -59,9 +59,7 @@ class TestProviderFollowsSession:
         stale.config.main_model.provider = "stale-provider"
         monkeypatch.setattr(am.AgentModule, "_instance", stale, raising=False)
 
-        assert am._get_main_provider_name(
-            self._fake_session("m", "fresh-provider")
-        ) == "fresh-provider"
+        assert am._get_main_provider_name(self._fake_session("m", "fresh-provider")) == "fresh-provider"
 
     def test_provider_name_falls_back_to_instance_without_session(self, monkeypatch):
         """无会话（或会话未带 provider）时退回实例 config。"""
@@ -98,9 +96,13 @@ class TestSessionContextCarriesProvider:
         tk = MagicMock()
         tk.meta_map = {}
         sess = OnlineToolSession(
-            toolkit=tk, api_key="sk-test", api_url="https://api.test.com/v1",
-            model="test-model", provider="deepseek",
-            enable_thinking=False, no_stream_chunk=True,
+            toolkit=tk,
+            api_key="sk-test",
+            api_url="https://api.test.com/v1",
+            model="test-model",
+            provider="deepseek",
+            enable_thinking=False,
+            no_stream_chunk=True,
         )
         try:
             assert sess.context.provider == "deepseek"
@@ -117,10 +119,16 @@ class TestSwitchModelUpdatesProvider:
 
         cfg = types.SimpleNamespace(
             main_model=types.SimpleNamespace(
-                api_key="old", api_url="http://old", model_name="old",
-                provider="old-provider", ref_model="old-ref",
-                temperature=None, max_tokens=None, top_p=None,
-                max_context_tokens=None, options=None,
+                api_key="old",
+                api_url="http://old",
+                model_name="old",
+                provider="old-provider",
+                ref_model="old-ref",
+                temperature=None,
+                max_tokens=None,
+                top_p=None,
+                max_context_tokens=None,
+                options=None,
             ),
             cheap_model=types.SimpleNamespace(api_key="", api_url="", model_name=""),
         )
@@ -134,8 +142,11 @@ class TestSwitchModelUpdatesProvider:
     def test_provider_and_ref_updated(self, monkeypatch):
         am, cfg = self._install_fake_agent(monkeypatch)
         am.AgentModule.switch_model(
-            "sk-new", "https://api.deepseek.com", "deepseek-v4-flash",
-            provider="deepseek", ref_model="deepseek-v4-flash",
+            "sk-new",
+            "https://api.deepseek.com",
+            "deepseek-v4-flash",
+            provider="deepseek",
+            ref_model="deepseek-v4-flash",
         )
         assert cfg.main_model.provider == "deepseek"
         assert cfg.main_model.ref_model == "deepseek-v4-flash"
@@ -151,9 +162,7 @@ class TestSwitchModelUpdatesProvider:
     def test_explicit_empty_clears(self, monkeypatch):
         """显式传空串才是清空（与 None 语义区分）。"""
         am, cfg = self._install_fake_agent(monkeypatch)
-        am.AgentModule.switch_model(
-            "sk", "https://api.x.com", "m", provider="", ref_model=""
-        )
+        am.AgentModule.switch_model("sk", "https://api.x.com", "m", provider="", ref_model="")
         assert cfg.main_model.provider == ""
         assert cfg.main_model.ref_model == ""
 
@@ -161,6 +170,7 @@ class TestSwitchModelUpdatesProvider:
 # ═══════════════════════════════════════════════════════════════
 # 背景二：config_path 必须在 load_all 之前接线
 # ═══════════════════════════════════════════════════════════════
+
 
 class TestLoadModulesConfigPathOrder:
     """set_config_path 必须早于 load_all（AgentModule._load 在 load_all 内跑）。"""
@@ -190,7 +200,8 @@ class TestLoadModulesConfigPathOrder:
 
         monkeypatch.setattr(srv, "get_registry", lambda: _FakeRegistry())
         monkeypatch.setattr(
-            srv, "load_all",
+            srv,
+            "load_all",
             lambda reg: (order.append("load_all"), {"agent": True})[1],
         )
 
@@ -199,9 +210,7 @@ class TestLoadModulesConfigPathOrder:
 
         assert "load_all" in order, order
         assert any(x.startswith("set_config_path") for x in order), order
-        assert order.index(f"set_config_path:{cfg_file}") < order.index("load_all"), (
-            f"set_config_path 必须早于 load_all，实际顺序: {order}"
-        )
+        assert order.index(f"set_config_path:{cfg_file}") < order.index("load_all"), f"set_config_path 必须早于 load_all，实际顺序: {order}"
 
     def test_no_config_path_skips_early_wiring(self, monkeypatch):
         """未指定 config_path 时不提前接线（保持原行为，不误设空路径）。"""

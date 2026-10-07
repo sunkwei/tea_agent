@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """toolkit_blender 回归测试。
 
 分两层：
@@ -135,7 +134,7 @@ class TestEmbeddedScriptsCompile:
     @pytest.mark.parametrize("name", ["PROBE_PY", "SCENE_PY", "EXPORT_PY"])
     def test_compiles(self, name):
         src = getattr(tb, name)
-        compile(src, "<%s>" % name, "exec")
+        compile(src, f"<{name}>", "exec")
 
     @pytest.mark.parametrize("name", ["PROBE_PY", "SCENE_PY", "EXPORT_PY"])
     def test_marker_embedded(self, name):
@@ -285,7 +284,7 @@ class TestRealBlender:
             "import bpy\n"
             "bpy.ops.wm.read_factory_settings(use_empty=True)\n"
             "bpy.ops.mesh.primitive_uv_sphere_add(radius=1, location=(0, 0, 0))\n"
-            "bpy.ops.wm.save_as_mainfile(filepath=%r)\n" % blend
+            f"bpy.ops.wm.save_as_mainfile(filepath={blend!r})\n"
         )
         r = toolkit_blender(action="run", code=code, timeout=240)
         assert r["ok"] and osp.isfile(blend), r.get("stderr", "")[-500:]
@@ -314,7 +313,7 @@ class TestRealBlender:
             "sc.render.engine = 'BLENDER_EEVEE_NEXT' if 'BLENDER_EEVEE_NEXT' in "
             "[e.identifier for e in bpy.types.RenderSettings.bl_rna.properties['engine'].enum_items] "
             "else sc.render.engine\n"
-            "bpy.ops.wm.save_as_mainfile(filepath=%r)\n" % blend
+            f"bpy.ops.wm.save_as_mainfile(filepath={blend!r})\n"
         )
         r = toolkit_blender(action="run", code=code, timeout=240)
         assert r["ok"], r.get("stderr", "")[-500:]

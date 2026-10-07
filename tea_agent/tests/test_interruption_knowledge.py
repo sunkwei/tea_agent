@@ -23,7 +23,9 @@ class TestRecordInterruptionAnchor:
         session = MagicMock()
         session._last_interruption = None
         _record_interruption_anchor(
-            session, iterations=3, last_tool_names=["toolkit_exec", "toolkit_file"],
+            session,
+            iterations=3,
+            last_tool_names=["toolkit_exec", "toolkit_file"],
             full_reply="partial reply text",
         )
         ev = session._last_interruption
@@ -60,10 +62,13 @@ class TestInjectInterruptionKnowledge:
         mock_tk = MagicMock()
         mock_tk.meta_map = {}
         defaults = {
-            "toolkit": mock_tk, "api_key": "sk-test",
+            "toolkit": mock_tk,
+            "api_key": "sk-test",
             "api_url": "https://api.test.com/v1",
-            "model": "test-model", "enable_thinking": False,
-            "storage": None, "no_stream_chunk": True,
+            "model": "test-model",
+            "enable_thinking": False,
+            "storage": None,
+            "no_stream_chunk": True,
         }
         defaults.update(kwargs)
         return OnlineToolSession(**defaults)
@@ -87,9 +92,9 @@ class TestInjectInterruptionKnowledge:
         sys_msg = sess.context.messages[1]
         assert sys_msg["role"] == "system"
         content = sys_msg["content"]
-        assert "toolkit_exec" in content       # 工具名
-        assert "第 2 轮" in content            # 迭代轮次
-        assert "不是这样" in content           # 用户后续指令
+        assert "toolkit_exec" in content  # 工具名
+        assert "第 2 轮" in content  # 迭代轮次
+        assert "不是这样" in content  # 用户后续指令
         sess.close()
 
     def test_no_injection_without_anchor(self):
@@ -105,7 +110,9 @@ class TestInjectInterruptionKnowledge:
         # partial_reply 与后续消息同话题（否则按换话题走 abandoned 模板，
         # 而本用例断言的是 followup 指令内容是否被完整保留、不被截断）
         sess._last_interruption = {
-            "iteration": 1, "tool_name": "t", "partial_reply": "长指令",
+            "iteration": 1,
+            "tool_name": "t",
+            "partial_reply": "长指令",
         }
         ok = sess._inject_interruption_knowledge("长指令" * 200)
         assert ok is True
@@ -127,13 +134,17 @@ class TestInjectInterruptionKnowledge:
         """集成：chat_stream 入口在 reset 后自动注入 corrected 提示"""
         sess = self._make_session()
         sess._last_interruption = {
-            "iteration": 1, "tool_name": "toolkit_exec",
-            "partial_reply": "旧方向：重构存储层", "phase": "tool_loop",
+            "iteration": 1,
+            "tool_name": "toolkit_exec",
+            "partial_reply": "旧方向：重构存储层",
+            "phase": "tool_loop",
         }
         # mock pipeline 与依赖，跳过真实 API 调用
         mock_pipeline = MagicMock()
         mock_pipeline.execute.return_value = {
-            "full_reply": "ok", "used_tools": False, "iterations": 1,
+            "full_reply": "ok",
+            "used_tools": False,
+            "iterations": 1,
         }
         sess.pipeline = mock_pipeline
         sess.reflection_manager = None
@@ -188,17 +199,13 @@ class TestClassifyInterruption:
 
     def test_corrected_when_topic_continues(self):
         """同方向继续（关键词大幅重叠）→ corrected 且给出真实相似度。"""
-        cls, sim = classify_interruption(
-            {"partial_reply": "继续重构存储层"}, "继续重构存储层，但换种方式"
-        )
+        cls, sim = classify_interruption({"partial_reply": "继续重构存储层"}, "继续重构存储层，但换种方式")
         assert cls == "corrected"
         assert sim is not None and 0.0 < sim <= 1.0
 
     def test_abandoned_when_topic_switches(self):
         """换话题（关键词几乎不重叠）→ abandoned。"""
-        cls, sim = classify_interruption(
-            {"partial_reply": "重构存储层"}, "今天天气怎么样"
-        )
+        cls, sim = classify_interruption({"partial_reply": "重构存储层"}, "今天天气怎么样")
         assert cls == "abandoned"
         assert sim == pytest.approx(0.0)
 
@@ -206,9 +213,7 @@ class TestClassifyInterruption:
         """边界：相似度恰好等于阈值 → corrected（>= 判定）。"""
         text = "重构存储层"
         # 相同文本 → Jaccard = 1.0，取 threshold=1.0 命中边界
-        cls, sim = classify_interruption(
-            {"partial_reply": text}, text, threshold=1.0
-        )
+        cls, sim = classify_interruption({"partial_reply": text}, text, threshold=1.0)
         assert cls == "corrected"
         assert sim == pytest.approx(1.0)
 
@@ -226,9 +231,7 @@ class TestClassifyInterruption:
 
     def test_returns_none_similarity_only_when_uncomparable(self):
         """similarity=None 只表示「未计算」，不得用于「算出来是 0」。"""
-        _, sim_zero = classify_interruption(
-            {"partial_reply": "重构存储层"}, "今天天气怎么样"
-        )
+        _, sim_zero = classify_interruption({"partial_reply": "重构存储层"}, "今天天气怎么样")
         assert sim_zero == 0.0, "算得 0 也要返回 0，不能退化成 None"
 
 
@@ -248,9 +251,12 @@ class TestInterruptionStore:
         st.close()
         store = InterruptionStore(os.path.join(tmp_path, "chat.db"))
         ev = {
-            "topic_id": "t1", "timestamp": "2026-08-03 06:00:00",
-            "iteration": 2, "tool_name": "toolkit_exec",
-            "partial_reply": "partial", "phase": "tool_loop",
+            "topic_id": "t1",
+            "timestamp": "2026-08-03 06:00:00",
+            "iteration": 2,
+            "tool_name": "toolkit_exec",
+            "partial_reply": "partial",
+            "phase": "tool_loop",
         }
         eid = store.insert_interruption_event(ev)
         assert eid != ""
@@ -267,9 +273,7 @@ class TestInterruptionStore:
         st.close()
         store = InterruptionStore(db)
         eid = store.insert_interruption_event({"topic_id": "t1", "tool_name": "toolkit_file"})
-        ok = store.update_interruption_classification(
-            eid, "abandoned", 0.35, "换个话题", "2026-08-03 06:05:00"
-        )
+        ok = store.update_interruption_classification(eid, "abandoned", 0.35, "换个话题", "2026-08-03 06:05:00")
         assert ok is True
         row = store.get_interruption_event(eid)
         assert row["classification"] == "abandoned"
@@ -285,12 +289,8 @@ class TestInterruptionStore:
         st.close()
         store = InterruptionStore(db)
         for i in range(3):
-            store.insert_interruption_event(
-                {"topic_id": "t1", "tool_name": "toolkit_exec", "timestamp": f"2026-08-0{i+1} 06:00:00"}
-            )
-        store.insert_interruption_event(
-            {"topic_id": "t1", "tool_name": "toolkit_file", "timestamp": "2026-08-04 06:00:00"}
-        )
+            store.insert_interruption_event({"topic_id": "t1", "tool_name": "toolkit_exec", "timestamp": f"2026-08-0{i + 1} 06:00:00"})
+        store.insert_interruption_event({"topic_id": "t1", "tool_name": "toolkit_file", "timestamp": "2026-08-04 06:00:00"})
         stats = store.stats_interruptions()
         by_name = {s["tool_name"]: s for s in stats}
         assert by_name["toolkit_exec"]["count"] == 3
@@ -303,12 +303,8 @@ class TestInterruptionStore:
         st = Storage(db_path=db)
         st.close()
         store = InterruptionStore(db)
-        store.insert_interruption_event(
-            {"topic_id": "t1", "tool_name": "toolkit_exec", "timestamp": "2020-01-01 00:00:00"}
-        )
-        store.insert_interruption_event(
-            {"topic_id": "t1", "tool_name": "toolkit_file", "timestamp": "2026-08-03 00:00:00"}
-        )
+        store.insert_interruption_event({"topic_id": "t1", "tool_name": "toolkit_exec", "timestamp": "2020-01-01 00:00:00"})
+        store.insert_interruption_event({"topic_id": "t1", "tool_name": "toolkit_file", "timestamp": "2026-08-03 00:00:00"})
         deleted = store.cleanup_old_events(keep_days=30)
         assert deleted >= 1
         remaining = store.query_interruptions()
@@ -322,19 +318,26 @@ class TestM2Injection:
         mock_tk = MagicMock()
         mock_tk.meta_map = {}
         defaults = {
-            "toolkit": mock_tk, "api_key": "sk-test",
+            "toolkit": mock_tk,
+            "api_key": "sk-test",
             "api_url": "https://api.test.com/v1",
-            "model": "test-model", "enable_thinking": False,
-            "storage": None, "no_stream_chunk": True,
+            "model": "test-model",
+            "enable_thinking": False,
+            "storage": None,
+            "no_stream_chunk": True,
         }
         defaults.update(kwargs)
         return OnlineToolSession(**defaults)
 
     def _anchor(self, **kw):
         a = {
-            "id": "ev-1", "topic_id": "t1", "iteration": 2,
-            "tool_name": "toolkit_exec", "partial_reply": "重构存储层并补充测试",
-            "phase": "tool_loop", "status": "pending",
+            "id": "ev-1",
+            "topic_id": "t1",
+            "iteration": 2,
+            "tool_name": "toolkit_exec",
+            "partial_reply": "重构存储层并补充测试",
+            "phase": "tool_loop",
+            "status": "pending",
         }
         a.update(kw)
         return a
@@ -434,17 +437,23 @@ def inter_storage():
 
 
 def _insert_event(st, tool_name, status="classified", topic="t1"):
-    eid = st.insert_interruption_event({
-        "topic_id": topic,
-        "timestamp": "2026-08-01 10:00:00",
-        "iteration": 2,
-        "tool_name": tool_name,
-        "partial_reply": "doing something",
-        "phase": "tool_loop",
-    })
+    eid = st.insert_interruption_event(
+        {
+            "topic_id": topic,
+            "timestamp": "2026-08-01 10:00:00",
+            "iteration": 2,
+            "tool_name": tool_name,
+            "partial_reply": "doing something",
+            "phase": "tool_loop",
+        }
+    )
     if status == "classified":
         st.update_interruption_classification(
-            eid, "abandoned", 0.2, "new topic", "2026-08-01 10:01:00",
+            eid,
+            "abandoned",
+            0.2,
+            "new topic",
+            "2026-08-01 10:01:00",
         )
     return eid
 
@@ -459,9 +468,7 @@ class TestAnalyzeInterruptions:
         assert len(written) == 1
         assert "toolkit_exec" in written[0]
         # 记忆已入库
-        mems = inter_storage.memories.search_memories(
-            category="preference", tags=["interruption"], limit=10
-        )
+        mems = inter_storage.memories.search_memories(category="preference", tags=["interruption"], limit=10)
         assert any("toolkit_exec" in m["content"] for m in mems)
 
     def test_below_threshold_not_sedimented(self, inter_storage):
@@ -550,8 +557,12 @@ class TestM4InjectionConfig:
         mock_tk = MagicMock()
         mock_tk.meta_map = {}
         defaults = {
-            "toolkit": mock_tk, "api_key": "sk-test", "api_url": "https://api.test.com/v1",
-            "model": "test-model", "enable_thinking": False, "storage": None,
+            "toolkit": mock_tk,
+            "api_key": "sk-test",
+            "api_url": "https://api.test.com/v1",
+            "model": "test-model",
+            "enable_thinking": False,
+            "storage": None,
             "no_stream_chunk": True,
         }
         defaults.update(kwargs)
@@ -561,10 +572,10 @@ class TestM4InjectionConfig:
     def _restore_config(self, monkeypatch):
         # 钉住 config 单例：跨文件全局态（_last_config_path/_config_cache）可能
         # 让 get_config() 重新加载，导致本用例对 interruption 的修改被丢弃。
-        import tea_agent.config as _C
+        import tea_agent.config as cfg_mod
 
         cfg = get_config()
-        monkeypatch.setattr(_C, "_config_cache", cfg)
+        monkeypatch.setattr(cfg_mod, "_config_cache", cfg)
         monkeypatch.setattr(cfg, "interruption", dict(cfg.interruption))
 
     def test_disabled_skips_injection(self, monkeypatch):
@@ -584,7 +595,8 @@ class TestM4InjectionConfig:
         cfg.interruption["similarity_threshold"] = 1.0
         sess = self._make_session()
         sess._last_interruption = {
-            "iteration": 1, "tool_name": "toolkit_exec",
+            "iteration": 1,
+            "tool_name": "toolkit_exec",
             "partial_reply": "重构存储层",
         }
         # 措辞相近但非完全相同 → Jaccard < 1.0 → 在阈值 1.0 下判 abandoned
@@ -601,10 +613,10 @@ class TestM4AnchorConfig:
     def _restore_config(self, monkeypatch):
         # 钉住 config 单例：跨文件全局态（_last_config_path/_config_cache）可能
         # 让 get_config() 重新加载，导致本用例对 interruption 的修改被丢弃。
-        import tea_agent.config as _C
+        import tea_agent.config as cfg_mod
 
         cfg = get_config()
-        monkeypatch.setattr(_C, "_config_cache", cfg)
+        monkeypatch.setattr(cfg_mod, "_config_cache", cfg)
         monkeypatch.setattr(cfg, "interruption", dict(cfg.interruption))
 
     def test_partial_reply_max_from_config(self):
@@ -651,15 +663,17 @@ class TestM5SkillGeneration:
 
     def _insert_classified(self, storage, tool, count):
         for i in range(count):
-            storage.insert_interruption_event({
-                "event_id": f"{tool}-{i}",
-                "topic_id": "m5-topic",
-                "iteration": i + 1,
-                "tool_name": tool,
-                "partial_reply": "x",
-                "status": "classified",
-                "classification": "abandoned",
-            })
+            storage.insert_interruption_event(
+                {
+                    "event_id": f"{tool}-{i}",
+                    "topic_id": "m5-topic",
+                    "iteration": i + 1,
+                    "tool_name": tool,
+                    "partial_reply": "x",
+                    "status": "classified",
+                    "classification": "abandoned",
+                }
+            )
 
     def test_skill_generated_above_threshold(self, inter_storage, tmp_path):
         self._insert_classified(inter_storage, "toolkit_exec", 3)
@@ -690,9 +704,7 @@ class TestM5SkillGeneration:
     def test_skill_memory_tracked(self, inter_storage, tmp_path):
         self._insert_classified(inter_storage, "toolkit_save_file", 3)
         analyze_interruptions(inter_storage, skill_min_count=3, skills_dir=str(tmp_path))
-        mems = inter_storage.memories.search_memories(
-            category="preference", tags=["skill:interrupt-avoid-save-file"], limit=5
-        )
+        mems = inter_storage.memories.search_memories(category="preference", tags=["skill:interrupt-avoid-save-file"], limit=5)
         assert mems, "生成 skill 后应记录可追踪记忆"
 
     def test_skill_name_mapping(self):
@@ -715,20 +727,29 @@ class TestWebAnchorRestore:
         mock_tk = MagicMock()
         mock_tk.meta_map = {}
         defaults = {
-            "toolkit": mock_tk, "api_key": "sk-test", "api_url": "https://api.test.com/v1",
-            "model": "test-model", "enable_thinking": False,
-            "storage": storage, "no_stream_chunk": True,
+            "toolkit": mock_tk,
+            "api_key": "sk-test",
+            "api_url": "https://api.test.com/v1",
+            "model": "test-model",
+            "enable_thinking": False,
+            "storage": storage,
+            "no_stream_chunk": True,
         }
         defaults.update(kwargs)
         return OnlineToolSession(**defaults)
 
     def test_restore_from_pending_event(self, inter_storage):
         """有 pending 事件 → 恢复为锚点"""
-        inter_storage.insert_interruption_event({
-            "event_id": "web-1", "topic_id": "topic-A",
-            "iteration": 3, "tool_name": "toolkit_exec",
-            "partial_reply": "doing...", "status": "pending",
-        })
+        inter_storage.insert_interruption_event(
+            {
+                "event_id": "web-1",
+                "topic_id": "topic-A",
+                "iteration": 3,
+                "tool_name": "toolkit_exec",
+                "partial_reply": "doing...",
+                "status": "pending",
+            }
+        )
         sess = self._make_web_session(storage=inter_storage)
         ev = sess._restore_interruption_anchor("topic-A")
         assert ev is not None
@@ -743,26 +764,34 @@ class TestWebAnchorRestore:
         assert sess._restore_interruption_anchor("topic-A") is None
 
     def test_restore_requires_topic(self, inter_storage):
-        inter_storage.insert_interruption_event({
-            "event_id": "web-2", "topic_id": "topic-A",
-            "iteration": 1, "tool_name": "toolkit_exec",
-            "partial_reply": "x", "status": "pending",
-        })
+        inter_storage.insert_interruption_event(
+            {
+                "event_id": "web-2",
+                "topic_id": "topic-A",
+                "iteration": 1,
+                "tool_name": "toolkit_exec",
+                "partial_reply": "x",
+                "status": "pending",
+            }
+        )
         sess = self._make_web_session(storage=inter_storage)
         assert sess._restore_interruption_anchor(None) is None
 
     def test_inject_web_scenario_classifies_event(self, inter_storage):
         """新 session（无内存锚点）+ pending 事件 + 换话题消息
         → 恢复锚点 → 判定 abandoned → 注入 → 事件变 classified"""
-        inter_storage.insert_interruption_event({
-            "event_id": "web-3", "topic_id": "topic-A",
-            "iteration": 2, "tool_name": "toolkit_exec",
-            "partial_reply": "统计行数中", "status": "pending",
-        })
-        sess = self._make_web_session(storage=inter_storage)
-        injected = sess._inject_interruption_knowledge(
-            "我们换个话题吧，聊聊核心能力模块", topic_id="topic-A"
+        inter_storage.insert_interruption_event(
+            {
+                "event_id": "web-3",
+                "topic_id": "topic-A",
+                "iteration": 2,
+                "tool_name": "toolkit_exec",
+                "partial_reply": "统计行数中",
+                "status": "pending",
+            }
         )
+        sess = self._make_web_session(storage=inter_storage)
+        injected = sess._inject_interruption_knowledge("我们换个话题吧，聊聊核心能力模块", topic_id="topic-A")
         assert injected is True
         # 事件已回写 classified
         rows = inter_storage.query_interruptions(topic_id="topic-A", status="classified")

@@ -16,10 +16,7 @@ RULES = [
     {"pattern": r"^\s*[-*]\s+", "match": "regex", "description": "[content] bullets"},
 ]
 
-GOOD = (
-    "<!-- ACME -->\n# Report: Aurora Quarterly\nClassification: INTERNAL\n"
-    "- p99 cut to 120ms\nReviewed-by: Aurora Team"
-)
+GOOD = "<!-- ACME -->\n# Report: Aurora Quarterly\nClassification: INTERNAL\n- p99 cut to 120ms\nReviewed-by: Aurora Team"
 BAD = "# Report: Aurora Quarterly\nSome summary without convention."
 
 

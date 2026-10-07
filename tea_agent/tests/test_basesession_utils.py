@@ -1,4 +1,3 @@
-# encoding: utf-8
 """
 测试 basesession.py 工具函数：
   - relaxed_json_loads
@@ -11,10 +10,10 @@
   - agent_pipeline 工具函数
   - build_api_messages 集成
 """
-import sys
-import os
+
 import json
-import copy
+import os
+import sys
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
@@ -26,6 +25,7 @@ from tea_agent.basesession import relaxed_json_loads  # noqa: E402
 
 passed = 0
 failed = 0
+
 
 # ── 断言助手（2026-09-19 修正）────────────────────────────────────────
 # 旧实现**只 print 不 raise**：`pytest tests/test_basesession_utils.py` 无论断言
@@ -39,6 +39,7 @@ def _fail(desc, detail):
     print(f"  ❌ {desc}: {detail}")
     raise AssertionError(f"{desc}: {detail}")
 
+
 def assert_eq(actual, expected, desc):
     global passed
     if actual == expected:
@@ -46,6 +47,7 @@ def assert_eq(actual, expected, desc):
         print(f"  ✅ {desc}")
     else:
         _fail(desc, f"期望 {expected!r}, 实际 {actual!r}")
+
 
 def assert_ne(actual, unexpected, desc):
     global passed
@@ -55,6 +57,7 @@ def assert_ne(actual, unexpected, desc):
     else:
         _fail(desc, f"不应等于 {unexpected!r}")
 
+
 def assert_true(cond, desc):
     global passed
     if cond:
@@ -63,6 +66,7 @@ def assert_true(cond, desc):
     else:
         _fail(desc, "条件不成立")
 
+
 def assert_in(sub, container, desc):
     global passed
     if sub in container:
@@ -70,6 +74,7 @@ def assert_in(sub, container, desc):
         print(f"  ✅ {desc}")
     else:
         _fail(desc, f"未找到 {sub!r} 在 {container!r}")
+
 
 def assert_raises(exc_cls, fn, desc):
     global passed
@@ -92,11 +97,7 @@ def test_relaxed_json_loads():
     print("\n━━━ Section 1: relaxed_json_loads ━━━")
 
     # 1.1 标准 JSON
-    assert_eq(
-        relaxed_json_loads('{"a": 1, "b": "hello"}'),
-        {"a": 1, "b": "hello"},
-        "标准 JSON: 正常解析"
-    )
+    assert_eq(relaxed_json_loads('{"a": 1, "b": "hello"}'), {"a": 1, "b": "hello"}, "标准 JSON: 正常解析")
 
     # 1.2 空/空白
     assert_eq(relaxed_json_loads(""), {}, "空字符串 → {}")
@@ -104,86 +105,40 @@ def test_relaxed_json_loads():
     assert_eq(relaxed_json_loads(None), {}, "None → {}")
 
     # 1.3 单引号
-    assert_eq(
-        relaxed_json_loads("{'a': 1, 'b': 'hello'}"),
-        {"a": 1, "b": "hello"},
-        "单引号 → 自动转双引号"
-    )
+    assert_eq(relaxed_json_loads("{'a': 1, 'b': 'hello'}"), {"a": 1, "b": "hello"}, "单引号 → 自动转双引号")
 
     # 1.4 Python 布尔值
-    assert_eq(
-        relaxed_json_loads('{"ok": True, "no": False}'),
-        {"ok": True, "no": False},
-        "Python True/False → JSON true/false"
-    )
+    assert_eq(relaxed_json_loads('{"ok": True, "no": False}'), {"ok": True, "no": False}, "Python True/False → JSON true/false")
 
     # 1.5 Python None
-    assert_eq(
-        relaxed_json_loads('{"x": None}'),
-        {"x": None},
-        "Python None → JSON null"
-    )
+    assert_eq(relaxed_json_loads('{"x": None}'), {"x": None}, "Python None → JSON null")
 
     # 1.6 尾逗号
-    assert_eq(
-        relaxed_json_loads('{"a": 1, "b": 2,}'),
-        {"a": 1, "b": 2},
-        "尾逗号 → 自动移除"
-    )
-    assert_eq(
-        relaxed_json_loads('[1, 2, 3,]'),
-        [1, 2, 3],
-        "数组尾逗号 → 自动移除"
-    )
+    assert_eq(relaxed_json_loads('{"a": 1, "b": 2,}'), {"a": 1, "b": 2}, "尾逗号 → 自动移除")
+    assert_eq(relaxed_json_loads("[1, 2, 3,]"), [1, 2, 3], "数组尾逗号 → 自动移除")
 
     # 1.7 注释（// 和 /* */）
     # ⚠️ 契约已收窄（basesession.py:78 有意为之）：`//` 只剥离**行首**注释。
     # 原因：`//` 也出现在 URL（https://…）里，全局剥离会截断 URL 值。
     # 实测「行尾注释」不再支持（会抛 JSONDecodeError），但 URL 值必须完整保留——
     # 下面两条断言正是钉住这个取舍的方向（宁可少支持一种写法，不可破坏 URL）。
+    assert_eq(relaxed_json_loads('{\n// 行首注释\n"a": 1,\n"b": 2}'), {"a": 1, "b": 2}, "行首 // 注释 → 移除")
+    assert_eq(relaxed_json_loads('{"a": 1 /* 块注释 */, "b": 2}'), {"a": 1, "b": 2}, "块注释 → 移除")
     assert_eq(
-        relaxed_json_loads('{\n// 行首注释\n"a": 1,\n"b": 2}'),
-        {"a": 1, "b": 2},
-        "行首 // 注释 → 移除"
-    )
-    assert_eq(
-        relaxed_json_loads('{"a": 1 /* 块注释 */, "b": 2}'),
-        {"a": 1, "b": 2},
-        "块注释 → 移除"
-    )
-    assert_eq(
-        relaxed_json_loads('{"url": "https://x.test/a?b=1"}'),
-        {"url": "https://x.test/a?b=1"},
-        "URL 中的 // 必须完整保留（收窄注释剥离的原因）"
+        relaxed_json_loads('{"url": "https://x.test/a?b=1"}'), {"url": "https://x.test/a?b=1"}, "URL 中的 // 必须完整保留（收窄注释剥离的原因）"
     )
 
     # 1.8 未引号 key
-    assert_eq(
-        relaxed_json_loads('{a: 1, b: "hello"}'),
-        {"a": 1, "b": "hello"},
-        "未引号 key → 自动加引号"
-    )
+    assert_eq(relaxed_json_loads('{a: 1, b: "hello"}'), {"a": 1, "b": "hello"}, "未引号 key → 自动加引号")
 
     # 1.9 控制字符
-    assert_eq(
-        relaxed_json_loads('{"a":"hello\x00world"}'),
-        {"a": "helloworld"},
-        "控制字符 → 移除"
-    )
+    assert_eq(relaxed_json_loads('{"a":"hello\x00world"}'), {"a": "helloworld"}, "控制字符 → 移除")
 
     # 1.10 从文本中提取 JSON
-    assert_eq(
-        relaxed_json_loads('some text {"a": 1} more text'),
-        {"a": 1},
-        "从文本提取 JSON 对象"
-    )
+    assert_eq(relaxed_json_loads('some text {"a": 1} more text'), {"a": 1}, "从文本提取 JSON 对象")
 
     # 1.11 从文本提取 JSON 数组
-    assert_eq(
-        relaxed_json_loads('prefix [1, 2, 3] suffix'),
-        [1, 2, 3],
-        "从文本提取 JSON 数组"
-    )
+    assert_eq(relaxed_json_loads("prefix [1, 2, 3] suffix"), [1, 2, 3], "从文本提取 JSON 数组")
 
     # 1.12 反斜杠路径 —— 2026-09-19 **已修复**（原为已知限制，现转为回归断言）
     #
@@ -196,39 +151,27 @@ def test_relaxed_json_loads():
     # UNC（`\\`）开头时，才把其中的歧义转义按字面反斜杠处理。这样
     # `"a\tb"`（真制表符）与 `"C:\temp"`（路径）就被正确区分开。
     result = relaxed_json_loads('{"path": "C:\\Users\\test\\file.txt"}')
-    assert_eq(result["path"], "C:\\Users\\test\\file.txt",
-              "反斜杠路径必须原样保留（不得解为制表符/换页符）")
+    assert_eq(result["path"], "C:\\Users\\test\\file.txt", "反斜杠路径必须原样保留（不得解为制表符/换页符）")
 
     # 反斜杠路径的完整形态（\t \f \n \b \r 各一，覆盖全部歧义字母）
-    assert_eq(relaxed_json_loads('{"p": "C:\\tea_agent"}')["p"], "C:\\tea_agent",
-              "路径含 \\t 段（\\tea_agent）")
-    assert_eq(relaxed_json_loads('{"p": "C:\\foo\\file.py"}')["p"], "C:\\foo\\file.py",
-              "路径含 \\f 段（\\foo\\file）")
+    assert_eq(relaxed_json_loads('{"p": "C:\\tea_agent"}')["p"], "C:\\tea_agent", "路径含 \\t 段（\\tea_agent）")
+    assert_eq(relaxed_json_loads('{"p": "C:\\foo\\file.py"}')["p"], "C:\\foo\\file.py", "路径含 \\f 段（\\foo\\file）")
 
     # 反向：**非**路径字面量里的转义必须保持 JSON 语义（路径保护不得越界）
-    assert_eq(relaxed_json_loads('{"a": "x\\ty"}'), {"a": "x\ty"},
-              "非路径字面量的 \\t 仍为制表符（保护未越界）")
-    assert_eq(relaxed_json_loads('{"path": "C:\\foo", "note": "a\\tb"}'),
-              {"path": "C:\\foo", "note": "a\tb"},
-              "同一 JSON 内路径与制表符并存，各自正确")
+    assert_eq(relaxed_json_loads('{"a": "x\\ty"}'), {"a": "x\ty"}, "非路径字面量的 \\t 仍为制表符（保护未越界）")
+    assert_eq(
+        relaxed_json_loads('{"path": "C:\\foo", "note": "a\\tb"}'), {"path": "C:\\foo", "note": "a\tb"}, "同一 JSON 内路径与制表符并存，各自正确"
+    )
 
     # 1.13 空对象
     assert_eq(relaxed_json_loads("{}"), {}, "空对象")
     assert_eq(relaxed_json_loads("[]"), [], "空数组")
 
     # 1.14 深层嵌套
-    assert_eq(
-        relaxed_json_loads('{"a": {"b": {"c": [1, 2, {"d": 3}]}}}'),
-        {"a": {"b": {"c": [1, 2, {"d": 3}]}}},
-        "深层嵌套 JSON"
-    )
+    assert_eq(relaxed_json_loads('{"a": {"b": {"c": [1, 2, {"d": 3}]}}}'), {"a": {"b": {"c": [1, 2, {"d": 3}]}}}, "深层嵌套 JSON")
 
     # 1.15 完全无法修复时抛异常
-    assert_raises(
-        json.JSONDecodeError,
-        lambda: relaxed_json_loads("{{{{{ totally invalid"),
-        "完全无效输入 → 抛 JSONDecodeError"
-    )
+    assert_raises(json.JSONDecodeError, lambda: relaxed_json_loads("{{{{{ totally invalid"), "完全无效输入 → 抛 JSONDecodeError")
 
 
 # ================================================================
@@ -236,6 +179,7 @@ def test_relaxed_json_loads():
 # ================================================================
 def test_compress_json_args():
     from tea_agent.basesession import BaseChatSession
+
     compress = BaseChatSession._compress_json_args
 
     print("\n━━━ Section 2: _compress_json_args ━━━")
@@ -307,23 +251,17 @@ def test_filter_level2_by_relevance():
 
     # 3.1 空输入
     assert_eq(filter_level2_by_relevance([], ""), [], "空 level2 列表")
-    result = filter_level2_by_relevance(
-        [{"user": "hi", "assistant": "hello"}], ""
-    )
+    result = filter_level2_by_relevance([{"user": "hi", "assistant": "hello"}], "")
     assert_eq(len(result), 1, "空 current_msg 返回全部")
 
     # 3.2 高关键词重叠 → kind=full
-    level2 = [
-        {"user": "如何用 Python 读取 CSV 文件", "assistant": "使用 pandas.read_csv"}
-    ]
+    level2 = [{"user": "如何用 Python 读取 CSV 文件", "assistant": "使用 pandas.read_csv"}]
     result = filter_level2_by_relevance(level2, "Python 读取 CSV")
     assert_true(len(result) > 0, "有匹配结果")
     assert_eq(result[0].get("kind"), "full", "高相关 → kind=full")
 
     # 3.3 低关键词重叠 → kind=summary
-    level2 = [
-        {"user": "如何配置 Docker 网络", "assistant": "创建自定义 bridge 网络"}
-    ]
+    level2 = [{"user": "如何配置 Docker 网络", "assistant": "创建自定义 bridge 网络"}]
     result = filter_level2_by_relevance(level2, "天气怎么样")
     if result:
         # 可能有 summary 或 full（取最高分）
@@ -331,18 +269,14 @@ def test_filter_level2_by_relevance():
     print(f"  ℹ️  低相关结果: {[r.get('kind') for r in result]}")
 
     # 3.4 文件路径匹配 → 高相关
-    level2 = [
-        {"user": "修改 main.py 的登录函数", "assistant": "已修改 login()", "files": ["src/main.py"]}
-    ]
+    level2 = [{"user": "修改 main.py 的登录函数", "assistant": "已修改 login()", "files": ["src/main.py"]}]
     result = filter_level2_by_relevance(level2, "main.py 登录")
     assert_true(len(result) > 0, "文件路径匹配有结果")
     if result:
         assert_eq(result[0].get("kind"), "full", "文件匹配 → kind=full")
 
     # 3.5 测试 files 字段加分
-    level2 = [
-        {"user": "了解模块A", "assistant": "模块A的功能是...", "files": ["module_a.py"]}
-    ]
+    level2 = [{"user": "了解模块A", "assistant": "模块A的功能是...", "files": ["module_a.py"]}]
     result = filter_level2_by_relevance(level2, "请修改 module_a.py")
     assert_true(len(result) > 0, "文件匹配触发高相关")
 
@@ -357,9 +291,7 @@ def test_filter_level2_by_relevance():
     print(f"  ℹ️  混合筛选: {len(level2)} in → {len(result)} out")
 
     # 3.7 thinking 字段也参与评分
-    level2 = [
-        {"user": "优化性能", "thinking": "可以使用缓存减少数据库查询", "assistant": "已添加缓存"}
-    ]
+    level2 = [{"user": "优化性能", "thinking": "可以使用缓存减少数据库查询", "assistant": "已添加缓存"}]
     result = filter_level2_by_relevance(level2, "数据库查询缓存")
     assert_true(len(result) > 0, "thinking 字段参与评分")
 
@@ -372,9 +304,9 @@ def make_msg(role, content, **kw):
     m.update(kw)
     return m
 
+
 def test_progressive_trim():
     from tea_agent.session.history_builder import _progressive_trim
-    from tea_agent.session.history_builder import estimate_messages_tokens
 
     print("\n━━━ Section 4: _progressive_trim ━━━")
 
@@ -397,8 +329,7 @@ def test_progressive_trim():
         make_msg("user", "今天的问题"),
     ]
     result = _progressive_trim(msgs, 15, ctx)  # 极低预算触发裁剪
-    has_history = any("[历史记录]" in m.get("content", "")
-                      for m in result if isinstance(m.get("content"), str))
+    has_history = any("[历史记录]" in m.get("content", "") for m in result if isinstance(m.get("content"), str))
     # 可能被删了也可能只剩摘要
     print(f"  ℹ️  策略1后消息数: {len(result)}, 含历史: {has_history}")
 
@@ -413,11 +344,11 @@ def test_progressive_trim():
     tool_msgs = [m for m in result if m.get("role") == "tool"]
     for tm in tool_msgs:
         if "工具结果已省略" in tm.get("content", ""):
-            print(f"  ✅ 策略2: 工具输出被替换为占位符")
+            print("  ✅ 策略2: 工具输出被替换为占位符")
             break
     else:
         # 可能预算够大没被替换
-        print(f"  ℹ️  策略2: 工具输出未替换 (预算可能足够)")
+        print("  ℹ️  策略2: 工具输出未替换 (预算可能足够)")
 
     # 4.4 策略3: reasoning_content 保留（DeepSeek V4 要求完整回传，不可清空/截断）
     msgs = [
@@ -429,8 +360,7 @@ def test_progressive_trim():
         if m.get("role") != "assistant":
             continue
         rc = m.get("reasoning_content", "")
-        assert_true(rc == "这是很长的思考过程 " * 200,
-                    "reasoning_content 必须原样保留（清空/截断会触发 DeepSeek 400）")
+        assert_true(rc == "这是很长的思考过程 " * 200, "reasoning_content 必须原样保留（清空/截断会触发 DeepSeek 400）")
 
     # 4.5 策略4: 长文本截断
     long_text = "word " * 10000
@@ -459,10 +389,11 @@ def test_progressive_trim():
     msgs = [make_msg("user", "hi"), make_msg("assistant", huge)]
     result = _progressive_trim(msgs, 10, ctx)
     last_content = result[-1].get("content", "")
-    assert_in("紧急截断" if len(huge) > len(last_content) else "", last_content
-              if "紧急截断" in last_content else "ok",
-              "最终保护: 紧急截断最后一条消息"
-              if "紧急截断" in last_content else "预算已满足，未触发紧急截断")
+    assert_in(
+        "紧急截断" if len(huge) > len(last_content) else "",
+        last_content if "紧急截断" in last_content else "ok",
+        "最终保护: 紧急截断最后一条消息" if "紧急截断" in last_content else "预算已满足，未触发紧急截断",
+    )
 
 
 # ================================================================
@@ -530,11 +461,7 @@ def test_validate_output_format():
     assert_true(not valid, "非法 JSON → 不通过")
 
     # 5b.8 综合: 多个警告
-    rules = {
-        "required_sections": ["A", "B"],
-        "forbidden_patterns": ["bad"],
-        "output_format": "json"
-    }
+    rules = {"required_sections": ["A", "B"], "forbidden_patterns": ["bad"], "output_format": "json"}
     valid, warns = _validate_output_format('{"key": "bad"}', rules)
     assert_true(len(warns) >= 2, "多个规则同时出警告")
 
@@ -598,22 +525,28 @@ def test_agent_pipeline():
         class MockDB:
             def get_topic(self, tid):
                 return None
+
             def get_recent_conversations(self, tid, limit=3):
                 return []
+
             def update_topic_title(self, tid, title):
                 pass
+
         class MockSess:
             @staticmethod
             def _get_summarize_client():
                 return None, None
+
             def _get_effective_params(self, tier):
                 return {}
+
             context = None
+
         def __init__(self):
             self._db = self.MockDB()
             self._sess = self.MockSess()
 
-    from tea_agent.agent_pipeline import auto_summary, l2_to_l3_summary, do_async_summaries
+    from tea_agent.agent_pipeline import auto_summary, do_async_summaries, l2_to_l3_summary
 
     # auto_summary 无 recent → 返回 (None, usage)
     summary, usage = auto_summary(MockAgent(), "test_topic")
@@ -628,7 +561,7 @@ def test_agent_pipeline():
     # do_async_summaries 不抛异常
     try:
         do_async_summaries(MockAgent(), "test_topic", None, should_summarize=False)
-        print(f"  ✅ do_async_summaries 不抛异常")
+        print("  ✅ do_async_summaries 不抛异常")
     except Exception as e:
         print(f"  ❌ do_async_summaries 异常: {e}")
 
@@ -637,8 +570,9 @@ def test_agent_pipeline():
 # Section 7: build_api_messages 集成测试
 # ================================================================
 def test_build_api_messages():
-    from tea_agent.session.history_builder import build_api_messages
     from types import SimpleNamespace
+
+    from tea_agent.session.history_builder import build_api_messages
 
     print("\n━━━ Section 7: build_api_messages 集成 ━━━")
 
@@ -687,9 +621,7 @@ def test_build_api_messages():
 
     # 7.2 L2 注入测试
     context2 = SimpleNamespace(**{**context.__dict__})
-    context2._level2 = [
-        {"user": "What is Python?", "assistant": "A programming language."}
-    ]
+    context2._level2 = [{"user": "What is Python?", "assistant": "A programming language."}]
     context2.supports_reasoning = True
     result2 = build_api_messages(context2, system_prompt)
     l2_msgs = [m for m in result2 if "[历史记录]" in str(m.get("content", ""))]
@@ -721,9 +653,7 @@ def test_build_api_messages():
     context5.messages = [
         {"role": "system", "content": "You are a helpful assistant."},
         {"role": "user", "content": "Search for X"},
-        {"role": "assistant", "content": "", "tool_calls": [
-            {"id": "c1", "type": "function", "function": {"name": "search", "arguments": "{}"}}
-        ]},
+        {"role": "assistant", "content": "", "tool_calls": [{"id": "c1", "type": "function", "function": {"name": "search", "arguments": "{}"}}]},
         {"role": "tool", "content": "result X", "tool_call_id": "c1"},
     ]
     result5 = build_api_messages(context5, system_prompt)
@@ -750,8 +680,8 @@ def test_build_api_messages():
     ]
     context7.supports_vision = False
     try:
-        result7 = build_api_messages(context7, system_prompt)
-        print(f"  ✅ 不支持视觉时图片被跳过")
+        build_api_messages(context7, system_prompt)
+        print("  ✅ 不支持视觉时图片被跳过")
     except Exception as e:
         print(f"  ❌ 不支持视觉异常: {e}")
 
@@ -775,20 +705,22 @@ if __name__ == "__main__":
 
     from tea_agent.basesession import relaxed_json_loads
 
-    total_start = __import__('time').time()
+    total_start = __import__("time").time()
 
     for name, fn in tests:
         try:
             fn()
         except Exception as e:
             import traceback
+
             print(f"  ❌❌ [{name}] 抛异常: {e}")
             traceback.print_exc()
             # 标记失败但不修改 global，test fn 自己的 except 已处理
             # 这里额外给个计数
             import sys
+
             sys.stderr.write(f"[FATAL] {name} 未处理异常\n")
 
-    elapsed = __import__('time').time() - total_start
-    print(f"\n━━━ 总计: {passed} 通过 | ❌ {failed} 失败 | 共 {passed+failed} 项 | {elapsed:.2f}s ━━━")
+    elapsed = __import__("time").time() - total_start
+    print(f"\n━━━ 总计: {passed} 通过 | ❌ {failed} 失败 | 共 {passed + failed} 项 | {elapsed:.2f}s ━━━")
     sys.exit(0 if failed == 0 else 1)

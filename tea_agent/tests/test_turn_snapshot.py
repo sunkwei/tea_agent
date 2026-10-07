@@ -75,7 +75,7 @@ class TestEnsureTurn:
     def test_preserves_active_snapshot(self, db):
         ts.begin_turn("t1")
         ts.record_event("t1", {"type": "content", "text": "前台已产出"}, 0, force=True)
-        ts.ensure_turn("t1")   # 后台接管
+        ts.ensure_turn("t1")  # 后台接管
         snap = ts.read_snapshot("t1")
         assert snap["partial_text"] == "前台已产出"
         assert len(snap["events"]) == 1
@@ -169,12 +169,10 @@ class TestThrottleAndBounds:
 
         # 未达间隔：接收成功，但**不产生新的磁盘写入**（updated_at 不变）
         assert ts.record_event("t1", {"type": "content", "text": "b"}, 1, now=100.1) is True
-        assert ts.read_snapshot("t1")["updated_at"] == snap_after_a["updated_at"], \
-            "节流未生效：不该落盘的也落了"
+        assert ts.read_snapshot("t1")["updated_at"] == snap_after_a["updated_at"], "节流未生效：不该落盘的也落了"
 
         # 超过间隔：这次才真正写盘
-        assert ts.record_event("t1", {"type": "content", "text": "c"}, 2,
-                               now=100.0 + ts.DEFAULT_MIN_INTERVAL + 0.01) is True
+        assert ts.record_event("t1", {"type": "content", "text": "c"}, 2, now=100.0 + ts.DEFAULT_MIN_INTERVAL + 0.01) is True
         assert ts.read_snapshot("t1")["updated_at"] != snap_after_a["updated_at"]
 
         snap = ts.read_snapshot("t1")
@@ -217,8 +215,7 @@ class TestThrottleAndBounds:
     def test_force_bypasses_throttle(self, db):
         ts.begin_turn("t1")
         ts.record_event("t1", {"type": "content", "text": "a"}, 0, now=1.0)
-        assert ts.record_event("t1", {"type": "content", "text": "b"}, 1,
-                               now=1.0, force=True) is True
+        assert ts.record_event("t1", {"type": "content", "text": "b"}, 1, now=1.0, force=True) is True
 
     def test_seen_advances_even_when_write_skipped(self, db):
         """节流跳过的写不影响最终一致性：后一次写会带上更高的 index。"""
@@ -233,15 +230,13 @@ class TestThrottleAndBounds:
     def test_events_are_bounded(self, db):
         ts.begin_turn("t1")
         for i in range(10):
-            ts.record_event("t1", {"type": "content", "text": str(i)}, i,
-                            force=True, max_events=3)
+            ts.record_event("t1", {"type": "content", "text": str(i)}, i, force=True, max_events=3)
         events = ts.read_snapshot("t1")["events"]
         assert [e["index"] for e in events] == [7, 8, 9]
 
     def test_long_fields_truncated(self, db):
         ts.begin_turn("t1")
-        ts.record_event("t1", {"type": "tool_result", "text": "x" * 5000}, 0,
-                        force=True, max_field=100)
+        ts.record_event("t1", {"type": "tool_result", "text": "x" * 5000}, 0, force=True, max_field=100)
         ev = ts.read_snapshot("t1")["events"][0]["event"]
         assert len(ev["text"]) < 200
         assert ev["text"].endswith("[truncated]")
@@ -335,8 +330,7 @@ class TestRecovery:
         # 断言**全部** content 事件（不只是 recovered 的）。
         # 曾因只筛 recovered=True 而漏掉「partial_text 重复补发」缺陷：
         # 原实现无条件再补一条累积文本，导致同一内容出现两遍（端到端实测踩中）。
-        texts = [e["event"].get("text") for e in fake.buffers["t1"]
-                 if e["event"].get("type") == "content"]
+        texts = [e["event"].get("text") for e in fake.buffers["t1"] if e["event"].get("type") == "content"]
         assert texts == ["abc"], f"内容重复或丢失：{texts}"
 
     def test_partial_text_used_when_no_content_events(self, db):
@@ -346,8 +340,7 @@ class TestRecovery:
         ts.record_event("t1", {"type": "token", "text": "xyz"}, 0, force=True)
         fake = _FakeState()
         ts.rebuild_buffers(state_module=fake)
-        texts = [e["event"].get("text") for e in fake.buffers["t1"]
-                 if e["event"].get("type") == "content"]
+        texts = [e["event"].get("text") for e in fake.buffers["t1"] if e["event"].get("type") == "content"]
         assert texts == ["xyz"], f"partial_text 兜底失效：{texts}"
 
 

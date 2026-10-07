@@ -35,10 +35,7 @@ def png_file(client_and_dir):
     _tc, d = client_and_dir
     path = os.path.join(d, "_preview测试.png")
     # 1x1 透明 PNG
-    data = bytes.fromhex(
-        "89504e470d0a1a0a0000000d494844520000000100000001080600000"
-        "01f15c4890000000a49444154789c6300010000050001"
-    )
+    data = bytes.fromhex("89504e470d0a1a0a0000000d49484452000000010000000108060000001f15c4890000000a49444154789c6300010000050001")
     with open(path, "wb") as fh:
         fh.write(data)
     yield "_preview测试.png"
@@ -106,8 +103,7 @@ class TestPreviewEndpoint:
 class TestIsPreviewableImage:
     """扩展名白名单判定（大小写不敏感）。"""
 
-    @pytest.mark.parametrize("name", ["a.png", "a.PNG", "a.jpg", "a.jpeg", "a.gif",
-                                      "a.webp", "a.bmp", "a.svg", "a.avif"])
+    @pytest.mark.parametrize("name", ["a.png", "a.PNG", "a.jpg", "a.jpeg", "a.gif", "a.webp", "a.bmp", "a.svg", "a.avif"])
     def test_images_are_previewable(self, name):
         from tea_agent.server.route_handlers import is_previewable_image
 

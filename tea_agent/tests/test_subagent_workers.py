@@ -29,6 +29,7 @@ def subagent_mod(monkeypatch):
     saved = (mod._executor, mod._executor_workers)
     # 用全新小池替换，避免污染其他测试
     from concurrent.futures import ThreadPoolExecutor
+
     mod._executor = ThreadPoolExecutor(max_workers=5, thread_name_prefix="subagent-t")
     mod._executor_workers = 5
     yield mod
@@ -65,9 +66,7 @@ class TestPoolScaling:
     def test_spawn_expands_pool(self, subagent_mod):
         with patch(f"{MOD}._execute_subagent") as mock_exec:
             mock_exec.return_value = {"status": "completed"}
-            r = subagent_mod.toolkit_subagent(
-                action="spawn", goal="t", max_concurrent=10
-            )
+            r = subagent_mod.toolkit_subagent(action="spawn", goal="t", max_concurrent=10)
         assert r["status"] == "pending"
         assert subagent_mod._executor_workers == 10
         assert subagent_mod._executor._max_workers == 10

@@ -11,20 +11,20 @@
    告警文案含处置指引；
 4. 自纠重试计入迭代预算（max_iterations 耗尽后不再额外请求模型）。
 """
+
 from unittest.mock import MagicMock
 
 from tea_agent.onlinesession import OnlineToolSession
 from tea_agent.session.tool_loop_runner import execute_tool_loop
 
 # 复刻生产日志中被丢弃的畸形参数形态（batch + 多行代码 + 截断）
-_BAD_TC = [{
-    "id": "call_bad_1",
-    "name": "toolkit_exec",
-    "arguments": (
-        '{"action": "batch", "commands": [{"app": "python", "args": '
-        '["-c", "import pathlib\\ns=pathlib.Path(\'t'
-    ),
-}]
+_BAD_TC = [
+    {
+        "id": "call_bad_1",
+        "name": "toolkit_exec",
+        "arguments": ('{"action": "batch", "commands": [{"app": "python", "args": ["-c", "import pathlib\\ns=pathlib.Path(\'t'),
+    }
+]
 
 
 def _make_session() -> OnlineToolSession:
@@ -33,8 +33,12 @@ def _make_session() -> OnlineToolSession:
     mock_tk.call_tool.return_value = "mock_result"
     mock_tk.get_config.return_value = None
     sess = OnlineToolSession(
-        toolkit=mock_tk, api_key="sk-test", api_url="https://api.test.com/v1",
-        model="test-model", enable_thinking=False, storage=None,
+        toolkit=mock_tk,
+        api_key="sk-test",
+        api_url="https://api.test.com/v1",
+        model="test-model",
+        enable_thinking=False,
+        storage=None,
         no_stream_chunk=True,
     )
     sess._build_api_messages = MagicMock(return_value=[{"role": "user", "content": "test"}])
@@ -52,10 +56,12 @@ class TestInvalidToolArgsSelfCorrection:
         """契约1+2：畸形轮注入反馈 → 模型重发合法调用 → 回合正常完成"""
         sess = _make_session()
         # 第1轮返回畸形 tool_call；第2轮（收到反馈后）正常作答
-        sess._process_stream_with_reasoning = MagicMock(side_effect=[
-            ("", _BAD_TC, ""),
-            ("重发自纠成功", [], ""),
-        ])
+        sess._process_stream_with_reasoning = MagicMock(
+            side_effect=[
+                ("", _BAD_TC, ""),
+                ("重发自纠成功", [], ""),
+            ]
+        )
 
         notes: list[str] = []
         result = execute_tool_loop(sess, {"msg": "test", "callback": notes.append})
@@ -64,10 +70,7 @@ class TestInvalidToolArgsSelfCorrection:
         assert result.get("error") is None
         assert "重发自纠成功" in result["full_reply"]
         # 契约1：注入了含失败原因的 user 反馈（而非直接终止）
-        feedback_msgs = [
-            m for m in sess.context.messages
-            if m.get("role") == "user" and "不是合法 JSON" in str(m.get("content", ""))
-        ]
+        feedback_msgs = [m for m in sess.context.messages if m.get("role") == "user" and "不是合法 JSON" in str(m.get("content", ""))]
         assert len(feedback_msgs) == 1
         # 反馈携带失败参数片段，模型可据此自纠
         assert "失败参数片段" in feedback_msgs[0]["content"]
@@ -78,9 +81,7 @@ class TestInvalidToolArgsSelfCorrection:
     def test_persistent_malform_terminates_with_error(self):
         """契约3：连续畸形超上限 → 终止并返回可诊断 error"""
         sess = _make_session()
-        sess._process_stream_with_reasoning = MagicMock(
-            return_value=("", _BAD_TC, "")
-        )
+        sess._process_stream_with_reasoning = MagicMock(return_value=("", _BAD_TC, ""))
 
         notes: list[str] = []
         result = execute_tool_loop(sess, {"msg": "test", "callback": notes.append})
@@ -92,10 +93,7 @@ class TestInvalidToolArgsSelfCorrection:
         # 初始轮 + 2 次自纠重试 = 3 次模型请求，不会无限重试
         assert sess.api.create_chat_stream.call_count == 3
         # 两次自纠反馈注入，第 3 次畸形才终止
-        feedback_count = sum(
-            1 for m in sess.context.messages
-            if m.get("role") == "user" and "不是合法 JSON" in str(m.get("content", ""))
-        )
+        feedback_count = sum(1 for m in sess.context.messages if m.get("role") == "user" and "不是合法 JSON" in str(m.get("content", "")))
         assert feedback_count == 2
         sess.close()
 
@@ -104,9 +102,7 @@ class TestInvalidToolArgsSelfCorrection:
         sess = _make_session()
         sess.max_iterations = 1
         sess._extra_iterations = 0
-        sess._process_stream_with_reasoning = MagicMock(
-            return_value=("", _BAD_TC, "")
-        )
+        sess._process_stream_with_reasoning = MagicMock(return_value=("", _BAD_TC, ""))
 
         notes: list[str] = []
         result = execute_tool_loop(sess, {"msg": "test", "callback": notes.append})

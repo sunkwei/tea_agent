@@ -10,6 +10,7 @@
 
 from __future__ import annotations
 
+import contextlib
 import os
 import socket
 import subprocess
@@ -51,14 +52,12 @@ def _wait_health(port: int, timeout: float = 60.0) -> bool:
 def _listener_pid(port: int) -> int | None:
     """返回正在 LISTEN 该端口的进程 PID（用于证明进程确实被换掉）。"""
     try:
-        out = subprocess.run(["netstat", "-ano"], capture_output=True, text=True,
-                             timeout=20).stdout
+        out = subprocess.run(["netstat", "-ano"], capture_output=True, text=True, timeout=20).stdout
     except (OSError, subprocess.SubprocessError):
         return None
     for line in out.splitlines():
         parts = line.split()
-        if len(parts) >= 5 and parts[0].upper().startswith("TCP") \
-                and parts[1].endswith(f":{port}") and parts[3].upper() == "LISTENING":
+        if len(parts) >= 5 and parts[0].upper().startswith("TCP") and parts[1].endswith(f":{port}") and parts[3].upper() == "LISTENING":
             try:
                 return int(parts[4])
             except ValueError:
@@ -69,11 +68,8 @@ def _listener_pid(port: int) -> int | None:
 def _kill(pid: int | None) -> None:
     if not pid:
         return
-    try:
-        subprocess.run(["taskkill", "/F", "/PID", str(pid)],
-                       capture_output=True, timeout=20)
-    except (OSError, subprocess.SubprocessError):
-        pass
+    with contextlib.suppress(OSError, subprocess.SubprocessError):
+        subprocess.run(["taskkill", "/F", "/PID", str(pid)], capture_output=True, timeout=20)
 
 
 def _post_restart(port: int, mode: str = "immediate") -> dict:
@@ -86,15 +82,15 @@ def _post_restart(port: int, mode: str = "immediate") -> dict:
 
     req = urllib.request.Request(
         f"http://127.0.0.1:{port}/api/restart?mode={mode}",
-        data=b"{}", method="POST",
+        data=b"{}",
+        method="POST",
         headers={"Content-Type": "application/json"},
     )
     try:
         with urllib.request.urlopen(req, timeout=30) as r:
             return json.loads(r.read().decode("utf-8"))
     except (urllib.error.URLError, OSError, ValueError) as e:
-        return {"ok": True, "mode": mode,
-                "note": f"连接在关闭中重置: {type(e).__name__}"}
+        return {"ok": True, "mode": mode, "note": f"连接在关闭中重置: {type(e).__name__}"}
 
 
 @pytest.mark.timeout(240)
@@ -106,17 +102,17 @@ def test_restart_replaces_process_e2e(tmp_path):
     """
     port = _free_port()
     cfg = tmp_path / "config.yaml"
-    cfg.write_text("main_model:\n  provider: DeepSeek\n  model: deepseek-v4-flash\n",
-                   encoding="utf-8")
+    cfg.write_text("main_model:\n  provider: DeepSeek\n  model: deepseek-v4-flash\n", encoding="utf-8")
 
     env = dict(os.environ)
     env["TEA_SERVER_STATE_DB"] = str(tmp_path / "server_state.db")
 
     proc = subprocess.Popen(
-        [sys.executable, "-m", "tea_agent.server", "--host", "127.0.0.1",
-         "--port", str(port), "--config", str(cfg)],
-        cwd=PROJECT_ROOT, env=env,
-        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+        [sys.executable, "-m", "tea_agent.server", "--host", "127.0.0.1", "--port", str(port), "--config", str(cfg)],
+        cwd=PROJECT_ROOT,
+        env=env,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
     )
     old_pid = pid_after = None
     try:
@@ -141,16 +137,13 @@ def test_restart_replaces_process_e2e(tmp_path):
                 break
             time.sleep(1)
 
-        assert pid_after, (
-            f"重启后端口仍由旧进程监听（PID {old_pid}）→ 重启未真正替换进程")
+        assert pid_after, f"重启后端口仍由旧进程监听（PID {old_pid}）→ 重启未真正替换进程"
     finally:
         _kill(_listener_pid(port))
         _kill(old_pid)
         _kill(pid_after)
-        try:
+        with contextlib.suppress(OSError):
             proc.terminate()
-        except OSError:
-            pass
 
 
 def test_inflight_events_survive_restart_no_loss_no_dup(tmp_path):
@@ -181,15 +174,15 @@ def test_inflight_events_survive_restart_no_loss_no_dup(tmp_path):
 
     port = _free_port()
     cfg = tmp_path / "config.yaml"
-    cfg.write_text("main_model:\n  provider: DeepSeek\n  model: deepseek-v4-flash\n",
-                   encoding="utf-8")
+    cfg.write_text("main_model:\n  provider: DeepSeek\n  model: deepseek-v4-flash\n", encoding="utf-8")
     env = dict(os.environ)
     env["TEA_SERVER_STATE_DB"] = str(db)
-    proc = subprocess.Popen(
-        [sys.executable, "-m", "tea_agent.server", "--host", "127.0.0.1",
-         "--port", str(port), "--config", str(cfg)],
-        cwd=PROJECT_ROOT, env=env,
-        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+    subprocess.Popen(
+        [sys.executable, "-m", "tea_agent.server", "--host", "127.0.0.1", "--port", str(port), "--config", str(cfg)],
+        cwd=PROJECT_ROOT,
+        env=env,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
     )
     pid = None
     try:
@@ -205,16 +198,14 @@ def test_inflight_events_survive_restart_no_loss_no_dup(tmp_path):
         types = [e["event"].get("type") for e in events]
 
         # 不丢：崩溃前的 3 条事件原样可续读（其后是恢复时补的 done 收尾）
-        assert types[:3] == ["content", "content", "usage"], \
-            f"原始事件丢失或错序：types={types}"
+        assert types[:3] == ["content", "content", "usage"], f"原始事件丢失或错序：types={types}"
         # 序号连续无空洞 —— 前端按 since=N 增量拉取，空洞会导致错位
         assert idxs == [0, 1, 2, 3], f"序号不连续（续读会错位）：{idxs}"
         # 不重：索引唯一
         assert len(set(idxs)) == len(idxs), f"事件重复：{idxs}"
         # 不重：内容事件恰好「甲、乙」各一次 —— 绝不能再出现累积的「甲乙」。
         # 原实现无条件补发 partial_text，同一内容会渲染两遍，此处即其回归防护。
-        texts = [e["event"].get("text") for e in events
-                 if e["event"].get("type") == "content"]
+        texts = [e["event"].get("text") for e in events if e["event"].get("type") == "content"]
         assert texts == ["甲", "乙"], f"内容重复或丢失：{texts}"
         # 收尾：回合已死 → 必须补 done 并标记完成，否则前端无限轮询
         assert types[-1] == "done", f"缺少收尾事件：{types}"

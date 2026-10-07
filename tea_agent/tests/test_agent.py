@@ -53,6 +53,7 @@ class TestAgentCreation:
     def test_lightweight_mode_creates_agent(self, tmp_yaml_config):
         """lightweight 模式：创建成功，无 storage"""
         from tea_agent.agent import Agent
+
         _write_config(tmp_yaml_config)
 
         agent = Agent(mode="lightweight", config_path=tmp_yaml_config)
@@ -66,6 +67,7 @@ class TestAgentCreation:
     def test_full_mode_creates_agent_with_storage(self, tmp_db_path, tmp_yaml_config):
         """full 模式：创建成功，有 storage"""
         from tea_agent.agent import Agent
+
         os.makedirs(os.path.dirname(tmp_db_path) or ".", exist_ok=True)
         _write_config(tmp_yaml_config, db_path=tmp_db_path.replace("\\", "/"))
 
@@ -79,6 +81,7 @@ class TestAgentCreation:
     def test_lite_mode_creates_lite_session(self, tmp_yaml_config):
         """lite 模式：创建 LiteSession"""
         from tea_agent.agent import Agent
+
         _write_config(tmp_yaml_config)
 
         agent = Agent(mode="lite", config_path=tmp_yaml_config)
@@ -91,6 +94,7 @@ class TestAgentCreation:
     def test_invalid_mode_raises_valueerror(self, tmp_yaml_config):
         """无效 mode 应抛出 ValueError"""
         from tea_agent.agent import Agent
+
         _write_config(tmp_yaml_config)
 
         with pytest.raises(ValueError, match="mode 必须是"):
@@ -103,6 +107,7 @@ class TestTeaAgentFactory:
     def test_tea_agent_returns_lightweight_agent(self, tmp_yaml_config):
         """TeaAgent() 返回 lightweight 模式的 Agent"""
         from tea_agent.agent import Agent, TeaAgent
+
         _write_config(tmp_yaml_config)
 
         agent = TeaAgent(config_path=tmp_yaml_config)
@@ -117,6 +122,7 @@ class TestAgentLifecycle:
     def test_context_manager(self, tmp_yaml_config):
         """__enter__ / __exit__ 上下文管理器"""
         from tea_agent.agent import Agent
+
         _write_config(tmp_yaml_config)
 
         with Agent(mode="lightweight", config_path=tmp_yaml_config) as agent:
@@ -127,6 +133,7 @@ class TestAgentLifecycle:
     def test_close_cleans_up_resources(self, tmp_yaml_config):
         """close() 清理所有资源"""
         from tea_agent.agent import Agent
+
         _write_config(tmp_yaml_config)
 
         agent = Agent(mode="lightweight", config_path=tmp_yaml_config)
@@ -152,6 +159,7 @@ class TestAgentProperties:
     def test_session_alias(self, tmp_yaml_config):
         """session 是 sess 的别名"""
         from tea_agent.agent import Agent
+
         _write_config(tmp_yaml_config)
 
         agent = Agent(mode="lightweight", config_path=tmp_yaml_config)
@@ -161,6 +169,7 @@ class TestAgentProperties:
     def test_current_topic_id_default(self, tmp_yaml_config):
         """current_topic_id 默认为空"""
         from tea_agent.agent import Agent
+
         _write_config(tmp_yaml_config)
 
         agent = Agent(mode="lightweight", config_path=tmp_yaml_config)

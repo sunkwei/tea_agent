@@ -19,6 +19,7 @@ def test_build_call_graph_empty_dir():
         assert isinstance(classes, dict)
     finally:
         import shutil
+
         shutil.rmtree(dirpath, ignore_errors=True)
 
 
@@ -35,6 +36,7 @@ def test_build_call_graph_simple():
         assert "bar" in calls.get("foo", [])
     finally:
         import shutil
+
         shutil.rmtree(dirpath, ignore_errors=True)
 
 
@@ -49,6 +51,7 @@ def test_build_call_graph_class():
         assert "method" in defs
     finally:
         import shutil
+
         shutil.rmtree(dirpath, ignore_errors=True)
 
 
@@ -66,6 +69,7 @@ def test_build_call_graph_skips_cache():
         assert "real" in defs
     finally:
         import shutil
+
         shutil.rmtree(dirpath, ignore_errors=True)
 
 
@@ -84,8 +88,10 @@ def test_check_index_stale_no_index():
     try:
         # No symbol_index.json yet — function will raise FileNotFoundError
         import pytest
+
         with pytest.raises(FileNotFoundError):
             _check_index_stale(dirpath, run_dir)
     finally:
         import shutil
+
         shutil.rmtree(dirpath, ignore_errors=True)

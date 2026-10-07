@@ -51,6 +51,7 @@ def test_detect_language_directory_python():
         assert _detect_language(dirpath) == "python"
     finally:
         import shutil
+
         shutil.rmtree(dirpath, ignore_errors=True)
 
 
@@ -63,4 +64,5 @@ def test_detect_language_directory_cpp():
         assert _detect_language(dirpath) == "cpp"
     finally:
         import shutil
+
         shutil.rmtree(dirpath, ignore_errors=True)

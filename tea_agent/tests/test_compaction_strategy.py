@@ -6,8 +6,7 @@ from tea_agent import auto_compact as ac
 
 
 def _msgs(n=20):
-    return [{"role": "user" if i % 2 == 0 else "assistant", "content": f"m{i}"}
-            for i in range(n)]
+    return [{"role": "user" if i % 2 == 0 else "assistant", "content": f"m{i}"} for i in range(n)]
 
 
 def test_default_is_truncate_strategy():

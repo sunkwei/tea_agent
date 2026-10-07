@@ -29,11 +29,7 @@ def test_agent_uses_relative_intra_package_imports():
     """agent.py 不得出现 `from tea_agent.xxx import ...`（应为相对导入）。"""
     tree = _parse(PKG / "agent.py")
     bad = [
-        (n.lineno, n.module)
-        for n in ast.walk(tree)
-        if isinstance(n, ast.ImportFrom)
-        and n.level == 0
-        and (n.module or "").startswith("tea_agent")
+        (n.lineno, n.module) for n in ast.walk(tree) if isinstance(n, ast.ImportFrom) and n.level == 0 and (n.module or "").startswith("tea_agent")
     ]
     assert bad == [], f"agent.py 仍存在包内绝对导入: {bad}"
 
@@ -58,7 +54,10 @@ def test_agent_module_imports_cleanly_in_fresh_process():
     """独立进程导入 tea_agent.agent 必须成功（冒烟验证无真实导入环）。"""
     r = subprocess.run(
         [sys.executable, "-c", "import tea_agent.agent as m; assert hasattr(m, 'Agent')"],
-        cwd=str(ROOT), capture_output=True, text=True, timeout=180,
+        cwd=str(ROOT),
+        capture_output=True,
+        text=True,
+        timeout=180,
     )
     assert r.returncode == 0, f"导入 tea_agent.agent 失败:\n{r.stderr[-800:]}"
 

@@ -10,10 +10,10 @@ import logging
 
 import pytest
 
-
 # ============================================================
 # to_multimodal
 # ============================================================
+
 
 class TestToMultimodal:
     """多模态消息转换测试"""
@@ -21,6 +21,7 @@ class TestToMultimodal:
     def test_no_images_returns_unchanged(self):
         """无图片时应原样返回"""
         from tea_agent.session.history_builder import to_multimodal
+
         msg = {"role": "user", "content": "hello"}
         result = to_multimodal(msg, supports_vision=True)
         assert result["content"] == "hello"
@@ -29,6 +30,7 @@ class TestToMultimodal:
     def test_empty_images_returns_unchanged(self):
         """空图片列表应原样返回"""
         from tea_agent.session.history_builder import to_multimodal
+
         msg = {"role": "user", "content": "hello", "images": []}
         result = to_multimodal(msg, supports_vision=True)
         assert result["content"] == "hello"
@@ -37,15 +39,12 @@ class TestToMultimodal:
     def test_vision_supported_converts_to_multimodal(self, tmp_path):
         """支持视觉时应转换为多模态格式"""
         from tea_agent.session.history_builder import to_multimodal
+
         # 创建临时图片文件
         img_path = tmp_path / "test.png"
         img_path.write_bytes(b"fake png data")
 
-        msg = {
-            "role": "user",
-            "content": "描述这张图片",
-            "images": [str(img_path)]
-        }
+        msg = {"role": "user", "content": "描述这张图片", "images": [str(img_path)]}
         result = to_multimodal(msg, supports_vision=True)
         assert "images" not in result
         assert isinstance(result["content"], list)
@@ -57,14 +56,11 @@ class TestToMultimodal:
     def test_vision_not_supported_removes_images(self, tmp_path):
         """不支持视觉时应移除图片"""
         from tea_agent.session.history_builder import to_multimodal
+
         img_path = tmp_path / "test.png"
         img_path.write_bytes(b"fake png data")
 
-        msg = {
-            "role": "user",
-            "content": "描述这张图片",
-            "images": [str(img_path)]
-        }
+        msg = {"role": "user", "content": "描述这张图片", "images": [str(img_path)]}
         result = to_multimodal(msg, supports_vision=False)
         assert result["content"] == "描述这张图片"
         assert "images" not in result
@@ -72,17 +68,14 @@ class TestToMultimodal:
     def test_multiple_images(self, tmp_path):
         """多图片应全部转换"""
         from tea_agent.session.history_builder import to_multimodal
+
         # 创建多个临时图片文件
         img1 = tmp_path / "test1.png"
         img1.write_bytes(b"fake png 1")
         img2 = tmp_path / "test2.jpg"
         img2.write_bytes(b"fake jpg 2")
 
-        msg = {
-            "role": "user",
-            "content": "比较这两张图",
-            "images": [str(img1), str(img2)]
-        }
+        msg = {"role": "user", "content": "比较这两张图", "images": [str(img1), str(img2)]}
         result = to_multimodal(msg, supports_vision=True)
         assert isinstance(result["content"], list)
         assert len(result["content"]) == 3  # text + 2 images
@@ -90,20 +83,18 @@ class TestToMultimodal:
     def test_removes_images_key_from_result(self, tmp_path):
         """转换后应移除 images 键"""
         from tea_agent.session.history_builder import to_multimodal
+
         img_path = tmp_path / "test.png"
         img_path.write_bytes(b"fake png data")
 
-        msg = {
-            "role": "user",
-            "content": "test",
-            "images": [str(img_path)]
-        }
+        msg = {"role": "user", "content": "test", "images": [str(img_path)]}
         result = to_multimodal(msg, supports_vision=True)
         assert "images" not in result
 
     def test_data_url_passthrough(self):
         """data URL 图片（API server 传入）应直接透传，不当作文件路径处理"""
         from tea_agent.session.history_builder import to_multimodal
+
         data_url = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg=="
 
         msg = {
@@ -127,6 +118,7 @@ class TestToMultimodal:
         产出 {"type": "text", "text": [...]}，服务端 pydantic 报 400。
         """
         from tea_agent.session.history_builder import to_multimodal
+
         data_url = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg=="
 
         msg = {
@@ -149,6 +141,7 @@ class TestToMultimodal:
     def test_reentrant_is_idempotent_after_writeback(self, tmp_path):
         """回写后的 parts 再次过一遍 to_multimodal，结构不应继续变形"""
         from tea_agent.session.history_builder import to_multimodal
+
         img = tmp_path / "pic.png"
         img.write_bytes(b"fake png data")
 
@@ -165,6 +158,7 @@ class TestToMultimodal:
     def test_reentrant_nested_text_list_flattened(self):
         """历史里已嵌套的 text 列表应被递归展平，保持原有顺序"""
         from tea_agent.session.history_builder import to_multimodal
+
         data_url = "data:image/png;base64,AAA"
         msg = {
             "role": "user",
@@ -187,24 +181,30 @@ class TestToMultimodal:
     def test_messages_contain_images_detects_image_url(self):
         """含 image_url 内容的消息应被识别为含图"""
         from tea_agent.session.history_builder import messages_contain_images
+
         msgs = [
             {"role": "user", "content": "文本"},
-            {"role": "user", "content": [
-                {"type": "text", "text": "描述"},
-                {"type": "image_url", "image_url": {"url": "data:image/png;base64,xx"}},
-            ]},
+            {
+                "role": "user",
+                "content": [
+                    {"type": "text", "text": "描述"},
+                    {"type": "image_url", "image_url": {"url": "data:image/png;base64,xx"}},
+                ],
+            },
         ]
         assert messages_contain_images(msgs) is True
 
     def test_messages_contain_images_detects_images_field(self):
         """含未转换 images 字段的消息应被识别为含图"""
         from tea_agent.session.history_builder import messages_contain_images
+
         msgs = [{"role": "user", "content": "文本", "images": ["/tmp/a.png"]}]
         assert messages_contain_images(msgs) is True
 
     def test_messages_contain_images_false_for_text(self):
         """纯文本消息列表返回 False"""
         from tea_agent.session.history_builder import messages_contain_images
+
         msgs = [
             {"role": "system", "content": "sys"},
             {"role": "user", "content": "你好"},
@@ -216,6 +216,7 @@ class TestToMultimodal:
 # ============================================================
 # _extract_files_from_text — 符号索引容错（Linux 启动报错同源回归）
 # ============================================================
+
 
 class TestExtractFilesFromSymbolIndex:
     """.tea_agent_run/symbol_index.json 损坏时必须静默降级。
@@ -254,33 +255,39 @@ class TestExtractFilesFromSymbolIndex:
 
         assert "a/b.py" in _extract_files_from_text("build_history")
 
-    @pytest.mark.parametrize("bad", [
-        "",                       # 0 字节：上次写入被中断
-        "{incomplete",            # 半截 JSON
-        "[]",                     # 顶层不是对象
-        '{"sym": "not-a-list"}',  # 值类型不对
-        '{"sym": ["not-a-dict"]}',  # 元素类型不对
-    ])
+    @pytest.mark.parametrize(
+        "bad",
+        [
+            "",  # 0 字节：上次写入被中断
+            "{incomplete",  # 半截 JSON
+            "[]",  # 顶层不是对象
+            '{"sym": "not-a-list"}',  # 值类型不对
+            '{"sym": ["not-a-dict"]}',  # 元素类型不对
+        ],
+    )
     def test_corrupted_index_degrades_silently(self, tmp_path, monkeypatch, caplog, bad):
         """索引损坏应只返回正则提取到的路径，不抛异常、不打 ERROR。"""
         monkeypatch.chdir(tmp_path)
         self._make_index(tmp_path, bad)
         with caplog.at_level(logging.WARNING):
             from tea_agent.session.history_builder import _extract_files_from_text
+
             files = _extract_files_from_text("看看 build_history 和 a/b.py")
-        assert "a/b.py" in files                 # 正则通路不受影响
+        assert "a/b.py" in files  # 正则通路不受影响
         assert not [r for r in caplog.records if r.levelno >= logging.ERROR]
 
     def test_missing_index_is_fine(self, tmp_path, monkeypatch):
         """没有索引文件时正常工作（裸进程/新装环境）。"""
         monkeypatch.chdir(tmp_path)
         from tea_agent.session.history_builder import _extract_files_from_text
+
         assert "x/y.py" in _extract_files_from_text("参考 x/y.py 里的 build_history")
 
 
 # ============================================================
 # strip_historical_images — 历史轮图像剥离（400 回归）
 # ============================================================
+
 
 class TestStripHistoricalImages:
     """历史轮图像剥离：构造 API 历史的最后一步。
@@ -294,23 +301,23 @@ class TestStripHistoricalImages:
     def _msgs():
         return [
             {"role": "system", "content": "sp"},
-            {"role": "user", "content": "看这张图",
-             "images": ["/old.png"], "_b64_cache": {"/old.png": "xxxx"}},
+            {"role": "user", "content": "看这张图", "images": ["/old.png"], "_b64_cache": {"/old.png": "xxxx"}},
             {"role": "assistant", "content": "图里是一只猫"},
-            {"role": "user",
-             "content": [{"type": "text", "text": "再看这张"},
-                          {"type": "image_url",
-                           "image_url": {"url": "data:image/png;base64,QQ=="}}]},
-            {"role": "assistant",
-             "content": [{"type": "text", "text": "回复"},
-                          {"type": "image_url",
-                           "image_url": {"url": "data:image/png;base64,QQ=="}}]},
+            {
+                "role": "user",
+                "content": [{"type": "text", "text": "再看这张"}, {"type": "image_url", "image_url": {"url": "data:image/png;base64,QQ=="}}],
+            },
+            {
+                "role": "assistant",
+                "content": [{"type": "text", "text": "回复"}, {"type": "image_url", "image_url": {"url": "data:image/png;base64,QQ=="}}],
+            },
             {"role": "user", "content": "当前轮纯文本追问"},
             {"role": "user", "content": "[动态上下文] 时间: 2026-09-23"},
         ]
 
     def test_strips_old_turns_keeps_current(self):
         from tea_agent.session.history_builder import strip_historical_images
+
         out = strip_historical_images(self._msgs())
         # 历史 user：images / _b64_cache 私有键被剥
         assert "images" not in out[1]
@@ -326,16 +333,19 @@ class TestStripHistoricalImages:
     def test_current_turn_with_image_kept(self):
         """当前轮（最后一条真实 user）带图必须原样保留（交给视觉切换）。"""
         from tea_agent.session.history_builder import strip_historical_images
+
         msgs = self._msgs()
         msgs[5] = {"role": "user", "content": "看这张", "images": ["/new.png"]}
         out = strip_historical_images(msgs)
-        assert out[5].get("images") == ["/new.png"]   # 当前轮保留
-        assert "images" not in out[1]                  # 历史仍剥
+        assert out[5].get("images") == ["/new.png"]  # 当前轮保留
+        assert "images" not in out[1]  # 历史仍剥
 
     def test_idempotent(self):
         """幂等：重复剥离结果不变。"""
         import copy
+
         from tea_agent.session.history_builder import strip_historical_images
+
         once = strip_historical_images(self._msgs())
         snap = copy.deepcopy(once)
         assert strip_historical_images(once) == snap
@@ -343,6 +353,7 @@ class TestStripHistoricalImages:
     def test_no_real_user_returns_unchanged(self):
         """无真实 user 轮（仅 system/合成消息）→ 原样返回，不误剥。"""
         from tea_agent.session.history_builder import strip_historical_images
+
         msgs = [
             {"role": "system", "content": "sp"},
             {"role": "user", "content": "[动态上下文] x", "images": ["y"]},

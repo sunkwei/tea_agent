@@ -79,8 +79,7 @@ def test_delete_lines():
 def test_replace_lines():
     fp = _make_file("line1\nbad\nline3\n")
     try:
-        result = toolkit_edit(fp, action="replace_lines", start_line=2, end_line=2,
-                              new_text="good")
+        result = toolkit_edit(fp, action="replace_lines", start_line=2, end_line=2, new_text="good")
         assert result["ok"] is True
         with open(fp) as f:
             content = f.read()
@@ -102,8 +101,7 @@ def test_preview_patch():
 
 
 def test_file_not_found():
-    result = toolkit_edit("/nonexistent/path.py", action="replace_text",
-                          old_text="x", new_text="y")
+    result = toolkit_edit("/nonexistent/path.py", action="replace_text", old_text="x", new_text="y")
     assert result["ok"] is False
     assert "不存在" in result.get("error", "")
 

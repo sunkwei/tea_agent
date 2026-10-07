@@ -95,11 +95,7 @@ class TestSessionRef:
                 sr.set_agent(f"agent_{i}")
 
         sr.clear()
-        threads = [
-            threading.Thread(target=_set_session_only) for _ in range(5)
-        ] + [
-            threading.Thread(target=_set_agent_only) for _ in range(5)
-        ]
+        threads = [threading.Thread(target=_set_session_only) for _ in range(5)] + [threading.Thread(target=_set_agent_only) for _ in range(5)]
         for t in threads:
             t.start()
         for t in threads:

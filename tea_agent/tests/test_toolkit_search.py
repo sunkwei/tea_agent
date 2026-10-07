@@ -24,6 +24,7 @@ def test_search_symbol_found():
         assert any(r["name"] == "hello" for r in result["results"])
     finally:
         import shutil
+
         shutil.rmtree(dirpath, ignore_errors=True)
 
 
@@ -38,6 +39,7 @@ def test_search_symbol_not_found():
         assert "未找到" in result.get("message", "")
     finally:
         import shutil
+
         shutil.rmtree(dirpath, ignore_errors=True)
 
 
@@ -48,6 +50,7 @@ def test_search_symbol_empty_directory():
         assert result["ok"] is True
     finally:
         import shutil
+
         shutil.rmtree(dirpath, ignore_errors=True)
 
 
@@ -65,4 +68,5 @@ def test_search_symbol_class():
         assert results[0]["type"] == "class"
     finally:
         import shutil
+
         shutil.rmtree(dirpath, ignore_errors=True)

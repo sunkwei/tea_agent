@@ -24,10 +24,15 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..",
 
 try:
     import httpx
+
     _RemoteProtocolError = httpx.RemoteProtocolError
 except Exception:  # pragma: no cover
+
     class _RemoteProtocolError(Exception):
         pass
+
+
+import contextlib
 
 from tea_agent.onlinesession import OnlineToolSession  # noqa: E402
 
@@ -93,9 +98,7 @@ class _Stream:
         self._items = list(items)
         self._idx = 0
         self._fail_at = fail_at
-        self._exc = exc or _RemoteProtocolError(
-            "peer closed connection without sending complete message body (incomplete chunked read)"
-        )
+        self._exc = exc or _RemoteProtocolError("peer closed connection without sending complete message body (incomplete chunked read)")
 
     def __iter__(self):
         return self
@@ -117,6 +120,7 @@ def fake():
 
 # ── 1. 断流后重试成功 ──
 
+
 def test_stream_retry_recovers_after_interruption(fake):
     """第一次流中途断连，retry_factory 重取流后内容完整。"""
     first = _Stream([_make_chunk("你好"), _make_chunk("，世界")], fail_at=1)
@@ -128,29 +132,21 @@ def test_stream_retry_recovers_after_interruption(fake):
         return second
 
     cb = MagicMock()
-    content, tool_calls, reasoning = fake._process_stream_with_reasoning(
-        first, cb, retry_factory=retry_factory
-    )
-    assert content == "你好，世界！"          # 完整内容（丢弃半截重新生成）
-    assert factory_calls == [1]               # 重试工厂被调用一次
+    content, tool_calls, reasoning = fake._process_stream_with_reasoning(first, cb, retry_factory=retry_factory)
+    assert content == "你好，世界！"  # 完整内容（丢弃半截重新生成）
+    assert factory_calls == [1]  # 重试工厂被调用一次
     assert len(tool_calls) == 0
     # callback 收到中断提示
-    any_retry_hint = any(
-        "自动重试" in str(c.args[0]) for c in cb.call_args_list
-    )
+    any_retry_hint = any("自动重试" in str(c.args[0]) for c in cb.call_args_list)
     assert any_retry_hint
 
 
 def test_stream_retry_with_tool_calls(fake):
     """断流重试后工具调用完整（流式增量半截参数被丢弃）。"""
     # 第一次流：第一个 chunk 给了工具调用片段，第二个 chunk 断流
-    tc_partial = SimpleNamespace(
-        index=0, id="call_1", function=SimpleNamespace(name="toolkit_x", arguments='{"q"')
-    )
+    tc_partial = SimpleNamespace(index=0, id="call_1", function=SimpleNamespace(name="toolkit_x", arguments='{"q"'))
     first = _Stream([_make_chunk(tool_call=tc_partial)], fail_at=1)
-    tc_full = SimpleNamespace(
-        index=0, id="call_1", function=SimpleNamespace(name="toolkit_x", arguments='{"q": 1}')
-    )
+    tc_full = SimpleNamespace(index=0, id="call_1", function=SimpleNamespace(name="toolkit_x", arguments='{"q": 1}'))
     second = _Stream([_make_chunk(tool_call=tc_full)])
     calls = []
 
@@ -159,9 +155,7 @@ def test_stream_retry_with_tool_calls(fake):
         return second
 
     cb = MagicMock()
-    content, tool_calls, reasoning = fake._process_stream_with_reasoning(
-        first, cb, retry_factory=retry_factory
-    )
+    content, tool_calls, reasoning = fake._process_stream_with_reasoning(first, cb, retry_factory=retry_factory)
     assert len(calls) == 1
     # 工具调用数据来自第二次流（完整参数，扁平结构 id/name/arguments）
     assert len(tool_calls) == 1
@@ -170,6 +164,7 @@ def test_stream_retry_with_tool_calls(fake):
 
 
 # ── 2. 无 retry_factory → 原样抛出 ──
+
 
 def test_stream_raises_without_retry_factory(fake):
     """未提供 retry_factory 时断流异常原样抛出。"""
@@ -181,6 +176,7 @@ def test_stream_raises_without_retry_factory(fake):
 
 # ── 3. 重试次数超限 ──
 
+
 def test_stream_raises_after_max_retries(fake):
     """重试工厂每次返回断流流 → 超过 max_stream_retries 后抛出。"""
     calls = []
@@ -189,7 +185,7 @@ def test_stream_raises_after_max_retries(fake):
         calls.append(1)
         return _Stream([_make_chunk("x")], fail_at=0)  # 每次都断流
 
-    with pytest.raises(Exception):
+    with pytest.raises(Exception):  # noqa: B017 — 此处只要求「重试耗尽后必然抛错」
         fake._process_stream_with_reasoning(
             _Stream([_make_chunk("x")], fail_at=0),
             MagicMock(),
@@ -201,6 +197,7 @@ def test_stream_raises_after_max_retries(fake):
 
 # ── 4. 非可重试错误不重试 ──
 
+
 def test_stream_does_not_retry_non_retryable_error(fake):
     """ValueError（非网络类错误）不触发重试。"""
     stream = _Stream([_make_chunk("x")], fail_at=0, exc=ValueError("bad args"))
@@ -211,13 +208,12 @@ def test_stream_does_not_retry_non_retryable_error(fake):
         return _Stream([_make_chunk("ok")])
 
     with pytest.raises(ValueError):
-        fake._process_stream_with_reasoning(
-            stream, MagicMock(), retry_factory=retry_factory
-        )
+        fake._process_stream_with_reasoning(stream, MagicMock(), retry_factory=retry_factory)
     assert calls == []  # 未重试
 
 
 # ── 5. 正常流不受影响 ──
+
 
 def test_stream_normal_no_retry(fake):
     """正常流一次消费完成，retry_factory 不被调用。"""
@@ -229,9 +225,7 @@ def test_stream_normal_no_retry(fake):
         return stream
 
     cb = MagicMock()
-    content, tool_calls, reasoning = fake._process_stream_with_reasoning(
-        stream, cb, retry_factory=retry_factory
-    )
+    content, tool_calls, reasoning = fake._process_stream_with_reasoning(stream, cb, retry_factory=retry_factory)
     assert content == "hello world"
     assert calls == []
 
@@ -241,17 +235,17 @@ def test_stream_normal_no_retry(fake):
 # 不等 final msg：流式 chunk 边收边写 session_events(assistant/chunk)
 # ════════════════════════════════════════════════════════════
 
+
 @pytest.fixture
 def event_storage():
     """临时数据库 Storage（验证事件真实落盘）。"""
     from tea_agent.store._core import Storage
+
     db_path = os.path.join(tempfile.mkdtemp(), "test_stream_chunk.db")
     st = Storage(db_path)
     yield st
-    try:
+    with contextlib.suppress(Exception):
         st.close()
-    except Exception:
-        pass
 
 
 def test_stream_chunk_realtime_persist(event_storage):
@@ -285,11 +279,11 @@ def test_stream_interrupt_persists_partial(event_storage):
     tid = event_storage.topics.create_topic("CHK")
     fake = _FakeSession(storage=event_storage, topic_id=tid)
 
-    class Boom(Exception):
+    class BoomError(Exception):
         pass
 
-    stream = _Stream([_make_chunk("partial reply")], fail_at=1, exc=Boom("boom"))
-    with pytest.raises(Boom):
+    stream = _Stream([_make_chunk("partial reply")], fail_at=1, exc=BoomError("boom"))
+    with pytest.raises(BoomError):
         fake._process_stream_with_reasoning(stream, MagicMock())
     events = event_storage.events.replay(tid)
     chunks = [e for e in events if e["event_type"] == "assistant/chunk"]

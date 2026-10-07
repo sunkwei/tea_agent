@@ -16,6 +16,7 @@ ROOT = Path(__file__).resolve().parents[2]
 
 # ── toolkit_file 路径逃逸防护 ──────────────────────────────────────
 
+
 def test_resolve_path_rejects_relative_escape():
     """相对路径 ../ 逃逸必须被拒绝。"""
     from tea_agent.toolkit.toolkit_file import _resolve_path
@@ -73,6 +74,7 @@ def test_env_override_allows_outside(monkeypatch):
 
 # ── toolkit_scheduler：命令拆分（不经 shell） ───────────────────────
 
+
 def test_split_command_basic():
     from tea_agent.toolkit.toolkit_scheduler import _split_command
 
@@ -128,8 +130,7 @@ def test_safe_placeholders_count():
 def test_safe_set_clause_columns_and_raw():
     from tea_agent.store._sql_safety import safe_set_clause
 
-    got = safe_set_clause(["content", "updated_at"],
-                          raw={"updated_at": "CURRENT_TIMESTAMP"})
+    got = safe_set_clause(["content", "updated_at"], raw={"updated_at": "CURRENT_TIMESTAMP"})
     assert got == "content = ?, updated_at=CURRENT_TIMESTAMP", got
     with pytest.raises(ValueError):
         safe_set_clause(["content; DROP TABLE x"])
@@ -145,8 +146,7 @@ def test_safe_where_clause_operators_and_literals():
     got = safe_where_clause(["c.stamp >= ?", "c.stamp <= ?"], joiner=" OR ", wrap=True)
     assert got == "(c.stamp >= ?) OR (c.stamp <= ?)", got
     assert safe_where_clause(["content LIKE ?"]) == "content LIKE ?"
-    for bad in ("1=1 OR 1=1", "x = ?; DROP TABLE t", "x = ? -- comment", "UNION SELECT",
-                "is_active = 1 AND priority = 0"):
+    for bad in ("1=1 OR 1=1", "x = ?; DROP TABLE t", "x = ? -- comment", "UNION SELECT", "is_active = 1 AND priority = 0"):
         with pytest.raises(ValueError):
             safe_where_clause([bad])
 
@@ -178,20 +178,17 @@ def test_no_unsafe_sql_interpolation_in_store():
             tree = ast.parse(src)
         except SyntaxError:
             continue
-        for fn in [n for n in ast.walk(tree)
-                   if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef))]:
+        for fn in [n for n in ast.walk(tree) if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef))]:
             nodes = list(eb._own_nodes(fn))
             safe = eb._safe_sql_vars(nodes)
             for node in nodes:
                 if not isinstance(node, ast.JoinedStr):
                     continue
-                first = next((v for v in node.values
-                              if isinstance(v, ast.Constant) and isinstance(v.value, str)), None)
+                first = next((v for v in node.values if isinstance(v, ast.Constant) and isinstance(v.value, str)), None)
                 if not first or not eb._SQL_SHAPE_RE.match(str(first.value)):
                     continue
                 for v in node.values:
-                    if (isinstance(v, ast.FormattedValue)
-                            and not eb._is_safe_sql_expr(v.value, safe)):
+                    if isinstance(v, ast.FormattedValue) and not eb._is_safe_sql_expr(v.value, safe):
                         offenders.append(f"{rel}:{node.lineno}")
     assert offenders == [], f"未校验 SQL 插值: {offenders}"
 
@@ -235,6 +232,7 @@ def test_no_silent_exception_sinks_in_security_modules():
 
 
 # ── 提权能力移除（Agent 不得获取管理员权限）──────────────────────
+
 
 def test_sudo_gui_tool_removed():
     """toolkit_sudo_gui 必须彻底移除：提权一律交给用户手动执行。"""

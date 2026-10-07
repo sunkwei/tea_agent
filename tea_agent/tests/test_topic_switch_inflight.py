@@ -208,7 +208,8 @@ class TestUserMessageRecorded:
         ts.record_event(
             "t1",
             {"type": "user_message", "text": "看这张图", "images": ["img:3"]},
-            0, force=True,
+            0,
+            force=True,
         )
         snap = ts.read_snapshot("t1")
         ev = snap["events"][0]["event"]
@@ -240,26 +241,22 @@ class TestPinnedUserMessageSurvivesWindow:
 
     def test_user_message_pinned_when_overflowing(self, db):
         ts.begin_turn("t1")
-        ts.record_event("t1", {"type": "user_message", "text": "进行中的问题"},
-                        0, force=True)
+        ts.record_event("t1", {"type": "user_message", "text": "进行中的问题"}, 0, force=True)
         for i in range(1, 11):
-            ts.record_event("t1", {"type": "think", "text": str(i)}, i,
-                            force=True, max_events=3)
+            ts.record_event("t1", {"type": "think", "text": str(i)}, i, force=True, max_events=3)
 
         events = ts.read_snapshot("t1")["events"]
         types = [e["event"]["type"] for e in events]
         assert types[0] == "user_message", f"提问被挤出窗口：{types}"
         assert events[0]["event"]["text"] == "进行中的问题"
         # 尾部仍受窗口约束（保头只额外保留被淘汰区里的钉住事件）
-        assert [e["index"] for e in events] == [0, 8, 9, 10], \
-            f"窗口约束被破坏：{[e['index'] for e in events]}"
+        assert [e["index"] for e in events] == [0, 8, 9, 10], f"窗口约束被破坏：{[e['index'] for e in events]}"
 
     def test_regular_events_still_bounded(self, db):
         """非钉住事件照旧按窗口淘汰（不得因保头而全量留存）。"""
         ts.begin_turn("t1")
         for i in range(10):
-            ts.record_event("t1", {"type": "content", "text": str(i)}, i,
-                            force=True, max_events=3)
+            ts.record_event("t1", {"type": "content", "text": str(i)}, i, force=True, max_events=3)
         assert [e["index"] for e in ts.read_snapshot("t1")["events"]] == [7, 8, 9]
 
     def test_no_duplicate_when_pinned_in_tail(self, db):
@@ -278,11 +275,9 @@ class TestPinnedUserMessageSurvivesWindow:
         from tea_agent.server._compat import _seed_buffer_from_snapshot
 
         ts.begin_turn("t1")
-        ts.record_event("t1", {"type": "user_message", "text": "进行中的问题",
-                               "images": ["img:7"]}, 0, force=True)
+        ts.record_event("t1", {"type": "user_message", "text": "进行中的问题", "images": ["img:7"]}, 0, force=True)
         for i in range(1, 21):
-            ts.record_event("t1", {"type": "token", "text": f"字{i}"}, i,
-                            force=True, max_events=5)
+            ts.record_event("t1", {"type": "token", "text": f"字{i}"}, i, force=True, max_events=5)
 
         state_mod.create_background_buffer("t1")
         _seed_buffer_from_snapshot("t1")
@@ -313,7 +308,7 @@ class TestFrontendContract:
         """去重：切回瞬间若回合恰好落库，历史已有同一提问，不得渲染两条。"""
         src = self._app_js()
         i = src.index("case 'user_message'")
-        body = src[i:i + 900]
+        body = src[i : i + 900]
         assert "break" in body
         assert ".msg.user" in body, "未做重复提问检测"
 

@@ -29,7 +29,7 @@ from tea_agent.auto_compact import (  # noqa: E402
     run_pre_compact_hooks,
     unregister_pre_compact_hook,
 )
-from tea_agent.config import ModelConfig, load_config  # noqa: E402
+from tea_agent.config import ModelConfig  # noqa: E402
 from tea_agent.context_fragments import (  # noqa: E402
     ContextFragment,
     assemble_fragments,
@@ -43,6 +43,7 @@ from tea_agent.session.context import SessionContext  # noqa: E402
 
 # ═══ Fixtures ═════════════════════════════════════════
 
+
 def make_context(**kwargs) -> SessionContext:
     ctx = SessionContext()
     ctx.max_context_tokens = kwargs.pop("max_context_tokens", 1_048_576)
@@ -55,6 +56,7 @@ def make_context(**kwargs) -> SessionContext:
 
 
 # ═══ #1 Token 预算感知 ═════════════════════════════════
+
 
 class TestTokenBudgetFragment:
     """token_budget 片段已重新启用（2026-08-12：真实 usage 比例校准修复估算偏差）。"""
@@ -72,6 +74,7 @@ class TestTokenBudgetFragment:
 
 
 # ═══ #2 上下文片段系统 ═════════════════════════════════
+
 
 class TestContextFragments:
     def test_assemble_includes_builtin(self):
@@ -140,6 +143,7 @@ class TestContextFragments:
 
 
 # ═══ #3 压缩 Hooks ═════════════════════════════════════
+
 
 class TestCompactHooks:
     def setup_method(self):
@@ -213,6 +217,7 @@ class TestCompactHooks:
 
 # ═══ #4 AGENTS.md 分层加载 ═════════════════════════════
 
+
 class TestAgentsMdLoader:
     def test_find_project_root_git(self, tmp_path):
         proj = tmp_path / "proj"
@@ -274,6 +279,7 @@ class TestAgentsMdLoader:
 
 # ═══ #5 模型级 token budget 配置 ═══════════════════════
 
+
 class TestTokenBudgetConfig:
     def test_model_config_field_default(self):
         m = ModelConfig()
@@ -285,7 +291,9 @@ class TestTokenBudgetConfig:
         assert m.get_token_budget("reminder_threshold") == 0.2
         assert m.get_token_budget("missing", 42) == 42
 
+
 # ═══ 集成：history_builder 注入 ════════════════════════
+
 
 class TestHistoryBuilderIntegration:
     def test_system_prompt_stable_no_dynamic_fragments(self):

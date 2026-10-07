@@ -22,9 +22,7 @@ def test_solidify_analyze(exp_tool):
 
 def test_record_and_search(exp_tool):
     """record 一条经验后应能 search 到（原 toolkit_evolution_exp 行为）。"""
-    r = exp_tool.toolkit_experience_solidify(
-        action="record", description="test exp abc", category="test", tags="a,b", notes="n1"
-    )
+    r = exp_tool.toolkit_experience_solidify(action="record", description="test exp abc", category="test", tags="a,b", notes="n1")
     assert r["ok"], r
     s = exp_tool.toolkit_experience_solidify(action="search", query="abc")
     assert s["ok"] and s["total"] >= 1, s
@@ -41,9 +39,7 @@ def test_list_returns_recent(exp_tool):
 
 def test_lesson_records_failure(exp_tool):
     """lesson action = 失败教训入库（category=failure）。"""
-    r = exp_tool.toolkit_experience_solidify(
-        action="lesson", task="deploy", error="boom"
-    )
+    r = exp_tool.toolkit_experience_solidify(action="lesson", task="deploy", error="boom")
     assert r["ok"], r
     s = exp_tool.toolkit_experience_solidify(action="search", query="boom")
     assert s["total"] >= 1

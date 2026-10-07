@@ -14,11 +14,18 @@ Tea Agent Server API — 外部黑盒测试套件。
 
 用法：python tests/test_server_api.py [--host HOST] [--port PORT]
 """
-import argparse, json, os, sys, time, io, uuid, traceback
+
+import argparse
+import json
+import sys
+import traceback
+import uuid
+
 try:
     import requests
 except ImportError:
-    print("需要 pip install requests"); sys.exit(1)
+    print("需要 pip install requests")
+    sys.exit(1)
 
 
 class APITestClient:
@@ -28,30 +35,43 @@ class APITestClient:
         self.s.timeout = 10
         self._created = []
 
-    def _get(self, p, **kw): return self.s.get(self.base + p, **kw)
-    def _post(self, p, j=None, **kw): return self.s.post(self.base + p, json=j or {}, **kw)
-    def _put(self, p, j=None, **kw): return self.s.put(self.base + p, json=j or {}, **kw)
-    def _delete(self, p, **kw): return self.s.delete(self.base + p, **kw)
+    def _get(self, p, **kw):
+        return self.s.get(self.base + p, **kw)
+
+    def _post(self, p, j=None, **kw):
+        return self.s.post(self.base + p, json=j or {}, **kw)
+
+    def _put(self, p, j=None, **kw):
+        return self.s.put(self.base + p, json=j or {}, **kw)
+
+    def _delete(self, p, **kw):
+        return self.s.delete(self.base + p, **kw)
 
     def _sse(self, p, j=None, timeout=30):
         r = self.s.post(self.base + p, json=j or {}, stream=True, timeout=timeout)
         evts = []
-        if not r.ok: return evts, r
+        if not r.ok:
+            return evts, r
         for line in r.iter_lines(decode_unicode=True):
-            if not line or line.startswith(":"): continue
+            if not line or line.startswith(":"):
+                continue
             if line.startswith("data: "):
                 ds = line[6:].strip()
-                if ds == "[DONE]": break
-                try: evts.append(json.loads(ds))
-                except: evts.append({"raw": ds})
+                if ds == "[DONE]":
+                    break
+                try:
+                    evts.append(json.loads(ds))
+                except Exception:
+                    evts.append({"raw": ds})
         r.close()
         return evts, r
+
     # ── test methods ──
     def test_health(self):
         r = self._get("/health")
         assert r.ok, f"/health {r.status_code}"
         d = r.json()
-        print(f"  /health status={d.get('status','?')} v={d.get('version','?')}")
+        print(f"  /health status={d.get('status', '?')} v={d.get('version', '?')}")
 
     def test_list_sessions(self, limit=50):
         r = self._get(f"/api/sessions?limit={limit}")
@@ -74,13 +94,13 @@ class APITestClient:
         r = self._get(f"/api/topic/{topic_id}")
         assert r.ok, f"GET topic {r.status_code}"
         info = r.json().get("topic", {})
-        print(f"  TOPIC {topic_id[:8]}.. title={info.get('title','?')}")
+        print(f"  TOPIC {topic_id[:8]}.. title={info.get('title', '?')}")
         return info
 
     def test_rename(self, topic_id, new_title):
         r = self._put(f"/api/topic/{topic_id}", {"title": new_title})
         assert r.ok, f"rename {r.status_code}"
-        assert r.json().get("ok"), f"rename not ok"
+        assert r.json().get("ok"), "rename not ok"
         print(f"  RENAME -> [{new_title}]")
 
     def test_delete(self, topic_id, expect_ok=True):
@@ -100,7 +120,7 @@ class APITestClient:
         r = self._get(f"/api/topic/{topic_id}/conversations?limit=10")
         assert r.ok
         d = r.json()
-        print(f"  CONVS count={d.get('count',0)}")
+        print(f"  CONVS count={d.get('count', 0)}")
         return d.get("conversations", [])
 
     def test_config(self):
@@ -113,40 +133,40 @@ class APITestClient:
     def test_model(self):
         r = self._get("/api/model")
         assert r.ok
-        print(f"  MODEL OK")
+        print("  MODEL OK")
         return r.json()
 
     def test_v1_config(self):
         r = self._get("/v1/config")
         assert r.ok
-        print(f"  V1/CONFIG OK")
+        print("  V1/CONFIG OK")
 
     def test_v1_sessions(self):
         r = self._get("/v1/sessions")
         assert r.ok
         d = r.json()
-        print(f"  V1/SESSIONS -> {len(d.get('data',[]))}")
+        print(f"  V1/SESSIONS -> {len(d.get('data', []))}")
 
     def test_configs(self):
         r = self._get("/api/configs")
         assert r.ok
         d = r.json()
-        print(f"  CONFIGS -> {len(d.get('configs',[]))}")
+        print(f"  CONFIGS -> {len(d.get('configs', []))}")
 
     def test_tools(self):
         r = self._get("/api/tools")
         assert r.ok
         d = r.json()
-        print(f"  TOOLS -> {len(d.get('tools',[]))}")
+        print(f"  TOOLS -> {len(d.get('tools', []))}")
 
     def test_todos(self, topic_id):
         r = self._get(f"/api/topic/{topic_id}/todos")
         if r.status_code == 404:
-            print(f"  TODOS 404")
+            print("  TODOS 404")
             return []
         assert r.ok
         d = r.json()
-        print(f"  TODOS -> {len(d.get('todos',[]))}")
+        print(f"  TODOS -> {len(d.get('todos', []))}")
 
     def test_chat(self, topic_id, msg, timeout=25):
         evts, r = self._sse("/api/chat", {"topic_id": topic_id, "message": msg}, timeout=timeout)
@@ -162,7 +182,8 @@ class APITestClient:
         for ev in evts:
             if isinstance(ev, dict):
                 c = ev.get("choices", [{}])[0].get("delta", {}).get("content", "")
-                if c: texts.append(c)
+                if c:
+                    texts.append(c)
         reply = "".join(texts)
         print(f"    reply {len(reply)} chars")
         return reply
@@ -177,17 +198,18 @@ class APITestClient:
     def test_files(self):
         r = self._get("/api/files")
         assert r.ok
-        print(f"  FILES OK")
+        print("  FILES OK")
 
     def cleanup(self):
         for tid in self._created[:]:
             try:
                 self._delete(f"/api/topic/{tid}")
                 self._created.remove(tid)
-            except:
+            except Exception:
                 pass
         if self._created:
             print(f"  Cleaned {len(self._created)} topics")
+
 
 # ═══════════════════════════════════════════════
 #  Test Suites
@@ -203,7 +225,7 @@ def suite_01_health(c):
 def suite_02_tuc_topics(c):
     """tuc- 主题管理：查询/创建/验证"""
     sessions = c.test_list_sessions()
-    tuc_ids = [s["id"] for s in sessions if s.get("title","").startswith("tuc-")]
+    tuc_ids = [s["id"] for s in sessions if s.get("title", "").startswith("tuc-")]
     print(f"    Existing tuc-: {len(tuc_ids)}")
 
     titles = ["tuc-配置测试", "tuc-聊天验证", "tuc-PDF导出"]
@@ -213,21 +235,21 @@ def suite_02_tuc_topics(c):
         created.append(tid)
 
     sessions2 = c.test_list_sessions()
-    found = [s for s in sessions2 if s.get("title","").startswith("tuc-")]
+    found = [s for s in sessions2 if s.get("title", "").startswith("tuc-")]
     assert len(found) >= len(titles), f"tuc- count: {len(found)} < {len(titles)}"
     print(f"    After create: {len(found)} tuc- topics")
 
     for tid in created:
         info = c.test_topic_info(tid)
-        assert info.get("title","").startswith("tuc-")
+        assert info.get("title", "").startswith("tuc-")
 
 
 def suite_03_config_model(c):
     """配置 & 模型信息"""
     config = c.test_config()
-    main_m = config.get("main_model") or config.get("default_model","")
-    cheap_m = config.get("cheap_model","")
-    max_i = config.get("max_iterations") or config.get("max_turns","")
+    main_m = config.get("main_model") or config.get("default_model", "")
+    cheap_m = config.get("cheap_model", "")
+    max_i = config.get("max_iterations") or config.get("max_turns", "")
     print(f"    main_model={main_m}")
     print(f"    cheap_model={cheap_m}")
     print(f"    max_iterations={max_i}")
@@ -268,7 +290,7 @@ def suite_05_delete_rename(c):
     """删除主题 & 重命名"""
     tid = c.test_create_topic("待删除-TEMP")
     info = c.test_topic_info(tid)
-    orig = info.get("title","")
+    orig = info.get("title", "")
     print(f"    Original: {orig}")
 
     new = f"已重命名-{uuid.uuid4().hex[:6]}"
@@ -280,8 +302,9 @@ def suite_05_delete_rename(c):
     c.test_delete(tid)
     r = c._get(f"/api/topic/{tid}")
     assert r.status_code == 404, f"Deleted topic should 404, got {r.status_code}"
-    print(f"    Deletion verified: GET -> 404")
-    if tid in c._created: c._created.remove(tid)
+    print("    Deletion verified: GET -> 404")
+    if tid in c._created:
+        c._created.remove(tid)
 
 
 def suite_06_pdf_export(c):
@@ -290,7 +313,7 @@ def suite_06_pdf_export(c):
     print("    Sending chat for PDF content...")
     c.test_chat(tid, "请回复一句：测试PDF导出功能")
 
-    combos = [("latest","final"),("latest","full"),("full_topic","final"),("full_topic","full")]
+    combos = [("latest", "final"), ("latest", "full"), ("full_topic", "final"), ("full_topic", "full")]
     results = []
     for mode, fm in combos:
         content = c.test_pdf(tid, mode=mode, fm=fm)
@@ -315,27 +338,28 @@ def suite_08_errors(c):
     fake = "00000000-0000-0000-0000-000000000000"
 
     r = c._get(f"/api/topic/{fake}")
-    assert r.status_code in (404,500), f"Expected 404, got {r.status_code}"
+    assert r.status_code in (404, 500), f"Expected 404, got {r.status_code}"
     print(f"  GET fake topic -> {r.status_code}")
 
     r = c._delete(f"/api/topic/{fake}")
     print(f"  DELETE fake -> {r.status_code}")
 
     r = c._put(f"/api/topic/{fake}", {})
-    assert r.status_code in (400,422,500), f"Expected 400, got {r.status_code}"
+    assert r.status_code in (400, 422, 500), f"Expected 400, got {r.status_code}"
     print(f"  PUT no title -> {r.status_code}")
 
     r = c._post("/api/chat", {})
-    assert r.status_code in (400,422), f"Expected 400, got {r.status_code}"
+    assert r.status_code in (400, 422), f"Expected 400, got {r.status_code}"
     print(f"  POST chat empty -> {r.status_code}")
 
     r = c._post("/api/new_topic", {})
     assert r.ok, f"Create topic without title fail: {r.status_code}"
     d = r.json()
     assert "topic_id" in d
-    print(f"  POST new_topic no title -> OK (default)")
+    print("  POST new_topic no title -> OK (default)")
     tid = d["topic_id"]
-    if tid in c._created: c._created.remove(tid)
+    if tid in c._created:
+        c._created.remove(tid)
     c.test_delete(tid)
 
     r = c._get(f"/v1/export/pdf/{fake}")
@@ -369,21 +393,21 @@ def run_all(host="127.0.0.1", port=8282):
 
     passed = failed = 0
     for name, fn in suites:
-        print(f"\n{'='*50}")
+        print(f"\n{'=' * 50}")
         print(f"  {name}")
-        print(f"{'='*50}")
+        print(f"{'=' * 50}")
         try:
             fn(c)
-            print(f"  ✅ 通过")
+            print("  ✅ 通过")
             passed += 1
         except Exception as e:
             print(f"  ❌ 失败: {e}")
             traceback.print_exc()
             failed += 1
 
-    print(f"\n{'='*50}")
+    print(f"\n{'=' * 50}")
     print(f"  结果: {passed} 通过, {failed} 失败 / {len(suites)} 套件")
-    print(f"{'='*50}")
+    print(f"{'=' * 50}")
 
     c.cleanup()
     return failed == 0

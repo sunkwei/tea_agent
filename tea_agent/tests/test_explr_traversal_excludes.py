@@ -27,8 +27,17 @@ from tea_agent.toolkit.toolkit_explr import _SKIP_DIRS, _prune_dirs
 
 # 实测会污染符号扫描的目录名（node_modules 与 build_mini_dist 是本次缺陷主因）
 KNOWN_JUNK = (
-    "node_modules", "build_mini_dist", "build", "dist", "__pycache__",
-    ".git", ".tea_agent_run", ".venv", "venv", "env", "tmp",
+    "node_modules",
+    "build_mini_dist",
+    "build",
+    "dist",
+    "__pycache__",
+    ".git",
+    ".tea_agent_run",
+    ".venv",
+    "venv",
+    "env",
+    "tmp",
 )
 
 
@@ -108,7 +117,4 @@ def test_no_inline_exclusion_lists_remain():
     """
     src = (Path(__file__).resolve().parents[1] / "toolkit" / "toolkit_explr.py").read_text(encoding="utf-8")
     count = src.count("dirs[:] = [d for d in dirs")
-    assert count == 1, (
-        f"发现 {count} 处 dirs 裁剪（期望仅 _prune_dirs 本体 1 处）—— "
-        f"新增遍历点必须复用 _prune_dirs，不得再写内联排除列表"
-    )
+    assert count == 1, f"发现 {count} 处 dirs 裁剪（期望仅 _prune_dirs 本体 1 处）—— 新增遍历点必须复用 _prune_dirs，不得再写内联排除列表"

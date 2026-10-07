@@ -17,14 +17,16 @@ from tea_agent.agent_background import analyze_interruptions
 def _seed(db, tool: str = "toolkit_exec", n: int = 2):
     """造 n 条已分类的打断事件（同一工具）。"""
     for i in range(n):
-        db.insert_interruption_event({
-            "topic_id": "t1",
-            "timestamp": f"2026-09-12 10:0{i}:00",
-            "iteration": i + 1,
-            "tool_name": tool,
-            "status": "classified",
-            "classification": "corrected",
-        })
+        db.insert_interruption_event(
+            {
+                "topic_id": "t1",
+                "timestamp": f"2026-09-12 10:0{i}:00",
+                "iteration": i + 1,
+                "tool_name": tool,
+                "status": "classified",
+                "classification": "corrected",
+            }
+        )
 
 
 def test_deleted_memory_is_not_resurrected(tmp_path):

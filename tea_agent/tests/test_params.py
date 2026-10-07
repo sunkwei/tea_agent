@@ -15,6 +15,7 @@ import pytest
 # 辅助：mock get_config 返回指定参数
 # ============================================================
 
+
 def _mock_config(temperature=0.3, max_tokens=1000):
     """创建 mock config，使 get_cheap_params 返回指定参数。"""
     from unittest.mock import MagicMock
@@ -30,6 +31,7 @@ def _mock_config(temperature=0.3, max_tokens=1000):
 # ============================================================
 # 基本结构
 # ============================================================
+
 
 class TestGetCheapParams:
     """get_cheap_params 基本契约"""
@@ -83,6 +85,7 @@ class TestGetCheapParams:
 # 各 section 默认值
 # ============================================================
 
+
 class TestGetCheapParamsSections:
     """各 section 默认值"""
 
@@ -126,6 +129,7 @@ class TestGetCheapParamsSections:
 # ============================================================
 # 降级行为
 # ============================================================
+
 
 class TestGetCheapParamsFallback:
     """配置加载失败时的降级行为"""
@@ -209,6 +213,7 @@ class TestGetCheapParamsFallback:
 # 独立性
 # ============================================================
 
+
 class TestGetCheapParamsIndependence:
     """返回值独立性测试"""
 
@@ -249,6 +254,7 @@ class TestGetCheapParamsIndependence:
 # ============================================================
 # 轻量集成测试
 # ============================================================
+
 
 class TestGetCheapParamsIntegration:
     """轻量集成测试 — 使用真实配置（如果有）"""

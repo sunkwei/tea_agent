@@ -14,6 +14,7 @@ A8 三层防线：
      解析 400 → 修正误配窗口 → 紧急输入预算（真实输入腰斩）→ 强制最深
      裁剪 + 强制摘要 → 钳制 max_tokens 重试。
 """
+
 from unittest.mock import MagicMock
 
 from tea_agent.onlinesession import OnlineToolSession
@@ -45,9 +46,14 @@ def _make_session_from_ctx(ctx: SessionContext) -> OnlineToolSession:
     mock_tk = MagicMock()
     mock_tk.meta_map = {}
     sess = OnlineToolSession(
-        toolkit=mock_tk, api_key="sk-test", api_url="https://api.test.com/v1",
-        model="test-model", enable_thinking=ctx.enable_thinking, storage=None,
-        supports_vision=ctx.supports_vision, supports_reasoning=ctx.supports_reasoning,
+        toolkit=mock_tk,
+        api_key="sk-test",
+        api_url="https://api.test.com/v1",
+        model="test-model",
+        enable_thinking=ctx.enable_thinking,
+        storage=None,
+        supports_vision=ctx.supports_vision,
+        supports_reasoning=ctx.supports_reasoning,
         disable_summary=ctx.disable_summary,
     )
     sess.context = ctx
@@ -59,7 +65,9 @@ def _fake_config(max_tokens: int) -> MagicMock:
     """最小 config mock：get_effective_params 返回固定参数"""
     fake_cfg = MagicMock()
     fake_cfg.get_effective_params = lambda mt, mode="mixed": {
-        "temperature": 0.7, "max_tokens": max_tokens, "top_p": 0.9,
+        "temperature": 0.7,
+        "max_tokens": max_tokens,
+        "top_p": 0.9,
     }
     return fake_cfg
 
@@ -75,6 +83,7 @@ class _SessionShim:
 # 1. solve_token_budget：按实际请求输出求解输入预算
 # ════════════════════════════════════════════════════════════
 
+
 class TestSolveTokenBudget:
     def test_incident_case_150k_window_65536_out(self):
         """事故案例：150K 窗口 + 65536 输出 → 输入预算 81464（< 旧 0.8 基线 120000）"""
@@ -84,7 +93,7 @@ class TestSolveTokenBudget:
         assert inb + out + 3000 <= 150000
         # 比旧固定 0.8 基线更积极：事故的 84465 输入现在会触发裁剪
         assert inb < 150000 * 0.8
-        assert 84465 > inb
+        assert inb < 84465
         # 下限保证基本工作空间
         assert inb >= max(2048, int(150000 * 0.10))
 
@@ -128,6 +137,7 @@ class TestSolveTokenBudget:
 # 2. _parse_context_overflow：400 错误体解析
 # ════════════════════════════════════════════════════════════
 
+
 class TestParseContextOverflow:
     def test_incident_string(self):
         """事故原文：三个关键字段全部解析出"""
@@ -153,16 +163,14 @@ class TestParseContextOverflow:
         """非溢出错误（RC 回传 400 / 连接错误 / 空串）不得误判"""
         assert _parse_context_overflow("") is None
         assert _parse_context_overflow("API connection error: timeout") is None
-        rc_err = (
-            "Error code: 400 - {'error': {'message': 'The reasoning_content in the "
-            "thinking mode must be passed back to the API.', 'code': 400}}"
-        )
+        rc_err = "Error code: 400 - {'error': {'message': 'The reasoning_content in the thinking mode must be passed back to the API.', 'code': 400}}"
         assert _parse_context_overflow(rc_err) is None
 
 
 # ════════════════════════════════════════════════════════════
 # 3. _request_max_tokens：请求 max_tokens 钳制
 # ════════════════════════════════════════════════════════════
+
 
 class TestRequestMaxTokens:
     def test_clamped_to_solver_cap(self):
@@ -197,6 +205,7 @@ class TestRequestMaxTokens:
 # 4. _ensure_within_output_budget：发送前护栏
 # ════════════════════════════════════════════════════════════
 
+
 class TestPresendGuard:
     def _ctx(self, **kw) -> SessionContext:
         ctx = SessionContext(model="m", supports_reasoning=False)
@@ -227,6 +236,7 @@ class TestPresendGuard:
 # 5. build_api_messages：记录输出上限 + 按输出感知预算更早裁剪
 # ════════════════════════════════════════════════════════════
 
+
 class TestBuildOutputAwareBudget:
     def test_records_output_cap_and_trims_to_budget(self, monkeypatch):
         """150K 窗口 + 65536 输出：预算 81464（< 旧 120000）→ 大历史裁到预算内"""
@@ -247,9 +257,7 @@ class TestBuildOutputAwareBudget:
         # 裁剪后总量 ≤ 输入预算（旧 0.8 基线 120000 不保证：84465+65536 > 150000）
         assert estimate_messages_tokens(result) <= budget
         # 最近轮次保留（过滤末尾自动注入的动态上下文，对齐 test_onlinesession 约定）
-        real_msgs = [m for m in result
-                     if not (m.get("role") == "user"
-                             and str(m.get("content", "")).startswith("[动态上下文"))]
+        real_msgs = [m for m in result if not (m.get("role") == "user" and str(m.get("content", "")).startswith("[动态上下文"))]
         last_user = [m for m in real_msgs if m.get("role") == "user"]
         assert last_user and str(last_user[-1]["content"]).startswith("Q")
         assert ctx._loop_trim_done is True
@@ -271,7 +279,7 @@ class TestBuildOutputAwareBudget:
 
         assert ctx._emergency_input_budget == 0  # 用后即焚
         assert ctx._loop_max_ratio >= 1.0 - 1e-9  # 紧急 → 直接满水位（Tier3）
-        assert ctx._token_exhausted is True       # 下一轮强制 LLM 增量摘要
+        assert ctx._token_exhausted is True  # 下一轮强制 LLM 增量摘要
         assert estimate_messages_tokens(result) <= emergency
         sess.close()
 
@@ -280,6 +288,7 @@ class TestBuildOutputAwareBudget:
 # 6. execute_tool_loop：400 溢出自愈（修正窗口 + 激进压缩 + 钳制重试）
 # ════════════════════════════════════════════════════════════
 
+
 class TestExecuteToolLoopOverflowRecovery:
     def _make_session(self) -> OnlineToolSession:
         mock_tk = MagicMock()
@@ -287,8 +296,12 @@ class TestExecuteToolLoopOverflowRecovery:
         mock_tk.call_tool.return_value = "mock_result"
         mock_tk.get_config.return_value = None
         sess = OnlineToolSession(
-            toolkit=mock_tk, api_key="sk-test", api_url="https://api.test.com/v1",
-            model="test-model", enable_thinking=False, storage=None,
+            toolkit=mock_tk,
+            api_key="sk-test",
+            api_url="https://api.test.com/v1",
+            model="test-model",
+            enable_thinking=False,
+            storage=None,
             no_stream_chunk=True,
         )
         sess._build_api_messages = MagicMock(return_value=[{"role": "user", "content": "test"}])
@@ -360,6 +373,7 @@ class TestExecuteToolLoopOverflowRecovery:
 # 7. B1/B2: 诚实水位线（计入 tools 开销）+ 15% 弹性预留提前裁剪
 # ════════════════════════════════════════════════════════════
 
+
 class TestHeadroomBudget:
     """B1/B2 回归：裁剪目标从 400 线（max_ctx-max_tokens）前移到
     (1-budget_warn_ratio) 线（默认 85% 窗口），水位线估算计入 tools schema 开销。
@@ -382,15 +396,14 @@ class TestHeadroomBudget:
         tk = MagicMock()
         tk.meta_map = {
             "toolkit_a": {
-                "name": "toolkit_a", "description": "工具A：读取并解析文件内容",
-                "parameters": {"type": "object",
-                               "properties": {"x": {"type": "string"}}},
+                "name": "toolkit_a",
+                "description": "工具A：读取并解析文件内容",
+                "parameters": {"type": "object", "properties": {"x": {"type": "string"}}},
             },
             "toolkit_b": {
                 "name": "toolkit_b",
                 "description": "tool b: a fairly long description text for estimation purposes",
-                "parameters": {"type": "object",
-                               "properties": {"y": {"type": "integer"}}},
+                "parameters": {"type": "object", "properties": {"y": {"type": "integer"}}},
             },
         }
         val = _estimate_tools_tokens(SessionContext(toolkit=tk))
@@ -404,8 +417,7 @@ class TestHeadroomBudget:
         改动后：预算 58964（=85% 线减输出余量）→ ratio≈1.1 → Tier3 深度裁剪，
         裁剪后总量落回弹性区，不再贴着 400 线。"""
         monkeypatch.setattr("tea_agent.config.get_config", lambda: _fake_config(65536))
-        ctx = SessionContext(model="test-model", enable_thinking=False,
-                             supports_reasoning=False)
+        ctx = SessionContext(model="test-model", enable_thinking=False, supports_reasoning=False)
         ctx.max_context_tokens = 150000
         for _i in range(142):  # ~62k tokens（仅消息体；tools 空）
             ctx.messages.append({"role": "user", "content": "Q" * 200})
@@ -425,9 +437,7 @@ class TestHeadroomBudget:
         # Tier3 触发 → 下一轮强制增量 LLM 摘要
         assert ctx._token_exhausted is True
         # 最近用户轮次保留（过滤末尾自动注入的动态上下文）
-        real_msgs = [m for m in result
-                     if not (m.get("role") == "user"
-                             and str(m.get("content", "")).startswith("[动态上下文"))]
+        real_msgs = [m for m in result if not (m.get("role") == "user" and str(m.get("content", "")).startswith("[动态上下文"))]
         last_user = [m for m in real_msgs if m.get("role") == "user"]
         assert last_user and str(last_user[-1]["content"]).startswith("Q")
         sess.close()

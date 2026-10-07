@@ -4,6 +4,7 @@
 很容易反过来弄坏本来就合法的调用 —— 且这类破坏常表现为 ok=True 却什么都没执行
 （比直接报错更危险）。本文件把三类合法形态钉成断言。
 """
+
 import importlib.util
 import os
 import shutil
@@ -14,7 +15,8 @@ import pytest
 
 _TOOLKIT_EXEC_PATH = os.path.join(
     os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
-    "toolkit", "toolkit_exec.py",
+    "toolkit",
+    "toolkit_exec.py",
 )
 
 
@@ -102,12 +104,11 @@ class TestTimeoutSemanticsPreserved:
         assert tk_exec._coerce_timeout(value) == expected
 
     def test_absurd_value_capped(self, tk_exec):
-        assert tk_exec._coerce_timeout(10 ** 9) == 86400
+        assert tk_exec._coerce_timeout(10**9) == 86400
 
     def test_explicit_timeout_reaches_subprocess(self, tk_exec):
         """显式 timeout 不得被归一化层吞掉。"""
-        r = tk_exec.toolkit_exec(app=sys.executable,
-                                 args=["-c", "import time; time.sleep(30)"], timeout=1)
+        r = tk_exec.toolkit_exec(app=sys.executable, args=["-c", "import time; time.sleep(30)"], timeout=1)
         assert r["timed_out"], f"显式 timeout=1 未生效: {r}"
 
 
@@ -143,8 +144,7 @@ class TestBatchErrorNamesRealKeys:
     def test_misspelled_keys_surfaced(self, tk_exec):
         r = tk_exec.toolkit_exec(
             action="batch",
-            commands=[{"ap": "echo", "args": ["x"], "timout": 1},
-                      {"app": "echo", "args": ["survivor"]}],
+            commands=[{"ap": "echo", "args": ["x"], "timout": 1}, {"app": "echo", "args": ["survivor"]}],
             timeout=10,
         )
         bad = [x for x in r["results"] if x and x.get("error")]

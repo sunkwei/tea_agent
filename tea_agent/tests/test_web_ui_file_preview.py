@@ -50,12 +50,7 @@ def _png_1x1() -> bytes:
     """
 
     def chunk(typ: bytes, data: bytes) -> bytes:
-        return (
-            struct.pack(">I", len(data))
-            + typ
-            + data
-            + struct.pack(">I", zlib.crc32(typ + data) & 0xFFFFFFFF)
-        )
+        return struct.pack(">I", len(data)) + typ + data + struct.pack(">I", zlib.crc32(typ + data) & 0xFFFFFFFF)
 
     ihdr = struct.pack(">IIBBBBB", 1, 1, 8, 2, 0, 0, 0)  # 1x1, 8bit, truecolor
     idat = zlib.compress(b"\x00\xff\x00\x00")  # filter 0 + RGB(255,0,0)
@@ -90,9 +85,7 @@ def _wait_health(base: str, proc: subprocess.Popen, timeout: float = 90.0) -> bo
 def sandbox(tmp_path_factory):
     """构造一个已知内容的沙箱目录（服务将以它为 cwd → 即文件树根）。"""
     d = tmp_path_factory.mktemp("ui_sandbox")
-    (d / "hello.py").write_text(
-        "import os\n\n\ndef greet(name):\n    return f'hi {name}'\n", encoding="utf-8"
-    )
+    (d / "hello.py").write_text("import os\n\n\ndef greet(name):\n    return f'hi {name}'\n", encoding="utf-8")
     # 故意写成紧凑单行：格式化开关的前后差异才好断言
     (d / "data.json").write_text('{"name":"tea","tags":[1,2,3]}', encoding="utf-8")
     (d / "note.md").write_text("# 标题\n\n**粗体** 与 `code`\n", encoding="utf-8")
@@ -175,9 +168,7 @@ def _open_tree(page) -> None:
 
 def _click_file(page, name: str) -> None:
     """点击树中指定文件（按显示名精确定位）。"""
-    item = page.locator("#file-tree-content .ft-item").filter(
-        has=page.locator(f".ft-name:text-is('{name}')")
-    ).first
+    item = page.locator("#file-tree-content .ft-item").filter(has=page.locator(f".ft-name:text-is('{name}')")).first
     item.wait_for(state="visible", timeout=15000)
     item.click()
     page.wait_for_selector("#modal-filepreview.open", timeout=15000)

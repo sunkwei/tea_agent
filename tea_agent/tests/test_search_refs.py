@@ -21,17 +21,21 @@ def _search_result(items):
 
 # ── 提取 ──
 
+
 def test_extract_web_search_urls():
     refs = extract_refs(
         "toolkit_search",
         {"query": "x", "search_type": "web"},
-        _search_result([
-            {"title": "Python 教程", "url": "https://docs.python.org/3/"},
-            {"title": "Blog", "url": "http://example.com/a"},
-        ]),
+        _search_result(
+            [
+                {"title": "Python 教程", "url": "https://docs.python.org/3/"},
+                {"title": "Blog", "url": "http://example.com/a"},
+            ]
+        ),
     )
     assert [r["url"] for r in refs] == [
-        "https://docs.python.org/3/", "http://example.com/a",
+        "https://docs.python.org/3/",
+        "http://example.com/a",
     ]
     assert refs[0]["title"] == "Python 教程"
 
@@ -39,7 +43,8 @@ def test_extract_web_search_urls():
 def test_extract_default_search_type_is_web():
     """search_type 缺省（模型常不传）时按 web 处理，不得漏采。"""
     refs = extract_refs(
-        "toolkit_search", {"query": "x"},
+        "toolkit_search",
+        {"query": "x"},
         _search_result([{"title": "t", "url": "https://a.com"}]),
     )
     assert len(refs) == 1
@@ -47,7 +52,8 @@ def test_extract_default_search_type_is_web():
 
 def test_extract_github_search_urls():
     refs = extract_refs(
-        "toolkit_search", {"query": "x", "search_type": "github"},
+        "toolkit_search",
+        {"query": "x", "search_type": "github"},
         _search_result([{"title": "repo", "url": "https://github.com/a/b"}]),
     )
     assert refs and refs[0]["url"] == "https://github.com/a/b"
@@ -55,14 +61,22 @@ def test_extract_github_search_urls():
 
 def test_no_refs_for_local_code_search():
     """代码搜索命中的是本地文件，不是参考链接。"""
-    assert extract_refs(
-        "toolkit_search", {"query": "def f", "search_type": "code"},
-        {"ok": True, "results": [{"file": "a.py", "line": 1}]},
-    ) == []
-    assert extract_refs(
-        "toolkit_search", {"query": "C", "search_type": "symbol"},
-        {"ok": True, "results": [{"file": "a.py", "name": "C"}]},
-    ) == []
+    assert (
+        extract_refs(
+            "toolkit_search",
+            {"query": "def f", "search_type": "code"},
+            {"ok": True, "results": [{"file": "a.py", "line": 1}]},
+        )
+        == []
+    )
+    assert (
+        extract_refs(
+            "toolkit_search",
+            {"query": "C", "search_type": "symbol"},
+            {"ok": True, "results": [{"file": "a.py", "name": "C"}]},
+        )
+        == []
+    )
 
 
 def test_no_refs_for_unlisted_tools():
@@ -71,36 +85,46 @@ def test_no_refs_for_unlisted_tools():
 
 
 def test_no_refs_on_search_failure():
-    assert extract_refs(
-        "toolkit_search", {"search_type": "web"},
-        {"ok": False, "error": "超时", "returncode": 1},
-    ) == []
+    assert (
+        extract_refs(
+            "toolkit_search",
+            {"search_type": "web"},
+            {"ok": False, "error": "超时", "returncode": 1},
+        )
+        == []
+    )
 
 
 def test_extract_skips_non_http_and_bad_entries():
     refs = extract_refs(
-        "toolkit_search", {"search_type": "web"},
-        _search_result([
-            {"title": "本地", "url": "file:///tmp/a"},
-            {"title": "空", "url": ""},
-            {"title": None, "url": None},
-            "非 dict",
-            {"title": "好", "url": "https://ok.com/"},
-        ]),
+        "toolkit_search",
+        {"search_type": "web"},
+        _search_result(
+            [
+                {"title": "本地", "url": "file:///tmp/a"},
+                {"title": "空", "url": ""},
+                {"title": None, "url": None},
+                "非 dict",
+                {"title": "好", "url": "https://ok.com/"},
+            ]
+        ),
     )
     assert [r["url"] for r in refs] == ["https://ok.com/"]
 
 
 def test_extract_js_fetch_uses_arg_url():
     refs = extract_refs(
-        "toolkit_js_fetch", {"url": "https://spa.example.com/page"},
+        "toolkit_js_fetch",
+        {"url": "https://spa.example.com/page"},
         {"ok": True, "title": "动态页标题"},
     )
-    assert refs == [{
-        "url": "https://spa.example.com/page",
-        "title": "动态页标题",
-        "source": "toolkit_js_fetch",
-    }]
+    assert refs == [
+        {
+            "url": "https://spa.example.com/page",
+            "title": "动态页标题",
+            "source": "toolkit_js_fetch",
+        }
+    ]
 
 
 def test_extract_js_fetch_without_url():
@@ -109,6 +133,7 @@ def test_extract_js_fetch_without_url():
 
 def test_extract_never_raises():
     """旁路采集：畸形输入只能返回空，不能抛。"""
+
     class _Boom(dict):
         def get(self, *a, **k):
             raise RuntimeError("boom")
@@ -117,6 +142,7 @@ def test_extract_never_raises():
 
 
 # ── 合并去重 ──
+
 
 def test_merge_dedupes_by_url_keeps_order():
     merged = merge_refs(
@@ -137,6 +163,7 @@ def test_merge_tolerates_none_and_junk():
 
 # ── 渲染 ──
 
+
 def test_format_empty_returns_empty_string():
     assert format_refs_text([]) == ""
     assert format_refs_text(None) == ""
@@ -144,10 +171,12 @@ def test_format_empty_returns_empty_string():
 
 
 def test_format_renders_markdown_links():
-    text = format_refs_text([
-        {"url": "https://a.com", "title": "A"},
-        {"url": "https://b.com", "title": "B"},
-    ])
+    text = format_refs_text(
+        [
+            {"url": "https://a.com", "title": "A"},
+            {"url": "https://b.com", "title": "B"},
+        ]
+    )
     assert text.startswith("🔗 本回合参考链接（2）")
     assert "1. [A](https://a.com)" in text
     assert "2. [B](https://b.com)" in text
@@ -171,6 +200,7 @@ def test_format_caps_at_max_items():
 
 # ── 接线：ToolComponent 采集 ──
 
+
 def test_tool_component_records_refs_into_ctx():
     from tea_agent.session.components.tool import _record_search_refs
 
@@ -179,13 +209,16 @@ def test_tool_component_records_refs_into_ctx():
 
     ctx = _Ctx()
     _record_search_refs(
-        ctx, "toolkit_search", {"search_type": "web"},
+        ctx,
+        "toolkit_search",
+        {"search_type": "web"},
         _search_result([{"title": "T", "url": "https://a.com"}]),
     )
     _record_search_refs(
-        ctx, "toolkit_search", {"search_type": "web"},
-        _search_result([{"title": "T", "url": "https://a.com"},
-                        {"title": "U", "url": "https://b.com"}]),
+        ctx,
+        "toolkit_search",
+        {"search_type": "web"},
+        _search_result([{"title": "T", "url": "https://a.com"}, {"title": "U", "url": "https://b.com"}]),
     )
     assert [r["url"] for r in ctx._search_refs] == ["https://a.com", "https://b.com"]
 
@@ -215,12 +248,15 @@ def test_record_search_refs_never_raises_on_bad_ctx():
             raise RuntimeError("boom")
 
     _record_search_refs(
-        _Boom(), "toolkit_search", {"search_type": "web"},
+        _Boom(),
+        "toolkit_search",
+        {"search_type": "web"},
         _search_result([{"title": "T", "url": "https://a.com"}]),
     )
 
 
 # ── 接线：回合收尾 ──
+
 
 def _make_session(refs, db_path=""):
     """真实 OnlineToolSession 实例（绕过重量级 __init__），只注入所需字段。"""
@@ -274,6 +310,4 @@ def test_emit_search_refs_never_raises():
     sess._emit_search_refs(lambda t: None)  # 不抛即通过
 
     # context 属性完全缺失（__new__ 裸实例）同样不得抛
-    OnlineToolSession._emit_search_refs(
-        OnlineToolSession.__new__(OnlineToolSession), lambda t: None
-    )
+    OnlineToolSession._emit_search_refs(OnlineToolSession.__new__(OnlineToolSession), lambda t: None)

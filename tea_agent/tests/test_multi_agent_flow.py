@@ -13,40 +13,47 @@ from unittest.mock import MagicMock, PropertyMock
 # FlowEngine
 # ============================================================
 
+
 class TestFlowState:
     """FlowState 状态管理测试"""
 
     def test_init_empty(self):
         from tea_agent.multi_agent import FlowState
+
         s = FlowState()
         assert s._data == {}
 
     def test_init_with_data(self):
         from tea_agent.multi_agent import FlowState
+
         s = FlowState({"a": 1, "b": "hello"})
         assert s["a"] == 1
         assert s["b"] == "hello"
 
     def test_set_get_item(self):
         from tea_agent.multi_agent import FlowState
+
         s = FlowState()
         s["key"] = "value"
         assert s["key"] == "value"
 
     def test_get_with_default(self):
         from tea_agent.multi_agent import FlowState
+
         s = FlowState()
         assert s.get("missing", "default") == "default"
         assert s.get("existing", "default") == "default"
 
     def test_contains(self):
         from tea_agent.multi_agent import FlowState
+
         s = FlowState({"a": 1})
         assert "a" in s
         assert "b" not in s
 
     def test_setdefault_existing(self):
         from tea_agent.multi_agent import FlowState
+
         s = FlowState({"a": 1})
         r = s.setdefault("a", 99)
         assert r == 1
@@ -54,6 +61,7 @@ class TestFlowState:
 
     def test_setdefault_missing(self):
         from tea_agent.multi_agent import FlowState
+
         s = FlowState()
         r = s.setdefault("a", "new")
         assert r == "new"
@@ -61,6 +69,7 @@ class TestFlowState:
 
     def test_history_tracking(self):
         from tea_agent.multi_agent import FlowState
+
         s = FlowState({"a": 1})
         s["a"] = 2
         s["b"] = 3
@@ -168,10 +177,12 @@ class TestFlowEngineBasic:
 
         class VizFlow(FlowEngine):
             @flow_start()
-            def a(self): return "a"
+            def a(self):
+                return "a"
 
             @flow_listen(a)
-            def b(self): return "b"
+            def b(self):
+                return "b"
 
         flow = VizFlow()
         viz = flow.visualize()
@@ -199,10 +210,9 @@ class TestFlowEngineDependencies:
         # dependent should be skipped or not executed
         assert result["success"] is False
         # Check that dependent step was either skipped or never ran
-        assert flow._statuses.get("dependent",
-                                   flow._statuses.get("dependent", None)) in (
-            "skipped", "pending", None
-        ) or True  # Accept any non-completed state for now
+        assert (
+            flow._statuses.get("dependent", flow._statuses.get("dependent", None)) in ("skipped", "pending", None) or True
+        )  # Accept any non-completed state for now
 
     def test_three_step_chain(self):
         from tea_agent.multi_agent import FlowEngine, flow_listen, flow_start
@@ -289,7 +299,7 @@ class TestRoleAgent:
             MockSession.return_value = mock_sess
 
             # Mock _get_llm_config
-            with patch.object(agent, '_get_llm_config') as mock_cfg:
+            with patch.object(agent, "_get_llm_config") as mock_cfg:
                 mock_cfg.return_value = MagicMock()
                 mock_cfg.return_value.api_key = "test-key"
                 mock_cfg.return_value.api_url = "http://test"
@@ -317,7 +327,7 @@ class TestRoleAgent:
             }
             MockSession.return_value = mock_sess
 
-            with patch.object(agent, '_get_llm_config') as mock_cfg:
+            with patch.object(agent, "_get_llm_config") as mock_cfg:
                 mock_cfg.return_value = MagicMock()
                 mock_cfg.return_value.api_key = "test"
                 mock_cfg.return_value.api_url = "http://test"
@@ -355,15 +365,11 @@ class TestAgentTool:
         mock_agent = MagicMock()
         mock_agent.execute_sync.return_value = "result data"
         # Make hasattr(agent, 'execute_sync') return True
-        type(mock_agent).execute_sync = PropertyMock(
-            return_value=lambda x: "result data"
-        )
+        type(mock_agent).execute_sync = PropertyMock(return_value=lambda x: "result data")
         # Simulate the hasattr check
-        mock_agent.configure_mock(**{
-            'execute.return_value': None,
-            'execute_with_context.return_value': None,
-            'execute_sync.return_value': "result data"
-        })
+        mock_agent.configure_mock(
+            **{"execute.return_value": None, "execute_with_context.return_value": None, "execute_sync.return_value": "result data"}
+        )
 
         # We need to test that call() works
         # Since AgentTool.call() uses hasattr to find the right method
@@ -384,6 +390,7 @@ class TestAgentTool:
             role = "helper"
             goal = "help"
             backstory = "I help"
+
             def execute_sync(self, goal, system_prompt=""):
                 return goal
 
@@ -409,6 +416,7 @@ class TestAgentTool:
         tool = AgentTool(SlowAgent(), name="slow", max_concurrent=2)
 
         import threading
+
         results = []
 
         def call_tool():
@@ -446,6 +454,7 @@ class TestAgentTool:
 # ============================================================
 # RoleDispatcher
 # ============================================================
+
 
 class TestRoleDispatcher:
     """RoleDispatcher 功能测试"""
@@ -489,7 +498,7 @@ class TestRoleDispatcher:
                 ],
                 "state": {},
                 "errors": {},
-            }
+            },
         )
         assert result["success"] is True
         assert result["total_steps"] == 3
@@ -500,6 +509,7 @@ class TestRoleDispatcher:
 # ============================================================
 # SubAgentManager
 # ============================================================
+
 
 class TestSubAgentManager:
     """SubAgentManager 基础功能测试"""

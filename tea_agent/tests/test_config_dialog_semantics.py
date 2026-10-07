@@ -35,55 +35,60 @@ def env(tmp_path, monkeypatch):
     monkeypatch.setenv("TEA_CONFIG", str(cfg))
     monkeypatch.setenv("TEA_PROVIDER_FILE", str(tmp_path / "provider.yaml"))
     provider_file = tmp_path / "provider.yaml"
-    provider_file.write_text(yaml.safe_dump({
-        "version": 1,
-        "providers": {
-            "DeepSeek": {
-                "api_url": "https://api.deepseek.com",
-                "api_key": "sk-main-1234567890",
-                "default_model": "deepseek-chat",
-                "source": "builtin",
-                "models": {
-                    "deepseek-chat": {
-                        "max_context_tokens": 131072,
-                        "max_output_tokens": 8192,
-                        "supports_reasoning": True,
-                        "supports_vision": False,
-                        "temperature": 0.7,
-                        "top_p": 0.9,
-                    },
-                    # 初始 supports_vision=True → POST False 后断言翻转，
-                    # 钉住「False 可写回」契约（旧过滤会静默丢弃）。
-                    "deepseek-flash": {
-                        "max_context_tokens": 65536,
-                        "max_output_tokens": 4096,
-                        "supports_reasoning": False,
-                        "supports_vision": True,
-                        "temperature": 0.7,
-                        "top_p": 0.9,
+    provider_file.write_text(
+        yaml.safe_dump(
+            {
+                "version": 1,
+                "providers": {
+                    "DeepSeek": {
+                        "api_url": "https://api.deepseek.com",
+                        "api_key": "sk-main-1234567890",
+                        "default_model": "deepseek-chat",
+                        "source": "builtin",
+                        "models": {
+                            "deepseek-chat": {
+                                "max_context_tokens": 131072,
+                                "max_output_tokens": 8192,
+                                "supports_reasoning": True,
+                                "supports_vision": False,
+                                "temperature": 0.7,
+                                "top_p": 0.9,
+                            },
+                            # 初始 supports_vision=True → POST False 后断言翻转，
+                            # 钉住「False 可写回」契约（旧过滤会静默丢弃）。
+                            "deepseek-flash": {
+                                "max_context_tokens": 65536,
+                                "max_output_tokens": 4096,
+                                "supports_reasoning": False,
+                                "supports_vision": True,
+                                "temperature": 0.7,
+                                "top_p": 0.9,
+                            },
+                        },
                     },
                 },
             },
-        },
-    }, allow_unicode=True, sort_keys=False), encoding="utf-8")
+            allow_unicode=True,
+            sort_keys=False,
+        ),
+        encoding="utf-8",
+    )
     # config.yaml 已删除 → 角色绑定由 provider.yaml roles 提供
     data = yaml.safe_load(provider_file.read_text(encoding="utf-8"))
     data["roles"] = {
         "main": {"provider": "DeepSeek", "model": "deepseek-chat"},
         "cheap": {"provider": "DeepSeek", "model": "deepseek-flash"},
     }
-    provider_file.write_text(
-        yaml.safe_dump(data, allow_unicode=True, sort_keys=False), encoding="utf-8")
+    provider_file.write_text(yaml.safe_dump(data, allow_unicode=True, sort_keys=False), encoding="utf-8")
 
     monkeypatch.setenv("TEA_PROVIDER_FILE", str(provider_file))
 
     import tea_agent.config as cfg_mod
-    import tea_agent.model_config as mc_mod
     import tea_agent.model_manager as mm_mod
+    import tea_agent.provider_store as ps_mod
     from tea_agent.server.modules import state
     from tea_agent.server.modules.agent_module import AgentModule
 
-    import tea_agent.provider_store as ps_mod
     monkeypatch.setattr(ps_mod, "_store", None)
     monkeypatch.setattr(mm_mod, "_service", None)
     monkeypatch.setattr(ps_mod, "_store", None)
@@ -96,6 +101,7 @@ def env(tmp_path, monkeypatch):
     monkeypatch.setattr(AgentModule, "_pending_switch", None, raising=False)
 
     from starlette.testclient import TestClient
+
     from tea_agent.server.server import create_app
 
     client = TestClient(create_app(config_path=str(cfg)))
@@ -111,20 +117,19 @@ def _dialog_payload() -> dict:
         "max_tokens": 5555,
         "top_p": 0.8,
         "max_context_tokens": 100000,
-        "options": {"supports_vision": True, "supports_reasoning": True,
-                    "reasoning_effort": "high"},
+        "options": {"supports_vision": True, "supports_reasoning": True, "reasoning_effort": "high"},
         "cheap_temperature": 0.1,
         "cheap_max_tokens": 2222,
         "cheap_top_p": 0.6,
         "cheap_max_context_tokens": 32768,
-        "cheap_options": {"supports_vision": False, "supports_reasoning": False,
-                          "reasoning_effort": "low"},
+        "cheap_options": {"supports_vision": False, "supports_reasoning": False, "reasoning_effort": "low"},
     }
 
 
 def test_apply_without_url_key_keeps_identity(env):
     """不提交 url/key/模型名 → 兑底当前值，身份三元组不变；参数全部生效。"""
     import yaml
+
     client, cfg, _pf, _am = env
 
     r = client.post("/api/model", json=_dialog_payload())
@@ -157,6 +162,7 @@ def test_apply_without_url_key_keeps_identity(env):
 def test_apply_writes_back_provider_yaml(env):
     """参数写回 provider.yaml：main + cheap 条目（窗口/输出/采样/能力/effort）。"""
     import yaml
+
     client, _cfg, pf, _am = env
 
     r = client.post("/api/model", json=_dialog_payload())
@@ -170,7 +176,7 @@ def test_apply_writes_back_provider_yaml(env):
     assert int(dm["max_output_tokens"]) == 5555
     assert float(dm["temperature"]) == 0.3
     assert float(dm["top_p"]) == 0.8
-    assert dm["supports_vision"] is True      # False → True 翻转
+    assert dm["supports_vision"] is True  # False → True 翻转
     assert dm["reasoning_effort"] == "high"
     # cheap 按 api_url 反查到同 provider，写到 deepseek-flash 条目
     cf = models["deepseek-flash"]
@@ -178,23 +184,21 @@ def test_apply_writes_back_provider_yaml(env):
     assert int(cf["max_output_tokens"]) == 2222
     assert float(cf["temperature"]) == 0.1
     assert float(cf["top_p"]) == 0.6
-    assert cf["supports_vision"] is False     # True → False 翻转（0.0/False 可写契约）
+    assert cf["supports_vision"] is False  # True → False 翻转（0.0/False 可写契约）
     assert cf["reasoning_effort"] == "low"
 
 
 def test_upsert_model_zero_false_and_unspecified(env):
     """upsert_model：0.0/False 是有效值可写；未显式提供的键不被 blank 覆盖。"""
     from tea_agent.provider_store import get_provider_store
+
     client, _cfg, _pf, _am = env
     store = get_provider_store()
 
-    store.upsert_model("DeepSeek", "deepseek-chat",
-                       {"max_context_tokens": 131072, "supports_vision": True,
-                        "temperature": 0.7})
-    store.upsert_model("DeepSeek", "deepseek-chat",
-                       {"temperature": 0.0, "top_p": 0.0, "supports_vision": False})
+    store.upsert_model("DeepSeek", "deepseek-chat", {"max_context_tokens": 131072, "supports_vision": True, "temperature": 0.7})
+    store.upsert_model("DeepSeek", "deepseek-chat", {"temperature": 0.0, "top_p": 0.0, "supports_vision": False})
     entry = store.providers()["DeepSeek"]["models"]["deepseek-chat"]
-    assert float(entry["temperature"]) == 0.0   # 旧过滤：0.0 被当空值丢弃 → 红
+    assert float(entry["temperature"]) == 0.0  # 旧过滤：0.0 被当空值丢弃 → 红
     assert float(entry["top_p"]) == 0.0
-    assert entry["supports_vision"] is False    # 旧过滤：False 被丢弃 → 红
+    assert entry["supports_vision"] is False  # 旧过滤：False 被丢弃 → 红
     assert int(entry["max_context_tokens"]) == 131072  # 未提供的键保持既有值

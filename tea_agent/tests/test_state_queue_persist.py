@@ -5,6 +5,7 @@
 内存是干净的，只有磁盘错 —— 于是重启后用户早已撤回的消息死灰复燃。
 （与项目此前修过的「删除的记忆被后台重建」同族。）
 """
+
 import importlib
 import json
 import os
@@ -63,8 +64,7 @@ class TestStaleSnapshotGuard:
         assert state.queue_remove("t1", item_id) is True
         state._persist_queues()
         path = real_path()
-        assert json.loads(open(path, encoding="utf-8").read()) == {}, \
-            "前置条件不成立：删除未先落盘"
+        assert json.loads(open(path, encoding="utf-8").read()) == {}, "前置条件不成立：删除未先落盘"
 
         release.set()
         ta.join(timeout=5)
@@ -117,8 +117,7 @@ class TestStaleSnapshotGuard:
         """restore 后必须能再次落盘：版本若不推进会被守卫跳过。"""
         path = state._queue_store_path()
         with open(path, "w", encoding="utf-8") as f:
-            json.dump({"t9": [{"id": "x1", "message": "restored",
-                               "images": [], "timestamp": 1.0}]}, f)
+            json.dump({"t9": [{"id": "x1", "message": "restored", "images": [], "timestamp": 1.0}]}, f)
         with state.message_queue_lock:
             state.message_queue.clear()
         assert state.restore_queues() == 1
@@ -157,8 +156,7 @@ class TestStaleSnapshotGuard:
         assert not any(t.is_alive() for t in ths), "疑似死锁"
 
         with state.message_queue_lock:
-            mem = {tid: [it["id"] for it in items] for tid, items in state.message_queue.items()
-                   if items}
+            mem = {tid: [it["id"] for it in items] for tid, items in state.message_queue.items() if items}
         final_id = state._persist_queues()
         disk = json.loads(open(state._queue_store_path(), encoding="utf-8").read())
         disk_ids = {tid: sorted(it["id"] for it in items) for tid, items in disk.items() if items}

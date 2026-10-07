@@ -22,29 +22,32 @@ def hot_switch_env(tmp_path, monkeypatch):
 
     pf = tmp_path / "provider.yaml"
     pf.write_text(
-        yaml.safe_dump({
-            "version": 1,
-            "providers": {
-                "DeepSeek": {
-                    "api_url": "https://api.deepseek.com",
-                    "api_key": "sk-test",
-                    "default_model": "deepseek-chat",
-                    "source": "builtin",
-                    "models": {
-                        "deepseek-chat": {"max_context_tokens": 131072,
-                                          "max_output_tokens": 8192},
-                        "deepseek-reasoner": {"max_context_tokens": 131072,
-                                              "max_output_tokens": 65536},
+        yaml.safe_dump(
+            {
+                "version": 1,
+                "providers": {
+                    "DeepSeek": {
+                        "api_url": "https://api.deepseek.com",
+                        "api_key": "sk-test",
+                        "default_model": "deepseek-chat",
+                        "source": "builtin",
+                        "models": {
+                            "deepseek-chat": {"max_context_tokens": 131072, "max_output_tokens": 8192},
+                            "deepseek-reasoner": {"max_context_tokens": 131072, "max_output_tokens": 65536},
+                        },
                     },
                 },
+                "roles": {"main": {"provider": "DeepSeek", "model": "deepseek-chat"}},
             },
-            "roles": {"main": {"provider": "DeepSeek", "model": "deepseek-chat"}},
-        }, allow_unicode=True, sort_keys=False),
+            allow_unicode=True,
+            sort_keys=False,
+        ),
         encoding="utf-8",
     )
     monkeypatch.setenv("TEA_PROVIDER_FILE", str(pf))
-    import tea_agent.provider_store as ps_mod
     import tea_agent.model_manager as mm_mod
+    import tea_agent.provider_store as ps_mod
+
     monkeypatch.setattr(ps_mod, "_store", None)
     monkeypatch.setattr(mm_mod, "_service", None, raising=False)
     import tea_agent.config as cfg_mod

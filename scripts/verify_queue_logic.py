@@ -2,18 +2,20 @@
 排队机制逻辑验证脚本
 模拟 TkGUI 的队列行为，验证核心逻辑
 """
-import sys, os
+
+import os
+import sys
+
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
 
 # ── 模拟队列行为（不依赖 Tkinter）──
 class MockGUI:
     """模拟 TkGUI 的排队相关逻辑"""
+
     def __init__(self):
         self._generating = False
-        self._generating_lock = type('Lock', (), {
-            '__enter__': lambda s: s,
-            '__exit__': lambda s, *a: None
-        })()
+        self._generating_lock = type("Lock", (), {"__enter__": lambda s: s, "__exit__": lambda s, *a: None})()
         self._message_queue = []
         self._last_sent = None
         self._interrupt_called = False
@@ -22,7 +24,7 @@ class MockGUI:
     @property
     def generating(self):
         return self._generating
-    
+
     @generating.setter
     def generating(self, value):
         self._generating = value
@@ -31,7 +33,7 @@ class MockGUI:
         """模拟 send 逻辑"""
         if images is None:
             images = []
-        
+
         with self._generating_lock:
             if not msg and not images:
                 return "break"
@@ -41,7 +43,7 @@ class MockGUI:
                     return "break"
                 return "break"
             self._generating = True
-        
+
         self._last_sent = (msg, images)
         return "started"
 
@@ -88,6 +90,7 @@ class MockGUI:
 passed = 0
 failed = 0
 
+
 def test(name, condition, detail=""):
     global passed, failed
     if condition:
@@ -96,6 +99,7 @@ def test(name, condition, detail=""):
     else:
         print(f"  ❌ {name}  {detail}")
         failed += 1
+
 
 print("=" * 50)
 print("排队机制逻辑验证")
@@ -186,7 +190,7 @@ test("图片消息入队", len(g._message_queue) == 1)
 test("图片内容正确", g._message_queue[0]["images"] == ["img1.jpg"])
 
 print(f"\n{'=' * 50}")
-print(f"结果: ✅ {passed} 通过 | ❌ {failed} 失败 | 共 {passed+failed} 项")
+print(f"结果: ✅ {passed} 通过 | ❌ {failed} 失败 | 共 {passed + failed} 项")
 print(f"{'=' * 50}")
 
 sys.exit(0 if failed == 0 else 1)

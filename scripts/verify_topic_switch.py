@@ -15,7 +15,13 @@
 依赖: pip install httpx
 """
 
-import asyncio, json, sys, os, time, argparse, urllib.request
+import argparse
+import asyncio
+import json
+import os
+import sys
+import time
+import urllib.request
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
@@ -28,14 +34,17 @@ class TestStats:
     def __init__(self):
         self.passed = 0
         self.failed = 0
+
     def ok(self, name, detail=""):
         self.passed += 1
         d = f" | {detail}" if detail else ""
         print(f"  ✅ {name}{d}")
+
     def fail(self, name, reason=""):
         self.failed += 1
         r = f" | {reason}" if reason else ""
         print(f"  ❌ {name}{r}")
+
     def summary(self):
         total = self.passed + self.failed
         print(f"\n{'=' * 50}")
@@ -55,8 +64,7 @@ def check_server(timeout=5):
 
 def create_topic(title="Test"):
     payload = json.dumps({"title": title}).encode()
-    req = urllib.request.Request(f"{BASE_URL}/api/new_topic", data=payload,
-                                  headers={"Content-Type": "application/json"})
+    req = urllib.request.Request(f"{BASE_URL}/api/new_topic", data=payload, headers={"Content-Type": "application/json"})
     with urllib.request.urlopen(req, timeout=10) as r:
         return json.loads(r.read())["topic_id"]
 
@@ -143,9 +151,7 @@ async def test_concurrent_topics(stats):
     async def stream_one(cli, tid, label, prompt):
         evts = []
         try:
-            async with cli.stream("POST", f"{BASE_URL}/api/chat",
-                                   json={"message": prompt, "topic_id": tid},
-                                   timeout=60) as resp:
+            async with cli.stream("POST", f"{BASE_URL}/api/chat", json={"message": prompt, "topic_id": tid}, timeout=60) as resp:
                 if resp.status_code != 200:
                     results[label] = {"ok": False, "error": f"HTTP {resp.status_code}"}
                     return
@@ -216,22 +222,23 @@ async def test_background_completion(stats):
 
     async def start_and_disconnect():
         nonlocal events_before_disconnect
-        async with httpx.AsyncClient(timeout=30) as cli:
-            async with cli.stream("POST", f"{BASE_URL}/api/chat",
-                                   json={"message": "用三句话介绍你自己", "topic_id": tid}) as resp:
-                if resp.status_code != 200:
-                    return
-                async for line in resp.aiter_lines():
-                    if line.startswith("data: "):
-                        d = line[6:]
-                        if d:
-                            try:
-                                json.loads(d)
-                                events_before_disconnect += 1
-                                if events_before_disconnect >= 5:
-                                    break  # 断开，不发送 abort
-                            except json.JSONDecodeError:
-                                pass
+        async with (
+            httpx.AsyncClient(timeout=30) as cli,
+            cli.stream("POST", f"{BASE_URL}/api/chat", json={"message": "用三句话介绍你自己", "topic_id": tid}) as resp,
+        ):
+            if resp.status_code != 200:
+                return
+            async for line in resp.aiter_lines():
+                if line.startswith("data: "):
+                    d = line[6:]
+                    if d:
+                        try:
+                            json.loads(d)
+                            events_before_disconnect += 1
+                            if events_before_disconnect >= 5:
+                                break  # 断开，不发送 abort
+                        except json.JSONDecodeError:
+                            pass
 
     await start_and_disconnect()
     if not events_before_disconnect:
@@ -246,10 +253,10 @@ async def test_background_completion(stats):
         await asyncio.sleep(2)
         convs = get_convs(tid)
         if convs:
-            stats.ok("后台保存", f"等待 {waited+2}s DB {len(convs)} 条")
+            stats.ok("后台保存", f"等待 {waited + 2}s DB {len(convs)} 条")
             break
         if (waited + 2) % 10 == 0:
-            print(f"  ⏳ 等待后台完成... {waited+2}s")
+            print(f"  ⏳ 等待后台完成... {waited + 2}s")
     if not convs:
         stats.fail("后台保存", "120s 后 DB 仍无记录")
         delete_topic(tid)
@@ -285,34 +292,33 @@ async def test_interrupt_works(stats):
 
     async def do_test():
         nonlocal got_abort, event_count
-        async with httpx.AsyncClient(timeout=30) as cli:
-            async with cli.stream("POST", f"{BASE_URL}/api/chat",
-                                   json={"message": "写一篇500字短文", "topic_id": tid}) as resp:
-                if resp.status_code != 200:
-                    return
-                async for line in resp.aiter_lines():
-                    if line.startswith("data: "):
-                        d = line[6:]
-                        if d:
-                            try:
-                                ev = json.loads(d)
-                                event_count += 1
-                                if event_count == 3 and not got_abort:
-                                    got_abort = True
-                                    payload = json.dumps({"topic_id": tid}).encode()
-                                    req = urllib.request.Request(
-                                        f"{BASE_URL}/api/chat/abort", data=payload,
-                                        headers={"Content-Type": "application/json"})
-                                    urllib.request.urlopen(req, timeout=5)
-                                    print(f"  🛑 已发送中断信号")
-                                if ev.get("type") in ("done", "error"):
-                                    break
-                            except json.JSONDecodeError:
-                                pass
+        async with (
+            httpx.AsyncClient(timeout=30) as cli,
+            cli.stream("POST", f"{BASE_URL}/api/chat", json={"message": "写一篇500字短文", "topic_id": tid}) as resp,
+        ):
+            if resp.status_code != 200:
+                return
+            async for line in resp.aiter_lines():
+                if line.startswith("data: "):
+                    d = line[6:]
+                    if d:
+                        try:
+                            ev = json.loads(d)
+                            event_count += 1
+                            if event_count == 3 and not got_abort:
+                                got_abort = True
+                                payload = json.dumps({"topic_id": tid}).encode()
+                                req = urllib.request.Request(f"{BASE_URL}/api/chat/abort", data=payload, headers={"Content-Type": "application/json"})
+                                urllib.request.urlopen(req, timeout=5)
+                                print("  🛑 已发送中断信号")
+                            if ev.get("type") in ("done", "error"):
+                                break
+                        except json.JSONDecodeError:
+                            pass
 
     await do_test()
     if got_abort:
-        stats.ok("中断信号", f"第3事件时发送 abort")
+        stats.ok("中断信号", "第3事件时发送 abort")
     else:
         stats.fail("中断信号", "未能发送")
         delete_topic(tid)
@@ -332,7 +338,7 @@ async def main():
     BASE_URL = f"http://{args.host}:{PORT}"
 
     print(f"{'=' * 50}")
-    print(f"  切换主题不中断对话 — 自动测试")
+    print("  切换主题不中断对话 — 自动测试")
     print(f"  Server: {BASE_URL}")
     print(f"{'=' * 50}")
 
@@ -340,7 +346,7 @@ async def main():
         print(f"\n❌ Server 不可达！请先启动: python -m tea_agent.server --port {PORT}")
         print(f"   或在其他端口启动后: python {__file__} --port PORT")
         sys.exit(1)
-    print(f"  ✅ Server 在线\n")
+    print("  ✅ Server 在线\n")
 
     stats = TestStats()
 

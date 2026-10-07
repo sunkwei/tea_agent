@@ -52,4 +52,5 @@ def tmp_yaml_config():
 def default_agent_config():
     """返回默认的 AgentConfig 实例（不从文件加载）"""
     from tea_agent.config import AgentConfig
+
     return AgentConfig()

@@ -93,8 +93,7 @@ def test_is_junk_path_detects(junk):
 def test_is_junk_path_allows_real_source():
     assert not is_junk_path("tea_agent/toolkit/toolkit_explr.py")
     assert not is_junk_path("/abs/tea_agent/server/server.py")
-    assert not is_junk_path("tea_agent/node_modules_notes.py"), \
-        "仅按目录段匹配，文件名的子串不算命中"
+    assert not is_junk_path("tea_agent/node_modules_notes.py"), "仅按目录段匹配，文件名的子串不算命中"
 
 
 def test_iter_files_skips_junk(tmp_path):
@@ -108,10 +107,7 @@ def test_iter_files_skips_junk(tmp_path):
     (tmp_path / "build_mini_dist").mkdir()
     (tmp_path / "build_mini_dist" / "copy.py").write_text("w = 4\n", encoding="utf-8")
 
-    got = sorted(
-        os.path.relpath(p, tmp_path).replace("\\", "/")
-        for p in iter_files(str(tmp_path), "*.py")
-    )
+    got = sorted(os.path.relpath(p, tmp_path).replace("\\", "/") for p in iter_files(str(tmp_path), "*.py"))
     assert got == ["src/real.py"], got
 
 
@@ -148,7 +144,4 @@ def test_no_scanner_reintroduces_inline_exclude_lists():
         for i, line in enumerate(text.splitlines(), 1):
             if pattern.search(line):
                 offenders.append(f"{f.relative_to(root.parent).as_posix()}:{i}")
-    assert not offenders, (
-        "以下位置又出现了内联目录排除列表，请改用 tea_agent.path_filters：\n  "
-        + "\n  ".join(offenders)
-    )
+    assert not offenders, "以下位置又出现了内联目录排除列表，请改用 tea_agent.path_filters：\n  " + "\n  ".join(offenders)

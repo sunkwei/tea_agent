@@ -20,6 +20,7 @@ topic_id / level2_items / cheap_model），而真实实现
 from __future__ import annotations
 
 import ast
+import contextlib
 import importlib
 import inspect
 import json
@@ -31,6 +32,7 @@ STORE = ROOT / "tea_agent" / "store"
 
 
 # ── 1. 运行时实证 ────────────────────────────────────────────────
+
 
 def test_l2_to_l3_summary_accepts_caller_arguments(tmp_path):
     """按 agent_pipeline 的真实入参调用委托层，必须正常返回而非 TypeError。
@@ -44,17 +46,15 @@ def test_l2_to_l3_summary_accepts_caller_arguments(tmp_path):
     try:
         result = db.generate_l2_to_l3_summary(
             "topic-x",
-            [],                      # overflow_items 为空 → 不触发 LLM
-            "已有摘要",               # existing_l3
-            None,                    # summarize_client（空溢出时不使用）
-            "cheap-model",           # summarize_model
+            [],  # overflow_items 为空 → 不触发 LLM
+            "已有摘要",  # existing_l3
+            None,  # summarize_client（空溢出时不使用）
+            "cheap-model",  # summarize_model
             extra_params={"temperature": 0.3},
         )
     finally:
-        try:
+        with contextlib.suppress(Exception):
             db.conn.close()
-        except Exception:
-            pass
 
     assert isinstance(result, tuple) and len(result) == 2, f"返回值形态异常: {result!r}"
     assert result[0] == "已有摘要", f"空溢出时应原样返回既有 L3 摘要: {result[0]!r}"
@@ -72,6 +72,7 @@ def test_l2_to_l3_summary_signature_matches_implementation():
 
 
 # ── 2. 结构性不变量：调用点感知的委托层检查 ──────────────────────
+
 
 def _delegation_call(fn):
     """body 仅一条 `return self.<attr>.<name>(...)` 时返回 (name, call)。"""
@@ -92,9 +93,12 @@ def _delegation_call(fn):
             if not isinstance(call, ast.Call):
                 return None
             f = call.func
-            if (isinstance(f, ast.Attribute) and isinstance(f.value, ast.Attribute)
-                    and isinstance(f.value.value, ast.Name)
-                    and f.value.value.id == "self"):
+            if (
+                isinstance(f, ast.Attribute)
+                and isinstance(f.value, ast.Attribute)
+                and isinstance(f.value.value, ast.Name)
+                and f.value.value.id == "self"
+            ):
                 return f.attr, call
             return None
     return None
@@ -106,12 +110,11 @@ def _call_problems(call, impl_sig) -> list:
     by_name = {p.name: p for p in params}
     has_kwargs = any(p.kind == p.VAR_KEYWORD for p in params)
     has_varargs = any(p.kind == p.VAR_POSITIONAL for p in params)
-    pos_params = [p for p in params
-                  if p.kind in (p.POSITIONAL_ONLY, p.POSITIONAL_OR_KEYWORD)]
+    pos_params = [p for p in params if p.kind in (p.POSITIONAL_ONLY, p.POSITIONAL_OR_KEYWORD)]
     problems, provided = [], set()
 
     for kw in call.keywords:
-        if kw.arg is None:          # **expr 解包：无法静态判定，保守跳过
+        if kw.arg is None:  # **expr 解包：无法静态判定，保守跳过
             continue
         provided.add(kw.arg)
         p = by_name.get(kw.arg)
@@ -121,9 +124,8 @@ def _call_problems(call, impl_sig) -> list:
         elif p.kind == p.POSITIONAL_ONLY:
             problems.append(f"关键字实参 {kw.arg!r} 为实现方的仅位置参数")
 
-    if not any(isinstance(a, ast.Starred) for a in call.args):
-        if len(call.args) > len(pos_params) and not has_varargs:
-            problems.append(f"位置实参 {len(call.args)} 个 > 实现方上限 {len(pos_params)}")
+    if not any(isinstance(a, ast.Starred) for a in call.args) and len(call.args) > len(pos_params) and not has_varargs:
+        problems.append(f"位置实参 {len(call.args)} 个 > 实现方上限 {len(pos_params)}")
 
     for idx, p in enumerate(pos_params):
         if p.name in provided or idx < len(call.args):
@@ -146,8 +148,7 @@ def test_store_pure_delegations_are_call_site_compatible():
     probe = _delegation_call(Storage.generate_l2_to_l3_summary)
     assert probe and probe[0] == "generate_l2_to_l3_summary", f"检测器失效: {probe!r}"
 
-    mods = [importlib.import_module(f"tea_agent.store.{p.stem}")
-            for p in sorted(STORE.glob("*.py")) if p.name != "__init__.py"]
+    mods = [importlib.import_module(f"tea_agent.store.{p.stem}") for p in sorted(STORE.glob("*.py")) if p.name != "__init__.py"]
 
     impls: dict = {}
     for m in mods:
@@ -158,10 +159,8 @@ def test_store_pure_delegations_are_call_site_compatible():
                 if isinstance(fn, (staticmethod, classmethod)):
                     fn = fn.__func__
                 if inspect.isfunction(fn):
-                    try:
+                    with contextlib.suppress(TypeError, ValueError):
                         impls.setdefault(name, {})[cls.__name__] = inspect.signature(fn)
-                    except (TypeError, ValueError):
-                        pass
 
     drifts = []
     for m in mods:
@@ -175,15 +174,11 @@ def test_store_pure_delegations_are_call_site_compatible():
                 if not got or got[0] != name:
                     continue
                 _tgt, call = got
-                cands = {c: s for c, s in impls.get(name, {}).items()
-                         if c != cls.__name__}
+                cands = {c: s for c, s in impls.get(name, {}).items() if c != cls.__name__}
                 if len(cands) != 1:
                     continue  # 无法唯一确定实现方 → 跳过
                 impl_cls, impl_sig = next(iter(cands.items()))
                 problems = _call_problems(call, impl_sig)
                 if problems:
-                    drifts.append({"wrapper": f"{cls.__name__}.{name}",
-                                   "impl": f"{impl_cls}.{name}",
-                                   "problems": problems})
-    assert drifts == [], f"委托层与实现不兼容 {len(drifts)} 处: " \
-                         f"{json.dumps(drifts, ensure_ascii=False)}"
+                    drifts.append({"wrapper": f"{cls.__name__}.{name}", "impl": f"{impl_cls}.{name}", "problems": problems})
+    assert drifts == [], f"委托层与实现不兼容 {len(drifts)} 处: {json.dumps(drifts, ensure_ascii=False)}"

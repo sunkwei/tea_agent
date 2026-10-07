@@ -1317,9 +1317,7 @@ class OnlineToolSession(BaseChatSession):
                     self.context.tool_log("⚠️ 上下文告急（>75% 窗口），立即压缩 L2→L3…")
                 else:
                     self.context.tool_log("⚠️ 上下文已用尽，强制压缩历史…")
-            self.summarizer_comp.summarize_old_history(
-                self.api, self._get_summarize_client, force=force, urgent=urgent
-            )
+            self.summarizer_comp.summarize_old_history(self.api, self._get_summarize_client, force=force, urgent=urgent)
         else:
             self.summarizer_comp.summarize_old_history(self.api, self._get_summarize_client)
         return context  # summarize_old_history 副作用修改 context，此处显式返回

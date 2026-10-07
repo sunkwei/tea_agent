@@ -16,6 +16,7 @@ class TestPipelineRegistration:
     def test_register_step_adds_to_steps(self):
         """测试: Register step adds to steps"""
         from tea_agent.session_pipeline import SessionPipeline
+
         p = SessionPipeline()
         p.register_step("step1", lambda ctx: {"result": 1})
         assert "step1" in p._steps
@@ -24,6 +25,7 @@ class TestPipelineRegistration:
     def test_register_duplicate_raises(self):
         """测试: Register duplicate raises"""
         from tea_agent.session_pipeline import SessionPipeline
+
         p = SessionPipeline()
         p.register_step("step1", lambda ctx: {})
         with pytest.raises(ValueError, match="step1"):
@@ -32,6 +34,7 @@ class TestPipelineRegistration:
     def test_remove_step_removes_from_both(self):
         """测试: Remove step removes from both"""
         from tea_agent.session_pipeline import SessionPipeline
+
         p = SessionPipeline()
         p.register_step("step1", lambda ctx: {})
         p.remove_step("step1")
@@ -41,6 +44,7 @@ class TestPipelineRegistration:
     def test_remove_nonexistent_raises(self):
         """测试: Remove nonexistent raises"""
         from tea_agent.session_pipeline import SessionPipeline
+
         p = SessionPipeline()
         # 当前实现：remove 不存在的步骤不抛异常（静默忽略）
         p.remove_step("nonexistent")  # should not raise
@@ -53,6 +57,7 @@ class TestPipelineOrdering:
     def test_default_order_by_registration(self):
         """测试: Default order by registration"""
         from tea_agent.session_pipeline import SessionPipeline
+
         p = SessionPipeline()
         p.register_step("a", lambda ctx: {})
         p.register_step("b", lambda ctx: {})
@@ -63,6 +68,7 @@ class TestPipelineOrdering:
     def test_position_controls_order(self):
         """测试: Position controls order"""
         from tea_agent.session_pipeline import SessionPipeline
+
         p = SessionPipeline()
         p.register_step("a", lambda ctx: {}, position=10)
         p.register_step("b", lambda ctx: {}, position=5)
@@ -73,6 +79,7 @@ class TestPipelineOrdering:
     def test_set_step_position_reorders(self):
         """测试: Set step position reorders"""
         from tea_agent.session_pipeline import SessionPipeline
+
         p = SessionPipeline()
         p.register_step("a", lambda ctx: {})
         p.register_step("b", lambda ctx: {})
@@ -87,6 +94,7 @@ class TestPipelineEnableDisable:
     def test_disabled_step_not_in_enabled(self):
         """测试: Disabled step not in enabled"""
         from tea_agent.session_pipeline import SessionPipeline
+
         p = SessionPipeline()
         p.register_step("a", lambda ctx: {}, enabled=False)
         assert len(p.get_enabled_steps()) == 0
@@ -94,6 +102,7 @@ class TestPipelineEnableDisable:
     def test_disable_step_hides_it(self):
         """测试: Disable step hides it"""
         from tea_agent.session_pipeline import SessionPipeline
+
         p = SessionPipeline()
         p.register_step("a", lambda ctx: {})
         p.register_step("b", lambda ctx: {})
@@ -104,10 +113,12 @@ class TestPipelineEnableDisable:
     def test_enable_step_shows_it(self):
         """测试: Enable step shows it"""
         from tea_agent.session_pipeline import SessionPipeline
+
         p = SessionPipeline()
         p.register_step("a", lambda ctx: {}, enabled=False)
         p.enable_step("a")
         assert len(p.get_enabled_steps()) == 1
+
 
 class TestPipelineExecution:
     """Pipeline 执行逻辑"""
@@ -115,6 +126,7 @@ class TestPipelineExecution:
     def test_execute_runs_enabled_steps_in_order(self):
         """测试: Execute runs enabled steps in order"""
         from tea_agent.session_pipeline import SessionPipeline
+
         p = SessionPipeline()
         order = []
 
@@ -139,6 +151,7 @@ class TestPipelineExecution:
     def test_execute_merges_results_into_context(self):
         """测试: Execute merges results into context"""
         from tea_agent.session_pipeline import SessionPipeline
+
         p = SessionPipeline()
 
         def step_one(ctx):
@@ -154,6 +167,7 @@ class TestPipelineExecution:
     def test_execute_skip_steps_skips_named(self):
         """测试: Execute skip steps skips named"""
         from tea_agent.session_pipeline import SessionPipeline
+
         p = SessionPipeline()
         order = []
 
@@ -173,6 +187,7 @@ class TestPipelineExecution:
     def test_execute_stop_at_stops_after_named(self):
         """测试: Execute stop at stops after named"""
         from tea_agent.session_pipeline import SessionPipeline
+
         p = SessionPipeline()
         order = []
 
@@ -197,6 +212,7 @@ class TestPipelineExecution:
     def test_execute_disabled_steps_skipped(self):
         """测试: Execute disabled steps skipped"""
         from tea_agent.session_pipeline import SessionPipeline
+
         p = SessionPipeline()
         order = []
 
@@ -216,6 +232,7 @@ class TestPipelineExecution:
     def test_execute_error_does_not_terminate(self):
         """Pipeline 容错：一个步骤出错，后续步骤继续执行"""
         from tea_agent.session_pipeline import SessionPipeline
+
         p = SessionPipeline()
         order = []
 
@@ -242,6 +259,7 @@ class TestPipelineListing:
     def test_list_steps_includes_enabled_and_disabled(self):
         """测试: List steps includes enabled and disabled"""
         from tea_agent.session_pipeline import SessionPipeline
+
         p = SessionPipeline()
         p.register_step("enabled_one", lambda ctx: {})
         p.register_step("disabled_one", lambda ctx: {}, enabled=False)

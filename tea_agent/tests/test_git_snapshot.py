@@ -127,8 +127,7 @@ def test_snapshot_only_target_files_in_diff(git_repo):
     (git_repo / "a.py").write_text("x = 3\n", encoding="utf-8")
     (git_repo / "other.py").write_text("dirty = True\n", encoding="utf-8")
     snap = git_snapshot(["a.py"], "edit a.py")
-    changed = _run(["git", "diff", "--name-only", "HEAD", snap["rev"]],
-                   str(git_repo)).split()
+    changed = _run(["git", "diff", "--name-only", "HEAD", snap["rev"]], str(git_repo)).split()
     assert changed == ["a.py"], f"快照混入了非目标文件: {changed}"
     # other.py 仍未跟踪
     assert "other.py" in _run(["git", "status", "--porcelain"], str(git_repo))
@@ -189,8 +188,7 @@ def test_toolkit_edit_auto_snapshot(git_repo):
     from tea_agent.toolkit.toolkit_edit import toolkit_edit
 
     before = _head_sha(git_repo)
-    r = toolkit_edit(file_path="a.py", action="replace_text",
-                     old_text="x = 1", new_text="x = 42")
+    r = toolkit_edit(file_path="a.py", action="replace_text", old_text="x = 1", new_text="x = 42")
     assert r.get("ok") is True
     assert r.get("git_snapshot"), "期望自动快照 hash"
     assert _head_sha(git_repo) == before, "快照不应改动当前分支"
@@ -201,8 +199,7 @@ def test_toolkit_edit_preview_no_snapshot(git_repo):
     """preview 模式不落盘、不快照。"""
     from tea_agent.toolkit.toolkit_edit import toolkit_edit
 
-    r = toolkit_edit(file_path="a.py", action="replace_text",
-                     old_text="x = 1", new_text="x = 99", preview=True)
+    r = toolkit_edit(file_path="a.py", action="replace_text", old_text="x = 1", new_text="x = 99", preview=True)
     assert r.get("ok") is True
     assert not r.get("git_snapshot")
     assert _snap_sha(git_repo) is None
@@ -223,8 +220,7 @@ def test_toolkit_edit_replace_text_auto_snapshot(git_repo):
     """toolkit_edit replace_text 修改成功后自动快照（原 toolkit_diff_edit 能力）。"""
     from tea_agent.toolkit.toolkit_edit import toolkit_edit
 
-    r = toolkit_edit(file_path="a.py", action="replace_text",
-                     old_text="x = 1", new_text="x = 7", return_diff=True)
+    r = toolkit_edit(file_path="a.py", action="replace_text", old_text="x = 1", new_text="x = 7", return_diff=True)
     assert r.get("ok") is True
     assert r.get("git_snapshot"), "期望自动快照 hash"
     assert r.get("diff"), "return_diff=True 应返回 unified diff"

@@ -59,10 +59,15 @@ def test_falls_back_to_agent_rounds():
     """
     c = _conn()
     _add_conversation(c, "c2", None)  # 新会话：该列为空
-    _add_round(c, "c2", 0, "assistant", content="thinking out loud",
-               tool_calls=json.dumps([{"id": "t1", "type": "function",
-                                       "function": {"name": "toolkit_exec"}}]),
-               rc="推理内容")
+    _add_round(
+        c,
+        "c2",
+        0,
+        "assistant",
+        content="thinking out loud",
+        tool_calls=json.dumps([{"id": "t1", "type": "function", "function": {"name": "toolkit_exec"}}]),
+        rc="推理内容",
+    )
     _add_round(c, "c2", 1, "tool", content="tool output")
 
     got = _load_rounds_map(c, c.execute("SELECT * FROM conversations").fetchall())
@@ -118,15 +123,10 @@ def test_export_source_reads_agent_rounds_not_rounds_json():
 
     p = pathlib.Path("tea_agent/toolkit/toolkit_export_last_pdf.py")
     src = p.read_text(encoding="utf-8")
-    hits = [
-        (n.lineno, ast.unparse(n))
-        for n in ast.walk(ast.parse(src))
-        if isinstance(n, ast.Subscript) and "rounds_json" in ast.unparse(n)
-    ]
+    hits = [(n.lineno, ast.unparse(n)) for n in ast.walk(ast.parse(src)) if isinstance(n, ast.Subscript) and "rounds_json" in ast.unparse(n)]
     # 只允许出现在 _load_rounds_map 内部（helper 自身负责兼容 legacy）
     tree = ast.parse(src)
-    helper = next(n for n in ast.walk(tree)
-                  if isinstance(n, ast.FunctionDef) and n.name == "_load_rounds_map")
+    helper = next(n for n in ast.walk(tree) if isinstance(n, ast.FunctionDef) and n.name == "_load_rounds_map")
     lo, hi = helper.lineno, (helper.end_lineno or helper.lineno)
     outside = [(ln, s) for ln, s in hits if not (lo <= ln <= hi)]
     assert not outside, f"导出实现仍在直读 rounds_json: {outside}"

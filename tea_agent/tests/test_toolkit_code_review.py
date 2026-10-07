@@ -75,15 +75,19 @@ def test_check_security_dangerous_exec():
 
 def test_assess_complexity():
     with tempfile.NamedTemporaryFile(mode="w", suffix=".py", delete=False) as f:
-        f.write("\n".join([
-            "import os",
-            "",
-            "def foo():",
-            "    pass",
-            "",
-            "class Bar:",
-            "    pass",
-        ]))
+        f.write(
+            "\n".join(
+                [
+                    "import os",
+                    "",
+                    "def foo():",
+                    "    pass",
+                    "",
+                    "class Bar:",
+                    "    pass",
+                ]
+            )
+        )
         fpath = f.name
     try:
         result = _assess_complexity(fpath)
@@ -144,9 +148,21 @@ def test_generate_report_empty_issues():
     lint_r = {"ok": True, "issues": [], "count": 0}
     semantic_r = {"ok": True, "issues": []}
     security_r = {"ok": True, "findings": [], "count": 0}
-    complexity_r = {"ok": True, "metrics": {"total_lines": 10, "code_lines": 8, "blank_lines": 1, "comment_lines": 1,
-                                             "comment_ratio": 12.5, "function_count": 1, "class_count": 0, "max_indent": 4,
-                                             "avg_line_length": 20.0}, "complexity_score": "简单"}
+    complexity_r = {
+        "ok": True,
+        "metrics": {
+            "total_lines": 10,
+            "code_lines": 8,
+            "blank_lines": 1,
+            "comment_lines": 1,
+            "comment_ratio": 12.5,
+            "function_count": 1,
+            "class_count": 0,
+            "max_indent": 4,
+            "avg_line_length": 20.0,
+        },
+        "complexity_score": "简单",
+    }
     style_r = {"ok": True, "issues": [], "count": 0}
     report = _generate_report("test.py", compile_r, lint_r, semantic_r, security_r, complexity_r, style_r)
     assert "代码质量优秀" in report
@@ -157,7 +173,11 @@ def test_generate_report_with_issues():
     compile_r = {"ok": False, "errors": ["SyntaxError: invalid syntax"]}
     lint_r = {"ok": False, "issues": [{"code": "F401", "location": {"row": 1, "column": 1}, "message": "unused import"}], "count": 1}
     semantic_r = {"ok": True, "issues": [{"type": "unresolved_reference", "name": "foo", "line": 2, "column": 0, "message": "undef"}], "total": 1}
-    security_r = {"ok": False, "findings": [{"line": 1, "severity": "high", "category": "dangerous_exec", "description": "危险动态执行", "matched": "eval"}], "count": 1}
+    security_r = {
+        "ok": False,
+        "findings": [{"line": 1, "severity": "high", "category": "dangerous_exec", "description": "危险动态执行", "matched": "eval"}],
+        "count": 1,
+    }
     complexity_r = {"ok": True, "metrics": {"total_lines": 50, "code_lines": 40}, "complexity_score": "中等"}
     style_r = {"ok": False, "issues": [{"line": 1, "type": "line_too_long", "description": "行过长: 120字符", "severity": "low"}], "count": 1}
     report = _generate_report("test.py", compile_r, lint_r, semantic_r, security_r, complexity_r, style_r)

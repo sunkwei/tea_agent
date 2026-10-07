@@ -29,9 +29,7 @@ from tea_agent.image_ref import (
 )
 
 # 1×1 有效 PNG（红点）
-PNG_BYTES = base64.b64decode(
-    "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8DwHwAFAAH/q842iQAAAABJRU5ErkJggg=="
-)
+PNG_BYTES = base64.b64decode("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8DwHwAFAAH/q842iQAAAABJRU5ErkJggg==")
 
 
 def _data_url(blob: bytes = PNG_BYTES, mime: str = "image/png") -> str:
@@ -53,6 +51,7 @@ def _make_real_png() -> bytes:
 #  image_ref 编解码
 # ══════════════════════════════════════════════════════════
 
+
 class TestImageRef:
     def test_make_and_parse_roundtrip(self):
         assert make_image_ref(7) == "img:7"
@@ -60,9 +59,22 @@ class TestImageRef:
 
     def test_parse_rejects_non_refs(self):
         """文件路径 / data URL / 外链 / 空值一律不是引用（向后兼容旧数据）。"""
-        for bad in ["uploads/x.png", "data:image/png;base64,AAA",
-                    "https://example.com/a.png", "", None, "img:", "img:abc",
-                    "img:0", "img:-1", 0, -3, True, False, 1.5]:
+        for bad in [
+            "uploads/x.png",
+            "data:image/png;base64,AAA",
+            "https://example.com/a.png",
+            "",
+            None,
+            "img:",
+            "img:abc",
+            "img:0",
+            "img:-1",
+            0,
+            -3,
+            True,
+            False,
+            1.5,
+        ]:
             assert parse_image_ref(bad) is None, bad
 
     def test_parse_accepts_positive_int(self):
@@ -75,8 +87,7 @@ class TestImageRef:
         assert mime == "image/jpeg" and blob == b"hello"
 
     def test_parse_data_url_invalid(self):
-        for bad in ["", "not-a-data-url", "data:image/png;base64,",
-                    "data:image/png,"]:
+        for bad in ["", "not-a-data-url", "data:image/png;base64,", "data:image/png,"]:
             mime, blob = parse_data_url(bad)
             assert blob is None, bad
 
@@ -90,6 +101,7 @@ class TestImageRef:
 # ══════════════════════════════════════════════════════════
 #  save_msg 图片入库（核心契约）
 # ══════════════════════════════════════════════════════════
+
 
 class TestSaveMsgImageStorage:
     def test_data_url_stored_as_blob_with_ref(self, storage):
@@ -180,8 +192,10 @@ class TestSaveMsgImageStorage:
         """坏图不得拖垮保存：文本保留，坏项原样回填。"""
         tid = storage.create_topic("t")
         storage.save_msg(
-            tid, {"text": "文字还在", "images": ["data:image/png;base64,!!!bad!!!"]},
-            "", False,
+            tid,
+            {"text": "文字还在", "images": ["data:image/png;base64,!!!bad!!!"]},
+            "",
+            False,
         )
         payload = json.loads(storage.get_conversations(tid, limit=1)[0]["user_msg"])
         assert payload["text"] == "文字还在"
@@ -209,6 +223,7 @@ class TestSaveMsgImageStorage:
 # ══════════════════════════════════════════════════════════
 #  Web 保存路径（原缺陷所在）
 # ══════════════════════════════════════════════════════════
+
 
 class _StubSession:
     """_save_chat_result 需要的最小 session 桩。"""
@@ -243,6 +258,7 @@ class TestWebSavePathPreservesImages:
 # ══════════════════════════════════════════════════════════
 #  HTTP 入口不落盘
 # ══════════════════════════════════════════════════════════
+
 
 def _handler_source(func_name: str) -> str:
     """按函数名截取 route_handlers 中该函数的源码（用于静态契约检查）。"""
@@ -300,6 +316,7 @@ class TestNoFilesystemBuffering:
 #  LLM 请求路径：img:<id> → data URL
 # ══════════════════════════════════════════════════════════
 
+
 class TestToMultimodalResolvesRefs:
     def _ctx(self, storage):
         class _Ctx:
@@ -317,8 +334,7 @@ class TestToMultimodalResolvesRefs:
         ref = json.loads(storage.get_conversations(tid, limit=1)[0]["user_msg"])["images"][0]
 
         msg = {"role": "user", "content": "看图", "images": [ref]}
-        out = to_multimodal(msg, supports_vision=True,
-                            image_resolver=_image_resolver_of(self._ctx(storage)))
+        out = to_multimodal(msg, supports_vision=True, image_resolver=_image_resolver_of(self._ctx(storage)))
         parts = out["content"]
         assert isinstance(parts, list)
         urls = [p["image_url"]["url"] for p in parts if p["type"] == "image_url"]
@@ -329,16 +345,15 @@ class TestToMultimodalResolvesRefs:
         """无 resolver 时引用被跳过（不炸、不产生非法 content）。"""
         from tea_agent.session.history_builder import to_multimodal
 
-        out = to_multimodal({"role": "user", "content": "看图", "images": ["img:1"]},
-                            supports_vision=True, image_resolver=None)
+        out = to_multimodal({"role": "user", "content": "看图", "images": ["img:1"]}, supports_vision=True, image_resolver=None)
         assert out["content"] == "看图"
 
     def test_missing_image_skipped(self, storage):
         from tea_agent.session.history_builder import _image_resolver_of, to_multimodal
 
-        out = to_multimodal({"role": "user", "content": "看图", "images": ["img:999999"]},
-                            supports_vision=True,
-                            image_resolver=_image_resolver_of(self._ctx(storage)))
+        out = to_multimodal(
+            {"role": "user", "content": "看图", "images": ["img:999999"]}, supports_vision=True, image_resolver=_image_resolver_of(self._ctx(storage))
+        )
         assert out["content"] == "看图"
 
     def test_no_storage_returns_none_resolver(self):
@@ -354,15 +369,13 @@ class TestToMultimodalResolvesRefs:
 #  导出：PDF / Markdown 必须带上图片
 # ══════════════════════════════════════════════════════════
 
+
 class TestExportIncludesImages:
     def _seed(self, storage):
         tid = storage.create_topic("图片导出测试")
         png = _make_real_png()
-        cid = storage.save_msg(
-            tid, {"text": "看这张图", "images": [_data_url(png)]}, "我看到了", False
-        )
-        storage.update_msg_rounds(conversation_id=cid, ai_msg="我看到了",
-                                   is_func_calling=False, rounds=None)
+        cid = storage.save_msg(tid, {"text": "看这张图", "images": [_data_url(png)]}, "我看到了", False)
+        storage.update_msg_rounds(conversation_id=cid, ai_msg="我看到了", is_func_calling=False, rounds=None)
         return tid, cid, png
 
     def test_parse_user_payload_extracts_ids(self):
@@ -475,6 +488,7 @@ class TestExportIncludesImages:
 #  前端解析契约（静态检查，防回归）
 # ══════════════════════════════════════════════════════════
 
+
 class TestFrontendParsing:
     def test_app_js_has_parse_user_msg(self):
         import tea_agent.server.route_handlers as rh
@@ -506,14 +520,13 @@ class TestFrontendParsing:
                 continue
             if needle in p.read_text(encoding="utf-8"):
                 hits.append(p.name)
-        assert hits, (
-            f"路由层（{pkg_dir.name}/）未注册 {needle} —— 图片回读路由丢失"
-        )
+        assert hits, f"路由层（{pkg_dir.name}/）未注册 {needle} —— 图片回读路由丢失"
 
 
 # ══════════════════════════════════════════════════════════
 #  回读接口
 # ══════════════════════════════════════════════════════════
+
 
 class TestImageHttpEndpoint:
     """回读接口。项目未装 pytest-asyncio，统一用 asyncio.run 驱动。"""
@@ -573,6 +586,7 @@ class TestImageHttpEndpoint:
 # ══════════════════════════════════════════════════════════
 #  schema
 # ══════════════════════════════════════════════════════════
+
 
 class TestImagesSchema:
     def test_images_table_columns(self, storage):

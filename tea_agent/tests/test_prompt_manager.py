@@ -124,10 +124,7 @@ class TestSystemPromptManager:
         manager.initialize()
 
         # 添加反思记录
-        storage.add_reflection(
-            summary="Test reflection",
-            suggestions=["Improve error handling", "Add more tests"]
-        )
+        storage.add_reflection(summary="Test reflection", suggestions=["Improve error handling", "Add more tests"])
 
         messages = manager.build_evolve_prompt()
 

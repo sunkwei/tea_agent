@@ -2,6 +2,7 @@
 @2026-06-07 gen by deepseek, BaseChatSession 核心功能测试
 覆盖: 会话创建、配置加载、thinking 探测、推理剥离、工具压缩
 """
+
 from unittest.mock import MagicMock
 
 import pytest
@@ -13,6 +14,7 @@ class TestBaseSessionConfig:
     def test_base_session_abstract(self):
         """BaseChatSession 是抽象类，不能直接实例化"""
         from tea_agent.basesession import BaseChatSession
+
         with pytest.raises(TypeError):
             BaseChatSession()
 
@@ -54,6 +56,7 @@ class TestConfigLoading:
     def test_load_config_returns_obj_with_main_model(self):
         """load_config 应返回具有 main_model 属性的对象"""
         from tea_agent.config import load_config
+
         cfg = load_config()
         assert hasattr(cfg, "main_model"), f"配置无 main_model 属性: {type(cfg)}"
         assert cfg.main_model is not None
@@ -62,6 +65,7 @@ class TestConfigLoading:
     def test_config_has_model_name(self):
         """配置应包含模型名称"""
         from tea_agent.config import load_config
+
         cfg = load_config()
         assert cfg.main_model.model_name is not None
 
@@ -72,12 +76,14 @@ class TestLiteSession:
     def test_lite_session_needs_dependencies(self):
         """LiteSession 需要 toolkit/api_key/api_url 参数"""
         from tea_agent.litesession import LiteSession
+
         with pytest.raises(TypeError):
             LiteSession(model="test-model")
 
     def test_lite_session_creation_with_mocks(self):
         """使用 mock 创建 LiteSession"""
         from tea_agent.litesession import LiteSession
+
         mock_tk = MagicMock()
         sess = LiteSession(
             model="test-model",
@@ -105,31 +111,31 @@ class TestToolArgsCompressThresholds:
         assert _args_keep_bytes() == 1024
 
     def test_env_override_compress_threshold(self, monkeypatch):
-        import tea_agent.basesession as B
+        import tea_agent.basesession as bs
 
         monkeypatch.setenv("TEA_ARGS_COMPRESS_BYTES", "512")
-        assert B._args_compress_threshold() == 512
+        assert bs._args_compress_threshold() == 512
 
     def test_env_override_keep_bytes_actually_keeps_more(self, monkeypatch):
         """提高保留量后，超长参数确实保留更多内容（不只是数字变了）。"""
         import json
 
-        import tea_agent.basesession as B
+        import tea_agent.basesession as bs
 
         args = json.dumps({"content": "x" * 20000})
         n = len(args.encode("utf-8"))
-        low = json.loads(B.BaseChatSession._compress_json_args(args, n))["content"]
+        low = json.loads(bs.BaseChatSession._compress_json_args(args, n))["content"]
         monkeypatch.setenv("TEA_ARGS_KEEP_BYTES", "4096")
-        high = json.loads(B.BaseChatSession._compress_json_args(args, n))["content"]
+        high = json.loads(bs.BaseChatSession._compress_json_args(args, n))["content"]
         assert len(high) > len(low) * 3, (len(low), len(high))
 
     @pytest.mark.parametrize("bad", ["abc", "0", "-5", "  ", "3.5"])
     def test_invalid_env_falls_back_to_default(self, monkeypatch, bad):
         """非法 env 必须回落默认，绝不抛异常（配置错误不该拖垮主流程）。"""
-        import tea_agent.basesession as B
+        import tea_agent.basesession as bs
 
         monkeypatch.setenv("TEA_ARGS_KEEP_BYTES", bad)
-        assert B._args_keep_bytes() == 1024
+        assert bs._args_keep_bytes() == 1024
 
     def test_below_threshold_untouched(self):
         """未超阈值时内容逐字节不变。"""
@@ -140,4 +146,3 @@ class TestToolArgsCompressThresholds:
         args = json.dumps({"content": "x" * 300})
         out = BaseChatSession._compress_json_args(args, len(args.encode("utf-8")))
         assert json.loads(out)["content"] == "x" * 300
-

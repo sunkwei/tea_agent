@@ -268,8 +268,7 @@ class TestToolAction:
         tid = wired.create_topic("t")
         wired.set_semantic_summary(tid, "x" * 500)
 
-        r = json.loads(hist.toolkit_history_extract(
-            action="l3_versions", topic_id=tid, max_chars=10))
+        r = json.loads(hist.toolkit_history_extract(action="l3_versions", topic_id=tid, max_chars=10))
         assert r["versions"][0]["truncated"] is True
         assert "已截断" in r["versions"][0]["content"]
 
@@ -283,10 +282,7 @@ class TestMigration:
     def test_table_created(self, storage):
         c = storage.conn.cursor()
         try:
-            row = c.execute(
-                "SELECT name FROM sqlite_master WHERE type='table' "
-                "AND name='history_versions'"
-            ).fetchone()
+            row = c.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='history_versions'").fetchone()
         finally:
             c.close()
         assert row is not None, "history_versions 表未创建"
@@ -294,10 +290,7 @@ class TestMigration:
     def test_index_created(self, storage):
         c = storage.conn.cursor()
         try:
-            row = c.execute(
-                "SELECT name FROM sqlite_master WHERE type='index' "
-                "AND name='idx_history_versions_topic'"
-            ).fetchone()
+            row = c.execute("SELECT name FROM sqlite_master WHERE type='index' AND name='idx_history_versions_topic'").fetchone()
         finally:
             c.close()
         assert row is not None, "history_versions 索引未创建"

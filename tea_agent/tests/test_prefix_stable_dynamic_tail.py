@@ -21,15 +21,14 @@ def _m(role, content, **kw):
 
 # ── 根因复现：纳入尾部动态消息即误报 ──
 
+
 def test_tail_dynamic_shift_is_not_a_real_violation():
     """稳定前缀逐字节相同时，尾部动态消息移位**不得**判为违例。"""
     stable = [_m("system", "sp"), _m("user", "u1")]
     # 第 1 次请求：stable + 动态尾巴
     req1 = stable + [_m("user", "[动态] TODO: 无")]
     # 第 2 次请求：新工具消息插在动态尾巴**之前**，尾巴后移
-    req2 = stable + [_m("assistant", None, tool_calls=[{"id": "c1"}]),
-                     _m("tool", "结果", tool_call_id="c1"),
-                     _m("user", "[动态] TODO: 无")]
+    req2 = stable + [_m("assistant", None, tool_calls=[{"id": "c1"}]), _m("tool", "结果", tool_call_id="c1"), _m("user", "[动态] TODO: 无")]
 
     assert not same_series(req1, req2), "整表比对必然判为改写（缺陷根因）"
     # 排除尾部 1 条后：稳定前缀是逐条前缀 → 同一序列，无违例
@@ -51,6 +50,7 @@ def test_real_prefix_rewrite_still_reported():
 
 
 # ── 接线：build_api_messages 必须写出尾部条数 ──
+
 
 def test_build_api_messages_records_dynamic_tail_count():
     """有动态尾巴 → _dynamic_tail_count=1，且尾条确为动态消息。"""
@@ -105,6 +105,7 @@ def test_online_session_excludes_tail_from_series_check():
 
 # ── 日志来源：违例 ERROR 不得挂在无关组件名下 ──
 
+
 def test_violation_is_logged_under_its_own_source(caplog):
     """契约：prefix_stable 违例必须挂在 turn_meta 观测点名下。
 
@@ -122,8 +123,7 @@ def test_violation_is_logged_under_its_own_source(caplog):
     sess.turn_meta.note_request([_m("system", "sp"), _m("user", "u1")])
 
     with caplog.at_level(logging.ERROR, logger="session.turn_meta"):
-        sess._note_request_series([_m("system", "被偷改的 sp"),
-                                   _m("user", "u1"), _m("user", "u2")])
+        sess._note_request_series([_m("system", "被偷改的 sp"), _m("user", "u1"), _m("user", "u2")])
 
     recs = [r for r in caplog.records if "prefix_stable" in r.getMessage()]
     assert recs, "真·前缀改写必须报违例"

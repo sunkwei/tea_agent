@@ -55,10 +55,7 @@ def test_python_check_reads_disk_not_stale_parent_module(tmp_path, monkeypatch):
         # 磁盘上把值改掉：只有「读磁盘」的实现才能看到 32
         mod.write_text("VALUE = 32\n", encoding="utf-8")
 
-        expr = (
-            f"from {_PROBE_PKG}.stale_mod import VALUE\n"
-            "assert VALUE == 32, '读到的是父进程旧值 %r（检查未隔离 sys.modules）' % VALUE\n"
-        )
+        expr = f"from {_PROBE_PKG}.stale_mod import VALUE\nassert VALUE == 32, '读到的是父进程旧值 %r（检查未隔离 sys.modules）' % VALUE\n"
         check = _run(expr, tmp_path)
         assert check["ok"] is True, f"python 检查未读磁盘：{check['detail']}"
     finally:
@@ -79,7 +76,8 @@ def test_python_check_runs_in_a_different_process(tmp_path):
 def test_python_check_hard_exit_fails_closed_and_recovers(tmp_path):
     """执行器硬退出 → 该检查判失败（fail-closed），且后续检查能重启执行器继续。"""
     task = {
-        "id": "probe-exit", "kind": "safety",
+        "id": "probe-exit",
+        "kind": "safety",
         "checks": [
             {"type": "python", "expr": "import os\nos._exit(0)\n"},
             {"type": "python", "expr": "assert 1 + 1 == 2"},

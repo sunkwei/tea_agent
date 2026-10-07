@@ -5,8 +5,6 @@ Config 测试套件 — ModelConfig / PathsConfig / AgentConfig / load_config / 
 import os
 from pathlib import Path
 
-import pytest
-
 
 class TestClampReasoningEffort:
     """clamp_reasoning_effort 值域钳制测试"""
@@ -48,29 +46,34 @@ class TestModelConfig:
     def test_default_not_configured(self):
         """测试: Default not configured"""
         from tea_agent.config import ModelConfig
+
         mc = ModelConfig()
         assert not mc.is_configured
 
     def test_configured_when_all_set(self):
         """测试: Configured when all set"""
         from tea_agent.config import ModelConfig
+
         mc = ModelConfig(api_key="sk-xxx", api_url="http://api.example.com/v1", model_name="test-model")
         assert mc.is_configured
 
     def test_not_configured_when_partial(self):
         """测试: Not configured when partial"""
         from tea_agent.config import ModelConfig
+
         mc = ModelConfig(api_key="sk-xxx", api_url="", model_name="test-model")
         assert not mc.is_configured
 
     def test_options_default_empty(self):
         """测试: Options default empty"""
         from tea_agent.config import ModelConfig
+
         mc = ModelConfig()
         assert mc.options == {}
 
 
 from tea_agent.storage_scope import DEFAULT_DB_NAME
+
 
 class TestPathsConfig:
     """PathsConfig 路径解析测试"""
@@ -78,6 +81,7 @@ class TestPathsConfig:
     def test_resolve_defaults(self):
         """默认值解析到 ~/.tea_agent"""
         from tea_agent.config import PathsConfig
+
         pc = PathsConfig()
         pc.resolve("/tmp")
 
@@ -94,6 +98,7 @@ class TestPathsConfig:
         import tempfile
 
         from tea_agent.config import PathsConfig
+
         # 使用临时目录的绝对路径作为 config_dir，确保跨平台
         tmpd = tempfile.mkdtemp(prefix="tea_test_")
         config_dir = _os.path.join(tmpd, "config")
@@ -114,6 +119,7 @@ class TestPathsConfig:
         import os as _os
 
         from tea_agent.config import PathsConfig
+
         # 使用平台无关的绝对路径
         abs_dir = _os.path.abspath("/var/lib/tea_agent")
         pc = PathsConfig(data_dir=abs_dir)
@@ -126,6 +132,7 @@ class TestPathsConfig:
     def test_resolve_tilde_expansion(self):
         """~ 展开为用户目录"""
         from tea_agent.config import PathsConfig
+
         pc = PathsConfig(data_dir="~/my_agent")
         pc.resolve("/tmp")
 
@@ -137,6 +144,7 @@ class TestPathsConfig:
         import os as _os
 
         from tea_agent.config import PathsConfig
+
         pc = PathsConfig(
             db_path="my_db/agent.db",
             toolkit_dir="/opt/tools",
@@ -157,6 +165,7 @@ class TestPathsConfig:
     def test_property_accessors(self):
         """属性访问器可用"""
         from tea_agent.config import PathsConfig
+
         pc = PathsConfig()
         pc.resolve("/tmp")
 
@@ -180,8 +189,7 @@ class TestEmbeddingRemoved:
     def test_agent_config_has_no_embedding_field(self):
         from tea_agent.config import AgentConfig
 
-        assert not hasattr(AgentConfig(), "embedding"), \
-            "AgentConfig 不应再有 embedding 字段（向量能力已下线）"
+        assert not hasattr(AgentConfig(), "embedding"), "AgentConfig 不应再有 embedding 字段（向量能力已下线）"
 
     def test_embedding_config_symbol_removed(self):
         import tea_agent.config as _cfg
@@ -191,8 +199,7 @@ class TestEmbeddingRemoved:
     def test_embedding_util_module_removed(self):
         import importlib.util
 
-        assert importlib.util.find_spec("tea_agent.embedding_util") is None, \
-            "tea_agent.embedding_util 应已删除"
+        assert importlib.util.find_spec("tea_agent.embedding_util") is None, "tea_agent.embedding_util 应已删除"
 
     def test_embedding_model_key_not_serialized(self):
         """to_full_dict / 模板都不得再产出 embedding_model 段。"""
@@ -277,8 +284,7 @@ class TestLoadSaveConfig:
 
         path = tmp_path / "provider.yaml"
         path.write_text(
-            yaml.safe_dump({"version": 1, "providers": providers},
-                           allow_unicode=True, sort_keys=False),
+            yaml.safe_dump({"version": 1, "providers": providers}, allow_unicode=True, sort_keys=False),
             encoding="utf-8",
         )
         monkeypatch.setenv("TEA_PROVIDER_FILE", str(path))
@@ -286,13 +292,15 @@ class TestLoadSaveConfig:
         return path
 
     def _prov(self):
-        return {"P": {
-            "api_url": "https://api.example.com/v1",
-            "api_key": "sk-p",
-            "default_model": "m1",
-            "models": {"m1": {}},
-            "source": "builtin",
-        }}
+        return {
+            "P": {
+                "api_url": "https://api.example.com/v1",
+                "api_key": "sk-p",
+                "default_model": "m1",
+                "models": {"m1": {}},
+                "source": "builtin",
+            }
+        }
 
     def test_load_default_no_file(self, tmp_path, monkeypatch):
         """provider.yaml 无提供商时返回代码默认值。"""
@@ -335,8 +343,7 @@ class TestLoadSaveConfig:
         before = set(tmp_path.iterdir())
         assert save_config(AgentConfig()) != ""
         created = {f.name for f in set(tmp_path.iterdir()) - before}
-        assert not any(f.startswith("config") and f.endswith((".yaml", ".yml"))
-                       for f in created), created
+        assert not any(f.startswith("config") and f.endswith((".yaml", ".yml")) for f in created), created
 
     def test_create_default_config_removed(self):
         """create_default_config 已随 config.yaml 一并删除。"""
@@ -350,9 +357,18 @@ def test_enable_thinking_parsing():
     from tea_agent.config import AgentConfig, _parse_session_params
 
     for raw_input, expected in [
-        (True, True), (False, False),
-        ("true", True), ("True", True), ("TRUE", True), ("1", True), ("yes", True),
-        ("false", False), ("False", False), ("FALSE", False), ("0", False), ("no", False),
+        (True, True),
+        (False, False),
+        ("true", True),
+        ("True", True),
+        ("TRUE", True),
+        ("1", True),
+        ("yes", True),
+        ("false", False),
+        ("False", False),
+        ("FALSE", False),
+        ("0", False),
+        ("no", False),
     ]:
         cfg = AgentConfig()
         data = {"enable_thinking": raw_input}

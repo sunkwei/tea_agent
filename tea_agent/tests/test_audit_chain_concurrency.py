@@ -9,6 +9,7 @@ _chain_head() 的内存缓存**永不被判定过期**：本进程写过一次�
 正是这个场景 —— 也就是说：**审计链在最真实的多进程部署形态下必然断裂**，
 它作为防篡改基础设施的价值等于零。
 """
+
 import json
 import os
 import subprocess
@@ -39,16 +40,14 @@ class TestChainHeadFreshness:
 
         # 原实例再写：修复前会用缓存里的 first['h'] → 跳过 mid → 断链
         third = al.record("tool/call", tool="b")
-        assert third["prev"] == mid["h"], (
-            "链头使用了过期缓存：prev 指向本进程上一条而非文件末行")
+        assert third["prev"] == mid["h"], "链头使用了过期缓存：prev 指向本进程上一条而非文件末行"
         assert al.verify()["ok"], "并发追加后审计链应仍然完整"
 
     def test_consecutive_appends_in_one_process_stay_chained(self, tmp_path):
         al = AuditLog(directory=str(tmp_path))
         for i in range(5):
             al.record("tool/call", tool=f"t{i}")
-        assert al.verify() == {"ok": True, "files": 1, "records": 5,
-                               "broken_at": None, "reason": "链路完整"}
+        assert al.verify() == {"ok": True, "files": 1, "records": 5, "broken_at": None, "reason": "链路完整"}
 
     def test_detects_real_tampering(self, tmp_path):
         """修复不能削弱原有检测能力：改写历史记录必须被检出。"""
@@ -102,11 +101,15 @@ class TestDirectoryProbe:
             "    al.record('tool/call', tool='p' + sys.argv[2], detail={'i': i})\n"
             "print(json.dumps({'dir': al.directory(), 'leftover': "
             "[f for f in __import__('os').listdir(sys.argv[1]) if f.startswith('.write_probe')]}))\n",
-            encoding="utf-8")
+            encoding="utf-8",
+        )
         nproc = 6
-        procs = [subprocess.Popen([sys.executable, str(child), str(tmp_path), str(k)],
-                                  stdout=subprocess.PIPE, stderr=subprocess.PIPE,
-                                  text=True, encoding="utf-8") for k in range(nproc)]
+        procs = [
+            subprocess.Popen(
+                [sys.executable, str(child), str(tmp_path), str(k)], stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, encoding="utf-8"
+            )
+            for k in range(nproc)
+        ]
         infos = []
         for p in procs:
             out, err = p.communicate(timeout=180)
@@ -117,10 +120,8 @@ class TestDirectoryProbe:
         dirs = {i["dir"] for i in infos}
         assert dirs == {str(tmp_path)}, f"进程解析到不同目录: {dirs}"
 
-        landed = sum(1 for f in tmp_path.glob("audit-*.jsonl")
-                     for l in open(f, encoding="utf-8") if l.strip())
-        assert landed == nproc * 10, (
-            f"落盘 {landed} != 期望 {nproc * 10} → 有进程被误判目录不可写而丢记录")
+        landed = sum(1 for f in tmp_path.glob("audit-*.jsonl") for ln in open(f, encoding="utf-8") if ln.strip())
+        assert landed == nproc * 10, f"落盘 {landed} != 期望 {nproc * 10} → 有进程被误判目录不可写而丢记录"
 
         # 探测残留**不是**契约。Windows 上 open→remove 之间句柄常被 AV/杀软/
         # 索引服务短暂占用，os.remove 偶发 PermissionError；产品代码有意
@@ -141,12 +142,12 @@ class TestDirectoryProbe:
         blocker.write_text("not a dir")  # 同名文件占位 → makedirs 必失败
         al = AuditLog(directory=str(blocker))
         resolved = al.directory()
-        assert resolved is None or resolved != str(blocker), (
-            "不可写目录被当作可用，写入将失败")
+        assert resolved is None or resolved != str(blocker), "不可写目录被当作可用，写入将失败"
 
     def test_probe_failure_to_clean_up_does_not_reject_dir(self, tmp_path):
         """清理探测文件失败不应影响目录可用性判定。"""
         import tea_agent.audit_log as mod
+
         real_remove = mod.os.remove
         boom = {"on": True}
 
@@ -227,10 +228,12 @@ class TestCrossProcessConcurrency:
         child = tmp_path / "_child.py"
         child.write_text(self._CHILD.format(root=_PKG_ROOT), encoding="utf-8")
         nproc = 6
-        procs = [subprocess.Popen([sys.executable, str(child), str(tmp_path), str(k)],
-                                 stdout=subprocess.PIPE, stderr=subprocess.PIPE,
-                                 text=True, encoding="utf-8")
-                 for k in range(nproc)]
+        procs = [
+            subprocess.Popen(
+                [sys.executable, str(child), str(tmp_path), str(k)], stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, encoding="utf-8"
+            )
+            for k in range(nproc)
+        ]
         reported = 0
         for p in procs:
             out, err = p.communicate(timeout=180)
@@ -240,11 +243,11 @@ class TestCrossProcessConcurrency:
         al = AuditLog(directory=str(tmp_path))
         files = al.files()
         landed = sum(sum(1 for line in open(f, encoding="utf-8") if line.strip()) for f in files)
-        recs = [json.loads(l) for f in files for l in open(f, encoding="utf-8") if l.strip()]
+        recs = [json.loads(ln) for f in files for ln in open(f, encoding="utf-8") if ln.strip()]
 
         assert reported == nproc * 15, f"有进程未写满: {reported}"
         assert landed == nproc * 15, f"落盘 {landed} != 自报 {reported} → 静默丢记录"
-        assert len(recs) == len(set(r["h"] for r in recs)), "出现重复哈希（并发覆盖写）"
+        assert len(recs) == len({r["h"] for r in recs}), "出现重复哈希（并发覆盖写）"
         prevs = [r["prev"] for r in recs]
         assert len(prevs) == len(set(prevs)), "重复 prev：两进程读到同一链头 → 跨进程锁未生效"
         assert al.verify()["ok"], "并发写入后审计链必须完整"

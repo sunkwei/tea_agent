@@ -42,10 +42,14 @@ def seeded(wired):
     st = wired
     tid = st.create_topic("t")
     cid = st.create_turn(tid, "用户问题")
-    st.append_round(cid, 0, "assistant", "我先查文件",
-                    tool_calls=[{"id": "c1", "type": "function",
-                                 "function": {"name": "toolkit_file", "arguments": "{}"}}],
-                    reasoning_content="思考中")
+    st.append_round(
+        cid,
+        0,
+        "assistant",
+        "我先查文件",
+        tool_calls=[{"id": "c1", "type": "function", "function": {"name": "toolkit_file", "arguments": "{}"}}],
+        reasoning_content="思考中",
+    )
     st.append_round(cid, 1, "tool", "文件内容=abc", tool_call_id="c1")
     st.finalize_turn(cid, "最终答复", is_func_calling=True)
     st.record_l0_snapshot(cid, "【L0】OS信息+AGENTS.md")
@@ -65,19 +69,16 @@ def _call(**kw) -> dict:
 
 class TestExtractAll:
     def test_all_four_levels_available(self, seeded):
-        r = _call(action="extract", topic_id=seeded["topic_id"],
-                  conversation_id=seeded["conversation_id"])
+        r = _call(action="extract", topic_id=seeded["topic_id"], conversation_id=seeded["conversation_id"])
         assert r["ok"] is True
         assert r["availability"] == {"L0": True, "L1": True, "L2": True, "L3": True}
 
     def test_l0_content_is_the_enriched_snapshot(self, seeded):
-        r = _call(action="extract", topic_id=seeded["topic_id"],
-                  conversation_id=seeded["conversation_id"], levels=["L0"])
+        r = _call(action="extract", topic_id=seeded["topic_id"], conversation_id=seeded["conversation_id"], levels=["L0"])
         assert r["L0"]["content"] == "【L0】OS信息+AGENTS.md"
 
     def test_l1_has_tool_chain_and_reasoning(self, seeded):
-        r = _call(action="extract", topic_id=seeded["topic_id"],
-                  conversation_id=seeded["conversation_id"], levels=["L1"])
+        r = _call(action="extract", topic_id=seeded["topic_id"], conversation_id=seeded["conversation_id"], levels=["L1"])
         msgs = r["L1"]["messages"]
         assert [m["role"] for m in msgs] == ["assistant", "tool"]
         # 工具链必须是**名字**（可读），而非原始 JSON blob
@@ -101,8 +102,7 @@ class TestExtractAll:
 class TestScopeLabelling:
     def test_scope_split_is_reported(self, seeded):
         """L0/L1=conversation，L2/L3=topic —— 混用会导致复原结论失真。"""
-        r = _call(action="extract", topic_id=seeded["topic_id"],
-                  conversation_id=seeded["conversation_id"])
+        r = _call(action="extract", topic_id=seeded["topic_id"], conversation_id=seeded["conversation_id"])
         assert r["L0"]["scope"] == "conversation"
         assert r["L1"]["scope"] == "conversation"
         assert r["L2"]["scope"] == "topic"
@@ -116,8 +116,7 @@ class TestScopeLabelling:
         assert "caveat" in r["L2"] and "caveat" in r["L3"]
 
     def test_conversation_levels_declared_historical(self, seeded):
-        r = _call(action="extract", topic_id=seeded["topic_id"],
-                  conversation_id=seeded["conversation_id"], levels=["L0", "L1"])
+        r = _call(action="extract", topic_id=seeded["topic_id"], conversation_id=seeded["conversation_id"], levels=["L0", "L1"])
         assert r["L0"]["historical"] is True
         assert r["L1"]["historical"] is True
 
@@ -134,8 +133,7 @@ class TestScopeLabelling:
 class TestUnavailableReasons:
     def test_nonexistent_conversation_says_wrong_id(self, seeded):
         """ID 打错 → 必须说「不存在」，不能误述成「历史回合」。"""
-        r = _call(action="extract", topic_id=seeded["topic_id"],
-                  conversation_id="no-such-id", levels=["L0"])
+        r = _call(action="extract", topic_id=seeded["topic_id"], conversation_id="no-such-id", levels=["L0"])
         assert r["L0"]["available"] is False
         reason = r["L0"]["reason"]
         assert "不存在" in reason, f"未区分「问错 ID」: {reason}"
@@ -187,22 +185,16 @@ class TestUnavailableReasons:
 
 class TestTruncationTrace:
     def test_l0_truncation_marked(self, seeded):
-        r = _call(action="extract", topic_id=seeded["topic_id"],
-                  conversation_id=seeded["conversation_id"],
-                  levels=["L0"], max_chars=5)
+        r = _call(action="extract", topic_id=seeded["topic_id"], conversation_id=seeded["conversation_id"], levels=["L0"], max_chars=5)
         assert r["L0"]["truncated"] is True
         assert "已截断" in r["L0"]["content"], "截断未留痕（会被当成原文）"
 
     def test_l1_truncation_marked(self, seeded):
-        r = _call(action="extract", topic_id=seeded["topic_id"],
-                  conversation_id=seeded["conversation_id"],
-                  levels=["L1"], max_chars=3)
+        r = _call(action="extract", topic_id=seeded["topic_id"], conversation_id=seeded["conversation_id"], levels=["L1"], max_chars=3)
         assert r["L1"]["truncated"] is True
 
     def test_no_truncation_when_under_limit(self, seeded):
-        r = _call(action="extract", topic_id=seeded["topic_id"],
-                  conversation_id=seeded["conversation_id"],
-                  levels=["L0"], max_chars=100000)
+        r = _call(action="extract", topic_id=seeded["topic_id"], conversation_id=seeded["conversation_id"], levels=["L0"], max_chars=100000)
         assert r["L0"]["truncated"] is False
         assert "已截断" not in r["L0"]["content"]
 
@@ -211,8 +203,7 @@ class TestTruncationTrace:
         cid = wired.create_turn(tid, "q")
         for i in range(5):
             wired.append_round(cid, i, "assistant", f"r{i}")
-        r = _call(action="extract", topic_id=tid, conversation_id=cid,
-                  levels=["L1"], max_rounds=2)
+        r = _call(action="extract", topic_id=tid, conversation_id=cid, levels=["L1"], max_rounds=2)
         assert r["L1"]["truncated"] is True
         assert len(r["L1"]["messages"]) == 2
         assert "truncated_note" in r["L1"]
@@ -224,24 +215,26 @@ class TestTruncationTrace:
 
 
 class TestLevelParsing:
-    @pytest.mark.parametrize("raw,expected", [
-        (None, ["L0", "L1", "L2", "L3"]),
-        ("", ["L0", "L1", "L2", "L3"]),
-        ([], ["L0", "L1", "L2", "L3"]),
-        ("L0", ["L0"]),
-        ("L0,L1", ["L0", "L1"]),
-        ("l0, l2", ["L0", "L2"]),
-        (["L1", "L3"], ["L1", "L3"]),
-        (["0", "2"], ["L0", "L2"]),
-        ("L0; L3", ["L0", "L3"]),
-        (["L0", "L0"], ["L0"]),  # 去重
-    ])
+    @pytest.mark.parametrize(
+        "raw,expected",
+        [
+            (None, ["L0", "L1", "L2", "L3"]),
+            ("", ["L0", "L1", "L2", "L3"]),
+            ([], ["L0", "L1", "L2", "L3"]),
+            ("L0", ["L0"]),
+            ("L0,L1", ["L0", "L1"]),
+            ("l0, l2", ["L0", "L2"]),
+            (["L1", "L3"], ["L1", "L3"]),
+            (["0", "2"], ["L0", "L2"]),
+            ("L0; L3", ["L0", "L3"]),
+            (["L0", "L0"], ["L0"]),  # 去重
+        ],
+    )
     def test_parse_levels(self, raw, expected):
         assert hist._parse_levels(raw) == expected
 
     def test_only_requested_levels_returned(self, seeded):
-        r = _call(action="extract", topic_id=seeded["topic_id"],
-                  conversation_id=seeded["conversation_id"], levels=["L0"])
+        r = _call(action="extract", topic_id=seeded["topic_id"], conversation_id=seeded["conversation_id"], levels=["L0"])
         assert "L0" in r
         assert "L1" not in r and "L2" not in r and "L3" not in r
         assert r["levels_requested"] == ["L0"]
@@ -296,9 +289,7 @@ class TestRobustness:
 
     def test_bad_max_chars_falls_back(self, seeded):
         """max_chars 传非数字 → 回落默认，不炸。"""
-        r = _call(action="extract", topic_id=seeded["topic_id"],
-                  conversation_id=seeded["conversation_id"],
-                  levels=["L0"], max_chars="abc")
+        r = _call(action="extract", topic_id=seeded["topic_id"], conversation_id=seeded["conversation_id"], levels=["L0"], max_chars="abc")
         assert r["ok"] is True and r["L0"]["available"] is True
 
     def test_single_level_failure_isolated(self, seeded, wired, monkeypatch):
@@ -308,8 +299,7 @@ class TestRobustness:
             raise RuntimeError("boom")
 
         monkeypatch.setattr(type(wired), "get_level2", _boom, raising=False)
-        r = _call(action="extract", topic_id=seeded["topic_id"],
-                  conversation_id=seeded["conversation_id"])
+        r = _call(action="extract", topic_id=seeded["topic_id"], conversation_id=seeded["conversation_id"])
         assert r["ok"] is True
         assert r["L2"]["available"] is False
         # 其他层不受影响
@@ -320,12 +310,11 @@ class TestRobustness:
         st = wired
         tid = st.create_topic("t")
         cid = st.create_turn(tid, "q")
-        st.append_round(cid, 0, "assistant", "正文",
-                        tool_calls=[{"id": "c1", "type": "function",
-                                     "function": {"name": "toolkit_exec", "arguments": "{}"}}])
+        st.append_round(
+            cid, 0, "assistant", "正文", tool_calls=[{"id": "c1", "type": "function", "function": {"name": "toolkit_exec", "arguments": "{}"}}]
+        )
         c = st.conn.cursor()
-        c.execute("UPDATE agent_rounds SET tool_calls = ? WHERE conversation_id = ?",
-                  ("{坏JSON", cid))
+        c.execute("UPDATE agent_rounds SET tool_calls = ? WHERE conversation_id = ?", ("{坏JSON", cid))
         st.conn.commit()
         c.close()
         r = _call(action="extract", topic_id=tid, conversation_id=cid, levels=["L1"])

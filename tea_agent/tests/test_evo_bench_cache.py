@@ -11,6 +11,7 @@
 
 from __future__ import annotations
 
+import contextlib
 from pathlib import Path
 
 import pytest
@@ -26,10 +27,8 @@ def tmp_source():
     try:
         yield p
     finally:
-        try:
+        with contextlib.suppress(OSError):
             p.unlink()
-        except OSError:
-            pass
 
 
 def _baseline_print_calls() -> int:
@@ -48,10 +47,8 @@ def test_run_bench_recomputes_metrics_across_calls(tmp_source):
     tmp_source.write_text("print(1)\n", encoding="utf-8")
     n1 = n0 + 1
 
-    expr = ("m = metrics(); assert m['print_calls'] == %d, "
-            "'期望 print_calls=%d，实际 %%d（指标缓存陈旧）' %% m['print_calls']" % (n1, n1))
-    task = {"id": "cache-probe", "kind": "probe", "title": "指标新鲜度",
-            "checks": [{"type": "python", "expr": expr}]}
+    expr = f"m = metrics(); assert m['print_calls'] == {n1}, '期望 print_calls={n1}，实际 %d（指标缓存陈旧）' % m['print_calls']"
+    task = {"id": "cache-probe", "kind": "probe", "title": "指标新鲜度", "checks": [{"type": "python", "expr": expr}]}
 
     agg = eb.run_bench(tasks=[task], root=str(ROOT))
     assert agg["score"] == 1.0, f"run_bench 使用了陈旧指标: {agg['failed']}"
@@ -62,9 +59,8 @@ def test_run_bench_detects_regression_within_same_process(tmp_source):
     from tea_agent.evaluation import evo_bench as eb
 
     n0 = _baseline_print_calls()
-    expr = "m = metrics(); assert m['print_calls'] == %d, 'print_calls 已变化'" % n0
-    task = {"id": "cache-regression", "kind": "probe", "title": "回归可检测",
-            "checks": [{"type": "python", "expr": expr}]}
+    expr = f"m = metrics(); assert m['print_calls'] == {n0}, 'print_calls 已变化'"
+    task = {"id": "cache-regression", "kind": "probe", "title": "回归可检测", "checks": [{"type": "python", "expr": expr}]}
 
     before = eb.run_bench(tasks=[task], root=str(ROOT))["score"]
     assert before == 1.0, f"基线应通过: {eb.run_bench(tasks=[task], root=str(ROOT))['failed']}"
@@ -72,6 +68,4 @@ def test_run_bench_detects_regression_within_same_process(tmp_source):
     tmp_source.write_text("print(1)\n", encoding="utf-8")
     after = eb.run_bench(tasks=[task], root=str(ROOT))["score"]
 
-    assert after == 0.0, (
-        f"同进程内指标恶化未被检测（before={before} after={after}）—— 缓存跨运行复用"
-    )
+    assert after == 0.0, f"同进程内指标恶化未被检测（before={before} after={after}）—— 缓存跨运行复用"

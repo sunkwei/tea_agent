@@ -4,6 +4,7 @@
 模型给等价但不存在的键。51 个工具逐个加 **kwargs 是打补丁，在唯一汇聚点
 （Toolkit.call_tool）预检一次才是修根因。
 """
+
 import pytest
 
 from tea_agent import tlk
@@ -20,8 +21,8 @@ class TestBindingPrecheck:
         with pytest.raises(TypeError) as ei:
             tk.call_tool("toolkit_file", action="read", file_path="x.py")
         msg = str(ei.value)
-        assert "file_path" in msg, msg          # 点名模型真正写错的键
-        assert "filename" in msg, msg           # 给出正确参数名
+        assert "file_path" in msg, msg  # 点名模型真正写错的键
+        assert "filename" in msg, msg  # 给出正确参数名
         assert "只接受" in msg, msg
 
     def test_missing_required_arg_is_named(self, tk):
@@ -48,8 +49,7 @@ class TestBindingPrecheck:
         """
         assert "toolkit_file" in tk._CACHE_WHITELIST
         with pytest.raises(TypeError) as ei:
-            tk.call_tool("toolkit_file", action="read", filename="x",
-                         wrong_key_because_model_hallucinated=1)
+            tk.call_tool("toolkit_file", action="read", filename="x", wrong_key_because_model_hallucinated=1)
         assert "wrong_key_because_model_hallucinated" in str(ei.value)
 
     def test_unknown_tool_still_keyerror(self, tk):
@@ -85,19 +85,20 @@ class TestBindingErrorOnCallableWithoutSignature:
         某些 C 扩展可调用对象 inspect.signature 会抛 ValueError；此时预检必须
         放行、保持原调用行为，而不是把一个能正常工作的工具判死。
         """
+
         def exploding_signature(_obj, **kw):
             raise ValueError("no signature for builtin")
 
         monkeypatch.setattr(tlk.inspect, "signature", exploding_signature)
         tk._sig_cache.clear()  # 前序用例已缓存签名，需清空才会真正走到取签名分支
         try:
-            assert tk._binding_error("toolkit_file", tk.func_map["toolkit_file"],
-                                     {"whatever": 1}) is None
+            assert tk._binding_error("toolkit_file", tk.func_map["toolkit_file"], {"whatever": 1}) is None
         finally:
             tk._sig_cache.clear()
 
     def test_typeerror_from_signature_is_not_blocked(self, tk, monkeypatch):
         """inspect.signature 抛 TypeError 时同样放行。"""
+
         def raising_signature(_obj, **kw):
             raise TypeError("unusable")
 

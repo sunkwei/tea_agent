@@ -15,6 +15,7 @@
 
 守卫要点：断言的是**契约**（响应含 ok、失败非 2xx），不是当前实现细节。
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -105,7 +106,7 @@ def test_frontend_and_backend_agree_on_ok_field():
     """
     js = (pathlib.Path(rhb.__file__).parent / "static" / "app.js").read_text(encoding="utf-8")
 
-    seg = js[js.index("window.addMemory"):]
+    seg = js[js.index("window.addMemory") :]
     seg = seg[: seg.index("async function refreshMemoryList")]
     assert "d.ok" in seg, "前端 addMemory 的判据变了，请同步本测试与后端契约"
 

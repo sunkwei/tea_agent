@@ -30,8 +30,9 @@ def storage(tmp_path):
 
 
 def _png() -> bytes:
-    from PIL import Image
     import io
+
+    from PIL import Image
 
     b = io.BytesIO()
     Image.new("RGB", (30, 20), (10, 90, 200)).save(b, format="PNG")
@@ -49,9 +50,7 @@ class TestTurnLifecycle:
         tid = storage.create_topic("t")
         cid = storage.create_turn(tid, {"text": "问题"})
 
-        row = storage.conn.execute(
-            "SELECT status, ai_msg, user_msg FROM conversations WHERE id = ?", (cid,)
-        ).fetchone()
+        row = storage.conn.execute("SELECT status, ai_msg, user_msg FROM conversations WHERE id = ?", (cid,)).fetchone()
         assert row is not None, "create_turn 未建行"
         assert row["status"] == "pending"
         assert row["ai_msg"] == ""
@@ -64,8 +63,7 @@ class TestTurnLifecycle:
 
         evs = storage.events.query_events(tid)
         assert [e["event_type"] for e in evs] == ["turn/start", "user/message"]
-        assert all(e["conversation_id"] == cid for e in evs), \
-            f"事件未归属到回合：{[e['conversation_id'] for e in evs]}"
+        assert all(e["conversation_id"] == cid for e in evs), f"事件未归属到回合：{[e['conversation_id'] for e in evs]}"
 
     def test_append_round_is_idempotent(self, storage):
         """同一 round_num 重复提交被跳过（重试/恢复场景）。"""
@@ -75,9 +73,7 @@ class TestTurnLifecycle:
         assert storage.append_round(cid, 0, "assistant", "首次") is True
         assert storage.append_round(cid, 0, "assistant", "重复") is False
 
-        rows = storage.conn.execute(
-            "SELECT content FROM agent_rounds WHERE conversation_id = ?", (cid,)
-        ).fetchall()
+        rows = storage.conn.execute("SELECT content FROM agent_rounds WHERE conversation_id = ?", (cid,)).fetchall()
         assert [r[0] for r in rows] == ["首次"]
 
     def test_finalize_turn_does_not_duplicate_rounds(self, storage):
@@ -86,18 +82,18 @@ class TestTurnLifecycle:
         cid = storage.create_turn(tid, "q")
         storage.append_round(cid, 0, "assistant", "实时写入")
 
-        storage.finalize_turn(cid, "最终回复", rounds=[
-            {"role": "assistant", "content": "实时写入"},
-            {"role": "tool", "content": "补写"},
-        ])
+        storage.finalize_turn(
+            cid,
+            "最终回复",
+            rounds=[
+                {"role": "assistant", "content": "实时写入"},
+                {"role": "tool", "content": "补写"},
+            ],
+        )
 
-        n = storage.conn.execute(
-            "SELECT COUNT(*) FROM agent_rounds WHERE conversation_id = ?", (cid,)
-        ).fetchone()[0]
+        n = storage.conn.execute("SELECT COUNT(*) FROM agent_rounds WHERE conversation_id = ?", (cid,)).fetchone()[0]
         assert n == 2, f"轮次重复：{n}"
-        row = storage.conn.execute(
-            "SELECT status, ai_msg FROM conversations WHERE id = ?", (cid,)
-        ).fetchone()
+        row = storage.conn.execute("SELECT status, ai_msg FROM conversations WHERE id = ?", (cid,)).fetchone()
         assert row["status"] == "done" and row["ai_msg"] == "最终回复"
 
     def test_finalize_writes_terminal_events(self, storage):
@@ -123,22 +119,24 @@ class TestRoundsSingleSource:
         """rounds_json 列不再写入（与 agent_rounds 重复存储，实测占库 38.4%）。"""
         tid = storage.create_topic("t")
         cid = storage.create_turn(tid, "q")
-        storage.update_msg_rounds(cid, "答", True, rounds=[
-            {"role": "assistant", "content": "a"},
-            {"role": "tool", "content": "b"},
-        ])
+        storage.update_msg_rounds(
+            cid,
+            "答",
+            True,
+            rounds=[
+                {"role": "assistant", "content": "a"},
+                {"role": "tool", "content": "b"},
+            ],
+        )
 
-        v = storage.conn.execute(
-            "SELECT rounds_json FROM conversations WHERE id = ?", (cid,)
-        ).fetchone()[0]
+        v = storage.conn.execute("SELECT rounds_json FROM conversations WHERE id = ?", (cid,)).fetchone()[0]
         assert v is None, f"rounds_json 仍在写入（冗余）：{str(v)[:60]}"
 
     def test_get_conversations_derives_rounds(self, storage):
         """get_conversations 的 rounds_json_parsed 从 agent_rounds 派生。"""
         tid = storage.create_topic("t")
         cid = storage.create_turn(tid, "q")
-        storage.append_round(cid, 0, "assistant", "调用工具",
-                             tool_calls=[{"id": "c1", "function": {"name": "tk"}}])
+        storage.append_round(cid, 0, "assistant", "调用工具", tool_calls=[{"id": "c1", "function": {"name": "tk"}}])
         storage.append_round(cid, 1, "tool", "结果", tool_call_id="c1")
         storage.finalize_turn(cid, "答")
 
@@ -154,9 +152,7 @@ class TestRoundsSingleSource:
         cid = storage.create_turn(tid, "q")
         storage.append_round(cid, 0, "assistant", "正文", reasoning_content="思考内容")
 
-        row = storage.conn.execute(
-            "SELECT content, reasoning_content FROM agent_rounds WHERE conversation_id = ?",
-            (cid,)).fetchone()
+        row = storage.conn.execute("SELECT content, reasoning_content FROM agent_rounds WHERE conversation_id = ?", (cid,)).fetchone()
         assert row["content"] == "正文", f"content 被污染：{row['content']!r}"
         assert row["reasoning_content"] == "思考内容"
         # 派生视图能还原为结构化 rounds（DeepSeek 要求 RC 原样回传）
@@ -166,8 +162,7 @@ class TestRoundsSingleSource:
         """派生结果与旧 rounds_json 结构兼容（可直接喂 load_history）。"""
         tid = storage.create_topic("t")
         cid = storage.create_turn(tid, "q")
-        storage.append_round(cid, 0, "assistant", "x",
-                             tool_calls=[{"id": "c1"}], reasoning_content="rc")
+        storage.append_round(cid, 0, "assistant", "x", tool_calls=[{"id": "c1"}], reasoning_content="rc")
 
         r = storage.get_rounds(cid)[0]
         assert set(r) <= {"role", "content", "tool_calls", "tool_call_id", "reasoning_content"}
@@ -199,8 +194,7 @@ class TestSoftDelete:
         assert c.execute("SELECT COUNT(*) FROM agent_rounds").fetchone()[0] == 1
         c.close()
         # 标记已写入
-        assert storage.conn.execute(
-            "SELECT deleted_at FROM conversations WHERE id = ?", (cid,)).fetchone()[0]
+        assert storage.conn.execute("SELECT deleted_at FROM conversations WHERE id = ?", (cid,)).fetchone()[0]
 
     def test_public_delete_topic_keeps_rows(self, storage):
         """对外 delete_topic 也必须是标记删除 —— 不能物理清空。
@@ -214,12 +208,9 @@ class TestSoftDelete:
         assert storage.delete_topic(tid) is True
 
         c = storage.conn.cursor()
-        assert c.execute("SELECT COUNT(*) FROM conversations").fetchone()[0] == 1, \
-            "delete_topic 物理删除了 conversations（应为标记删除）"
-        assert c.execute("SELECT COUNT(*) FROM agent_rounds").fetchone()[0] == 1, \
-            "delete_topic 物理删除了 agent_rounds"
-        assert c.execute("SELECT COUNT(*) FROM topics").fetchone()[0] == 1, \
-            "delete_topic 物理删除了 topics"
+        assert c.execute("SELECT COUNT(*) FROM conversations").fetchone()[0] == 1, "delete_topic 物理删除了 conversations（应为标记删除）"
+        assert c.execute("SELECT COUNT(*) FROM agent_rounds").fetchone()[0] == 1, "delete_topic 物理删除了 agent_rounds"
+        assert c.execute("SELECT COUNT(*) FROM topics").fetchone()[0] == 1, "delete_topic 物理删除了 topics"
         c.close()
         # 读路径不可见（语义上已删除）
         assert storage.get_topic(tid) is None
@@ -292,7 +283,7 @@ class TestToolComponentPersists:
 
         comp = ToolComponent.__new__(ToolComponent)
         comp.ctx = _FakeCtx(storage, "")
-        comp.collect_tool_call_round("c1", "结果")   # 不应抛异常
+        comp.collect_tool_call_round("c1", "结果")  # 不应抛异常
         assert comp.ctx._rounds_collector, "collector 仍应记录（内存）"
 
 
@@ -322,8 +313,7 @@ class TestHandlerWiring:
         body = _fn_source(rh.__file__, "handle_web_chat")
         assert "storage.create_turn(" in body, "handler 未在回合开始建行"
         # 必须在快照记录之前（先有 id，事件才能归属）
-        assert body.index("storage.create_turn(") < body.index('"user_message"'), \
-            "建行晚于快照记录 → 事件仍无归属"
+        assert body.index("storage.create_turn(") < body.index('"user_message"'), "建行晚于快照记录 → 事件仍无归属"
 
     def test_stream_handler_creates_turn(self):
         """API 流式路径同样在回合开始建行。"""
@@ -356,8 +346,7 @@ class TestHandlerWiring:
         from tea_agent.session.components import tool as tool_mod
 
         assert hasattr(tool_mod, "_collect_round"), "应为模块级函数"
-        stub = SimpleNamespace(ctx=SimpleNamespace(
-            supports_reasoning=True, _rounds_collector=[]))
+        stub = SimpleNamespace(ctx=SimpleNamespace(supports_reasoning=True, _rounds_collector=[]))
         tool_mod.ToolComponent.collect_assistant_text_round(stub, "x", "")
         assert stub.ctx._rounds_collector[0]["role"] == "assistant"
 
@@ -369,12 +358,14 @@ class _FakeEvents:
         self.calls = []
 
     def append_event(self, topic_id, event_type, payload, conversation_id=""):
-        self.calls.append({
-            "topic_id": topic_id,
-            "event_type": event_type,
-            "payload": payload,
-            "conversation_id": conversation_id,
-        })
+        self.calls.append(
+            {
+                "topic_id": topic_id,
+                "event_type": event_type,
+                "payload": payload,
+                "conversation_id": conversation_id,
+            }
+        )
         return len(self.calls)
 
 
@@ -393,14 +384,19 @@ def _self_ctx_attrs(path):
     hits = []
     for node in ast.walk(tree):
         # 形态 1: self.ctx
-        if (isinstance(node, ast.Attribute) and node.attr == "ctx"
-                and isinstance(node.value, ast.Name) and node.value.id == "self"):
+        if isinstance(node, ast.Attribute) and node.attr == "ctx" and isinstance(node.value, ast.Name) and node.value.id == "self":
             hits.append((node.lineno, "self.ctx"))
         # 形态 2: getattr(self, "ctx", ...)
-        if (isinstance(node, ast.Call) and isinstance(node.func, ast.Name)
-                and node.func.id == "getattr" and len(node.args) >= 2
-                and isinstance(node.args[0], ast.Name) and node.args[0].id == "self"
-                and isinstance(node.args[1], ast.Constant) and node.args[1].value == "ctx"):
+        if (
+            isinstance(node, ast.Call)
+            and isinstance(node.func, ast.Name)
+            and node.func.id == "getattr"
+            and len(node.args) >= 2
+            and isinstance(node.args[0], ast.Name)
+            and node.args[0].id == "self"
+            and isinstance(node.args[1], ast.Constant)
+            and node.args[1].value == "ctx"
+        ):
             hits.append((node.lineno, 'getattr(self, "ctx")'))
     return hits
 
@@ -438,17 +434,13 @@ class TestEventAttribution:
         cls, stub, events = self._stub()
         cls._log_assistant_chunk(stub, "增量文本")
         assert events.calls, "未落盘 assistant/chunk"
-        assert events.calls[0]["conversation_id"] == "cv-1", (
-            "assistant/chunk 未归属到轮次（conversation_id 丢失）"
-        )
+        assert events.calls[0]["conversation_id"] == "cv-1", "assistant/chunk 未归属到轮次（conversation_id 丢失）"
 
     def test_chunk_uses_context_not_ctx(self):
         """钉住属性名：取 self.context，绝不取 self.ctx。"""
         cls, stub, events = self._stub(misleading_ctx=True)
         cls._log_assistant_chunk(stub, "x")
-        assert events.calls[0]["conversation_id"] == "cv-1", (
-            "实现用了 self.ctx（OnlineToolSession 无此属性）"
-        )
+        assert events.calls[0]["conversation_id"] == "cv-1", "实现用了 self.ctx（OnlineToolSession 无此属性）"
 
     def test_chunk_reasoning_also_attributed(self):
         """仅思考链（无正文）时同样要归属。"""
@@ -481,9 +473,7 @@ class TestEventAttribution:
         import tea_agent.onlinesession as m
 
         hits = _self_ctx_attrs(m.__file__)
-        assert not hits, (
-            "onlinesession.py 出现 self.ctx（行 %s）—— 应为 self.context" % hits
-        )
+        assert not hits, f"onlinesession.py 出现 self.ctx（行 {hits}）—— 应为 self.context"
 
 
 # ════════════════════════════════════════════════════════════
@@ -514,15 +504,16 @@ class TestCorruptToolCallsDegradation:
         tid = storage.create_topic("t")
         cid = storage.create_turn(tid, "q")
         storage.append_round(
-            cid, 0, "assistant", "正文",
-            tool_calls=[{"id": "c1", "type": "function",
-                         "function": {"name": "toolkit_exec", "arguments": "{}"}}],
+            cid,
+            0,
+            "assistant",
+            "正文",
+            tool_calls=[{"id": "c1", "type": "function", "function": {"name": "toolkit_exec", "arguments": "{}"}}],
         )
         storage.append_round(cid, 1, "tool", "结果", tool_call_id="c1")
         c = storage.conn.cursor()
         c.execute(
-            "UPDATE agent_rounds SET tool_calls = ? "
-            "WHERE conversation_id = ? AND round_num = 0",
+            "UPDATE agent_rounds SET tool_calls = ? WHERE conversation_id = ? AND round_num = 0",
             ("{坏JSON", cid),
         )
         storage.conn.commit()
@@ -556,18 +547,18 @@ class TestCorruptToolCallsDegradation:
         with caplog.at_level(logging.DEBUG, logger="Storage.Conversations"):
             storage.get_rounds(cid)
 
-        assert any("tool_calls" in str(r.message) for r in caplog.records), (
-            "损坏 tool_calls 的降级未留痕（静默失效）"
-        )
+        assert any("tool_calls" in str(r.message) for r in caplog.records), "损坏 tool_calls 的降级未留痕（静默失效）"
 
     def test_valid_tool_calls_still_parsed(self, storage):
         """反向契约：正常数据不得被降级逻辑误伤。"""
         tid = storage.create_topic("t")
         cid = storage.create_turn(tid, "q")
         storage.append_round(
-            cid, 0, "assistant", "正文",
-            tool_calls=[{"id": "c1", "type": "function",
-                         "function": {"name": "toolkit_file", "arguments": "{}"}}],
+            cid,
+            0,
+            "assistant",
+            "正文",
+            tool_calls=[{"id": "c1", "type": "function", "function": {"name": "toolkit_file", "arguments": "{}"}}],
         )
 
         rounds = storage.get_rounds(cid)
@@ -597,9 +588,7 @@ class TestNonStreamingCreatesTurnEarly:
 
         body = _fn_source(am.__file__, "chat_completion")
         assert "create_turn(" in body, "非流式路径未在回合开始建行"
-        assert body.index("create_turn(") < body.index("chat_stream("), (
-            "建行晚于 chat_stream → 回合中事件仍无 conversation_id"
-        )
+        assert body.index("create_turn(") < body.index("chat_stream("), "建行晚于 chat_stream → 回合中事件仍无 conversation_id"
 
     def test_chat_completion_syncs_conversation_id_to_context(self):
         """建行后必须同步到 ctx，工具组件才拿得到（与流式路径同款）。"""
@@ -631,16 +620,16 @@ class TestNonStreamingCreatesTurnEarly:
             _last_cheap_usage={},
         )
         agent._cfg = SimpleNamespace(
-            history_l2_max=8, l2_thinking_max_chars=6000, l2_max_chars=120000,
+            history_l2_max=8,
+            l2_thinking_max_chars=6000,
+            l2_max_chars=120000,
         )
         agent._start_background_tasks = lambda *a, **k: None
 
         Agent._post_chat_pipeline(agent, "AI 最终回复", False, "用户问题", tid)
 
         convs = storage.get_conversations(tid, limit=0, include_rounds=False)
-        assert len(convs) == 1, (
-            f"同一回合产生了 {len(convs)} 行（应复用提前建的那一行，不得重复建行）"
-        )
+        assert len(convs) == 1, f"同一回合产生了 {len(convs)} 行（应复用提前建的那一行，不得重复建行）"
         row = convs[0]
         assert row["id"] == cid, "未复用提前建行的 conversation_id"
         assert row["ai_msg"] == "AI 最终回复", "未把 ai_msg 写到提前建的行上"
@@ -650,9 +639,7 @@ class TestNonStreamingCreatesTurnEarly:
         # 不含 status。契约断言不应依赖某个投影恰好带哪些列。
         c = storage.conn.cursor()
         try:
-            full = c.execute(
-                "SELECT status FROM conversations WHERE id = ?", (cid,)
-            ).fetchone()
+            full = c.execute("SELECT status FROM conversations WHERE id = ?", (cid,)).fetchone()
         finally:
             c.close()
         assert full["status"] == "done", f"回合未定稿为 done（实际 {full['status']!r}）"
@@ -677,7 +664,9 @@ class TestNonStreamingCreatesTurnEarly:
             _last_cheap_usage={},
         )
         agent._cfg = SimpleNamespace(
-            history_l2_max=8, l2_thinking_max_chars=6000, l2_max_chars=120000,
+            history_l2_max=8,
+            l2_thinking_max_chars=6000,
+            l2_max_chars=120000,
         )
         agent._start_background_tasks = lambda *a, **k: None
 
@@ -707,7 +696,9 @@ class TestNonStreamingCreatesTurnEarly:
             _last_cheap_usage={},
         )
         agent._cfg = SimpleNamespace(
-            history_l2_max=8, l2_thinking_max_chars=6000, l2_max_chars=120000,
+            history_l2_max=8,
+            l2_thinking_max_chars=6000,
+            l2_max_chars=120000,
         )
         agent._start_background_tasks = lambda *a, **k: None
 

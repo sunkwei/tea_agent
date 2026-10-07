@@ -22,18 +22,21 @@ from tea_agent.session.context import SessionContext
 # 1. detect_mode / extract_mode（已有）
 # ════════════════════════════════════════════════════════════
 
+
 class TestDetectMode:
     """detect_mode: 根据用户输入检测建议模式"""
 
     def test_returns_dict_with_mock(self):
         def mock_call_tool(action, text):
             return {"switched": False, "mode": "pragmatic"}
+
         result = detect_mode(mock_call_tool, "hello")
         assert isinstance(result, dict)
 
     def test_switched_true_when_mode_changes(self):
         def mock_call_tool(action, text):
             return {"switched": True, "from_mode": "mixed", "to_mode": "pragmatic", "reason": "code"}
+
         result = detect_mode(mock_call_tool, "write some code")
         assert result["switched"] is True
         assert result["from_mode"] == "mixed"
@@ -42,12 +45,14 @@ class TestDetectMode:
     def test_switched_false_when_no_change(self):
         def mock_call_tool(action, text):
             return {"switched": False, "mode": None}
+
         result = detect_mode(mock_call_tool, "hello")
         assert result["switched"] is False
 
     def test_exception_returns_default(self):
         def mock_call_tool(action, text):
             raise RuntimeError("tool not available")
+
         result = detect_mode(mock_call_tool, "hello")
         assert result["switched"] is False
         assert "error" in result
@@ -55,6 +60,7 @@ class TestDetectMode:
     def test_non_dict_result_handled(self):
         def mock_call_tool(action, text):
             return "not a dict"
+
         result = detect_mode(mock_call_tool, "hello")
         assert isinstance(result, dict)
         assert result["switched"] is False
@@ -101,6 +107,7 @@ class TestExtractMode:
 # 2. OnlineToolSession 生命周期（已有 + 增强）
 # ════════════════════════════════════════════════════════════
 
+
 class TestOnlineToolSessionCreate:
     """OnlineToolSession 创建测试"""
 
@@ -108,8 +115,13 @@ class TestOnlineToolSessionCreate:
         mock_tk = MagicMock()
         mock_tk.meta_map = {}
         defaults = {
-            "toolkit": mock_tk, "api_key": "sk-test", "api_url": "https://api.test.com/v1",
-            "model": "test-model", "max_history": 5, "enable_thinking": False, "storage": None,
+            "toolkit": mock_tk,
+            "api_key": "sk-test",
+            "api_url": "https://api.test.com/v1",
+            "model": "test-model",
+            "max_history": 5,
+            "enable_thinking": False,
+            "storage": None,
         }
         defaults.update(kwargs)
         sess = OnlineToolSession(**defaults)
@@ -124,7 +136,8 @@ class TestOnlineToolSessionCreate:
 
     def test_create_with_cheap_model(self):
         sess = self._make_session(
-            cheap_api_key="sk-cheap", cheap_api_url="https://cheap.api.com/v1",
+            cheap_api_key="sk-cheap",
+            cheap_api_url="https://cheap.api.com/v1",
             cheap_model="cheap-model",
         )
         assert sess._cheap_model_name == "cheap-model"
@@ -161,6 +174,7 @@ class TestOnlineToolSessionCreate:
     def test_create_with_storage(self):
         """带有 Storage 实例"""
         from unittest.mock import MagicMock
+
         mock_storage = MagicMock()
         sess = self._make_session(storage=mock_storage)
         assert sess.storage is mock_storage
@@ -176,8 +190,12 @@ class TestOnlineToolSessionLifecycle:
         mock_tk = MagicMock()
         mock_tk.meta_map = {}
         defaults = {
-            "toolkit": mock_tk, "api_key": "sk-test", "api_url": "https://api.test.com/v1",
-            "model": "test-model", "enable_thinking": False, "storage": None,
+            "toolkit": mock_tk,
+            "api_key": "sk-test",
+            "api_url": "https://api.test.com/v1",
+            "model": "test-model",
+            "enable_thinking": False,
+            "storage": None,
         }
         defaults.update(kwargs)
         return OnlineToolSession(**defaults)
@@ -193,8 +211,13 @@ class TestOnlineToolSessionLifecycle:
         sess.context._rounds_collector = [{"role": "assistant", "content": "test"}]
         sess._extra_iterations = 5
         sess.reset_session_state()
-        assert sess.context._last_usage == {"total_tokens": 0, "prompt_tokens": 0, "completion_tokens": 0,
-                                              "prompt_cache_hit_tokens": 0, "prompt_cache_miss_tokens": 0}
+        assert sess.context._last_usage == {
+            "total_tokens": 0,
+            "prompt_tokens": 0,
+            "completion_tokens": 0,
+            "prompt_cache_hit_tokens": 0,
+            "prompt_cache_miss_tokens": 0,
+        }
         assert sess.context._rounds_collector == []
         assert sess._extra_iterations == 0
 
@@ -218,14 +241,17 @@ class TestOnlineToolSessionLifecycle:
 # 3. _build_api_messages（新增：三级历史拼接）
 # ════════════════════════════════════════════════════════════
 
+
 class TestBuildApiMessages:
     """_build_api_messages 三级历史拼接逻辑"""
 
     def _make_context(self, **kwargs):
         """创建 SessionContext 并填充默认状态"""
         defaults = {
-            "model": "test-model", "enable_thinking": False,
-            "supports_reasoning": False, "disable_summary": False,
+            "model": "test-model",
+            "enable_thinking": False,
+            "supports_reasoning": False,
+            "disable_summary": False,
         }
         defaults.update(kwargs)
         ctx = SessionContext(**defaults)
@@ -236,9 +262,14 @@ class TestBuildApiMessages:
         mock_tk = MagicMock()
         mock_tk.meta_map = {}
         sess = OnlineToolSession(
-            toolkit=mock_tk, api_key="sk-test", api_url="https://api.test.com/v1",
-            model="test-model", enable_thinking=ctx.enable_thinking, storage=None,
-            supports_vision=ctx.supports_vision, supports_reasoning=ctx.supports_reasoning,
+            toolkit=mock_tk,
+            api_key="sk-test",
+            api_url="https://api.test.com/v1",
+            model="test-model",
+            enable_thinking=ctx.enable_thinking,
+            storage=None,
+            supports_vision=ctx.supports_vision,
+            supports_reasoning=ctx.supports_reasoning,
             disable_summary=ctx.disable_summary,
         )
         # 覆盖 context 为自定义的 ctx
@@ -260,9 +291,7 @@ class TestBuildApiMessages:
         assert result[0]["role"] == "system"
         assert "test assistant" in result[0]["content"]
         # 去掉末尾的尾部动态上下文后，最后一条应为 assistant
-        real_msgs = [m for m in result
-                     if not (m.get("role") == "user"
-                             and str(m.get("content", "")).startswith("[动态上下文"))]
+        real_msgs = [m for m in result if not (m.get("role") == "user" and str(m.get("content", "")).startswith("[动态上下文"))]
         assert real_msgs[-1]["role"] == "assistant"
         assert real_msgs[-1]["content"] == "Hi there!"
 
@@ -278,9 +307,7 @@ class TestBuildApiMessages:
         sess = self._make_session_from_ctx(ctx)
         result = sess._build_api_messages()
         # 去掉末尾的尾部动态上下文后，最后两条应为 Q2 / A2
-        real_msgs = [m for m in result
-                     if not (m.get("role") == "user"
-                             and str(m.get("content", "")).startswith("[动态上下文"))]
+        real_msgs = [m for m in result if not (m.get("role") == "user" and str(m.get("content", "")).startswith("[动态上下文"))]
         assert real_msgs[-2]["role"] == "user"
         assert real_msgs[-2]["content"] == "Q2"
         assert real_msgs[-1]["role"] == "assistant"
@@ -306,8 +333,7 @@ class TestBuildApiMessages:
         """L2: 相关历史对话注入"""
         ctx = self._make_context()
         ctx._level2 = [
-            {"user": "之前的对话", "assistant": "之前的回复",
-             "thinking": "", "files": []},
+            {"user": "之前的对话", "assistant": "之前的回复", "thinking": "", "files": []},
         ]
         ctx.messages = [
             {"role": "user", "content": "当前问题"},
@@ -352,9 +378,11 @@ class TestBuildApiMessages:
         ctx = self._make_context()
         ctx.messages = [
             {"role": "user", "content": "搜索天气"},
-            {"role": "assistant", "content": None,
-             "tool_calls": [{"id": "c1", "type": "function",
-                            "function": {"name": "get_weather", "arguments": "{}"}}]},
+            {
+                "role": "assistant",
+                "content": None,
+                "tool_calls": [{"id": "c1", "type": "function", "function": {"name": "get_weather", "arguments": "{}"}}],
+            },
             {"role": "tool", "content": "晴", "tool_call_id": "c1"},
             {"role": "assistant", "content": "天气晴朗"},
         ]
@@ -397,8 +425,7 @@ class TestBuildApiMessages:
         """多模态消息格式"""
         ctx = self._make_context(supports_vision=True)
         ctx.messages = [
-            {"role": "user", "content": "看这张图",
-             "images": ["/fake/path.png"]},
+            {"role": "user", "content": "看这张图", "images": ["/fake/path.png"]},
         ]
         sess = self._make_session_from_ctx(ctx)
         result = sess._build_api_messages()
@@ -424,6 +451,7 @@ class TestBuildApiMessages:
 # 4. api.create_chat_stream 参数测试（新增）
 # ════════════════════════════════════════════════════════════
 
+
 class TestCreateChatStreamParams:
     """create_chat_stream 参数传递测试"""
 
@@ -437,8 +465,10 @@ class TestCreateChatStreamParams:
 
     def _make_api(self, **kwargs):
         ctx_kwargs = {
-            "model": "test-model", "enable_thinking": False,
-            "client": MagicMock(), "supports_reasoning": False,
+            "model": "test-model",
+            "enable_thinking": False,
+            "client": MagicMock(),
+            "supports_reasoning": False,
             "no_stream_chunk": True,
             "_thinking_supported": None,
         }
@@ -449,11 +479,10 @@ class TestCreateChatStreamParams:
     def test_basic_call_without_thinking(self):
         """不带 thinking 的基础调用"""
         api = self._make_api()
-        api.ctx.client.chat.completions.create.return_value = MagicMock(
-            choices=[MagicMock(message=MagicMock(content="ok", tool_calls=None))]
-        )
+        api.ctx.client.chat.completions.create.return_value = MagicMock(choices=[MagicMock(message=MagicMock(content="ok", tool_calls=None))])
         api.create_chat_stream(
-            [{"role": "user", "content": "hi"}], [],
+            [{"role": "user", "content": "hi"}],
+            [],
         )
         api.ctx.client.chat.completions.create.assert_called_once()
         _, kwargs = api.ctx.client.chat.completions.create.call_args
@@ -465,9 +494,7 @@ class TestCreateChatStreamParams:
     def test_thinking_enabled(self):
         """thinking 启用时应传入 extra_body"""
         api = self._make_api(enable_thinking=True, _thinking_supported=True)
-        api.ctx.client.chat.completions.create.return_value = MagicMock(
-            choices=[MagicMock(message=MagicMock(content="ok", tool_calls=None))]
-        )
+        api.ctx.client.chat.completions.create.return_value = MagicMock(choices=[MagicMock(message=MagicMock(content="ok", tool_calls=None))])
         api.create_chat_stream([{"role": "user", "content": "hi"}], [])
         _, kwargs = api.ctx.client.chat.completions.create.call_args
         assert kwargs["extra_body"]["thinking"]["type"] == "enabled"
@@ -475,9 +502,7 @@ class TestCreateChatStreamParams:
     def test_thinking_disabled(self):
         """thinking 禁用时应传入 disabled"""
         api = self._make_api(enable_thinking=False, _thinking_supported=True)
-        api.ctx.client.chat.completions.create.return_value = MagicMock(
-            choices=[MagicMock(message=MagicMock(content="ok", tool_calls=None))]
-        )
+        api.ctx.client.chat.completions.create.return_value = MagicMock(choices=[MagicMock(message=MagicMock(content="ok", tool_calls=None))])
         api.create_chat_stream([{"role": "user", "content": "hi"}], [])
         _, kwargs = api.ctx.client.chat.completions.create.call_args
         assert kwargs["extra_body"]["thinking"]["type"] == "disabled"
@@ -485,9 +510,7 @@ class TestCreateChatStreamParams:
     def test_thinking_not_supported(self):
         """_thinking_supported=False 不传 extra_body"""
         api = self._make_api(enable_thinking=True, _thinking_supported=False)
-        api.ctx.client.chat.completions.create.return_value = MagicMock(
-            choices=[MagicMock(message=MagicMock(content="ok", tool_calls=None))]
-        )
+        api.ctx.client.chat.completions.create.return_value = MagicMock(choices=[MagicMock(message=MagicMock(content="ok", tool_calls=None))])
         api.create_chat_stream([{"role": "user", "content": "hi"}], [])
         _, kwargs = api.ctx.client.chat.completions.create.call_args
         # thinking 不支持时不应发送 thinking 参数（可发 reasoning_effort 兼容）
@@ -496,12 +519,8 @@ class TestCreateChatStreamParams:
 
     def test_reasoning_effort_auto_never_sent_default(self):
         """默认配置（auto + strength=0.7）不得下发 reasoning_effort=auto（API 400 回归）"""
-        api = self._make_api(
-            enable_thinking=True, supports_reasoning=True, _thinking_supported=True
-        )
-        api.ctx.client.chat.completions.create.return_value = MagicMock(
-            choices=[MagicMock(message=MagicMock(content="ok", tool_calls=None))]
-        )
+        api = self._make_api(enable_thinking=True, supports_reasoning=True, _thinking_supported=True)
+        api.ctx.client.chat.completions.create.return_value = MagicMock(choices=[MagicMock(message=MagicMock(content="ok", tool_calls=None))])
         api.create_chat_stream([{"role": "user", "content": "hi"}], [])
         _, kwargs = api.ctx.client.chat.completions.create.call_args
         eb = kwargs["extra_body"]
@@ -512,12 +531,12 @@ class TestCreateChatStreamParams:
     def test_reasoning_effort_strength_mapping(self):
         """thinking_strength=0.5 → reasoning_effort=medium"""
         api = self._make_api(
-            enable_thinking=True, supports_reasoning=True, _thinking_supported=True,
+            enable_thinking=True,
+            supports_reasoning=True,
+            _thinking_supported=True,
             thinking_strength=0.5,
         )
-        api.ctx.client.chat.completions.create.return_value = MagicMock(
-            choices=[MagicMock(message=MagicMock(content="ok", tool_calls=None))]
-        )
+        api.ctx.client.chat.completions.create.return_value = MagicMock(choices=[MagicMock(message=MagicMock(content="ok", tool_calls=None))])
         api.create_chat_stream([{"role": "user", "content": "hi"}], [])
         _, kwargs = api.ctx.client.chat.completions.create.call_args
         assert kwargs["extra_body"].get("reasoning_effort") == "medium"
@@ -525,12 +544,12 @@ class TestCreateChatStreamParams:
     def test_reasoning_effort_explicit_valid(self):
         """显式合法值 xhigh 原样下发"""
         api = self._make_api(
-            enable_thinking=True, supports_reasoning=True, _thinking_supported=True,
+            enable_thinking=True,
+            supports_reasoning=True,
+            _thinking_supported=True,
             reasoning_effort="xhigh",
         )
-        api.ctx.client.chat.completions.create.return_value = MagicMock(
-            choices=[MagicMock(message=MagicMock(content="ok", tool_calls=None))]
-        )
+        api.ctx.client.chat.completions.create.return_value = MagicMock(choices=[MagicMock(message=MagicMock(content="ok", tool_calls=None))])
         api.create_chat_stream([{"role": "user", "content": "hi"}], [])
         _, kwargs = api.ctx.client.chat.completions.create.call_args
         assert kwargs["extra_body"].get("reasoning_effort") == "xhigh"
@@ -538,12 +557,12 @@ class TestCreateChatStreamParams:
     def test_reasoning_effort_invalid_falls_back(self):
         """非法显式值回退到 strength 自动映射，绝不发送 auto"""
         api = self._make_api(
-            enable_thinking=True, supports_reasoning=True, _thinking_supported=True,
+            enable_thinking=True,
+            supports_reasoning=True,
+            _thinking_supported=True,
             reasoning_effort="banana",
         )
-        api.ctx.client.chat.completions.create.return_value = MagicMock(
-            choices=[MagicMock(message=MagicMock(content="ok", tool_calls=None))]
-        )
+        api.ctx.client.chat.completions.create.return_value = MagicMock(choices=[MagicMock(message=MagicMock(content="ok", tool_calls=None))])
         api.create_chat_stream([{"role": "user", "content": "hi"}], [])
         _, kwargs = api.ctx.client.chat.completions.create.call_args
         assert kwargs["extra_body"].get("reasoning_effort") != "auto"
@@ -555,12 +574,8 @@ class TestCreateChatStreamParams:
         mock_cfg.main_model.options = {"reasoning_effort": "auto"}
         mock_cfg.cheap_model.options = {}
         monkeypatch.setattr("tea_agent.config.get_config", lambda: mock_cfg)
-        api = self._make_api(
-            enable_thinking=True, supports_reasoning=True, _thinking_supported=True
-        )
-        api.ctx.client.chat.completions.create.return_value = MagicMock(
-            choices=[MagicMock(message=MagicMock(content="ok", tool_calls=None))]
-        )
+        api = self._make_api(enable_thinking=True, supports_reasoning=True, _thinking_supported=True)
+        api.ctx.client.chat.completions.create.return_value = MagicMock(choices=[MagicMock(message=MagicMock(content="ok", tool_calls=None))])
         api.create_chat_stream([{"role": "user", "content": "hi"}], [])
         _, kwargs = api.ctx.client.chat.completions.create.call_args
         eb = kwargs["extra_body"]
@@ -570,11 +585,11 @@ class TestCreateChatStreamParams:
         """qwen3.8 仅接受 xhigh/medium/low：strength 0.7 → high 必须钳制为 xhigh（400 回归）"""
         api = self._make_api(
             model="qwen3.8-27b",
-            enable_thinking=True, supports_reasoning=True, _thinking_supported=True,
+            enable_thinking=True,
+            supports_reasoning=True,
+            _thinking_supported=True,
         )
-        api.ctx.client.chat.completions.create.return_value = MagicMock(
-            choices=[MagicMock(message=MagicMock(content="ok", tool_calls=None))]
-        )
+        api.ctx.client.chat.completions.create.return_value = MagicMock(choices=[MagicMock(message=MagicMock(content="ok", tool_calls=None))])
         api.create_chat_stream([{"role": "user", "content": "hi"}], [])
         _, kwargs = api.ctx.client.chat.completions.create.call_args
         assert kwargs["extra_body"].get("reasoning_effort") == "xhigh"
@@ -583,12 +598,12 @@ class TestCreateChatStreamParams:
         """显式 high 对 qwen3.8 同样越界 → 钳制为 xhigh"""
         api = self._make_api(
             model="qwen3.8-27b",
-            enable_thinking=True, supports_reasoning=True, _thinking_supported=True,
+            enable_thinking=True,
+            supports_reasoning=True,
+            _thinking_supported=True,
             reasoning_effort="high",
         )
-        api.ctx.client.chat.completions.create.return_value = MagicMock(
-            choices=[MagicMock(message=MagicMock(content="ok", tool_calls=None))]
-        )
+        api.ctx.client.chat.completions.create.return_value = MagicMock(choices=[MagicMock(message=MagicMock(content="ok", tool_calls=None))])
         api.create_chat_stream([{"role": "user", "content": "hi"}], [])
         _, kwargs = api.ctx.client.chat.completions.create.call_args
         assert kwargs["extra_body"].get("reasoning_effort") == "xhigh"
@@ -597,12 +612,12 @@ class TestCreateChatStreamParams:
         """qwen3.8 值域内的显式值 medium 不钳制"""
         api = self._make_api(
             model="qwen3.8-27b",
-            enable_thinking=True, supports_reasoning=True, _thinking_supported=True,
+            enable_thinking=True,
+            supports_reasoning=True,
+            _thinking_supported=True,
             reasoning_effort="medium",
         )
-        api.ctx.client.chat.completions.create.return_value = MagicMock(
-            choices=[MagicMock(message=MagicMock(content="ok", tool_calls=None))]
-        )
+        api.ctx.client.chat.completions.create.return_value = MagicMock(choices=[MagicMock(message=MagicMock(content="ok", tool_calls=None))])
         api.create_chat_stream([{"role": "user", "content": "hi"}], [])
         _, kwargs = api.ctx.client.chat.completions.create.call_args
         assert kwargs["extra_body"].get("reasoning_effort") == "medium"
@@ -611,11 +626,11 @@ class TestCreateChatStreamParams:
         """deepseek-v4 接受全值域：high 原样通过"""
         api = self._make_api(
             model="deepseek-v4-flash",
-            enable_thinking=True, supports_reasoning=True, _thinking_supported=True,
+            enable_thinking=True,
+            supports_reasoning=True,
+            _thinking_supported=True,
         )
-        api.ctx.client.chat.completions.create.return_value = MagicMock(
-            choices=[MagicMock(message=MagicMock(content="ok", tool_calls=None))]
-        )
+        api.ctx.client.chat.completions.create.return_value = MagicMock(choices=[MagicMock(message=MagicMock(content="ok", tool_calls=None))])
         api.create_chat_stream([{"role": "user", "content": "hi"}], [])
         _, kwargs = api.ctx.client.chat.completions.create.call_args
         assert kwargs["extra_body"].get("reasoning_effort") == "high"
@@ -638,15 +653,19 @@ class TestCreateChatStreamParams:
         match = APIComponent._match_model_family("deepseek-v4-flash")
         assert match["family"] == "deepseek_v4"
         assert match.get("supported_efforts") == [
-            "none", "minimal", "low", "medium", "high", "xhigh", "max",
+            "none",
+            "minimal",
+            "low",
+            "medium",
+            "high",
+            "xhigh",
+            "max",
         ]
 
     def test_stream_options_included(self):
         """supports_reasoning=True 时传入 stream_options"""
         api = self._make_api(supports_reasoning=True)
-        api.ctx.client.chat.completions.create.return_value = MagicMock(
-            choices=[MagicMock(message=MagicMock(content="ok", tool_calls=None))]
-        )
+        api.ctx.client.chat.completions.create.return_value = MagicMock(choices=[MagicMock(message=MagicMock(content="ok", tool_calls=None))])
         api.create_chat_stream([{"role": "user", "content": "hi"}], [])
         _, kwargs = api.ctx.client.chat.completions.create.call_args
         assert kwargs["stream_options"] == {"include_usage": True}
@@ -654,12 +673,13 @@ class TestCreateChatStreamParams:
     def test_temperature_max_tokens_top_p(self):
         """temperature / max_tokens / top_p 参数传递"""
         api = self._make_api()
-        api.ctx.client.chat.completions.create.return_value = MagicMock(
-            choices=[MagicMock(message=MagicMock(content="ok", tool_calls=None))]
-        )
+        api.ctx.client.chat.completions.create.return_value = MagicMock(choices=[MagicMock(message=MagicMock(content="ok", tool_calls=None))])
         api.create_chat_stream(
-            [{"role": "user", "content": "hi"}], [],
-            temperature=0.7, max_tokens=500, top_p=0.9,
+            [{"role": "user", "content": "hi"}],
+            [],
+            temperature=0.7,
+            max_tokens=500,
+            top_p=0.9,
         )
         _, kwargs = api.ctx.client.chat.completions.create.call_args
         assert kwargs["temperature"] == 0.7
@@ -669,15 +689,16 @@ class TestCreateChatStreamParams:
     def test_vision_support(self):
         """视觉支持传入 messages"""
         api = self._make_api(supports_vision=True)
-        api.ctx.client.chat.completions.create.return_value = MagicMock(
-            choices=[MagicMock(message=MagicMock(content="这是一张图", tool_calls=None))]
-        )
+        api.ctx.client.chat.completions.create.return_value = MagicMock(choices=[MagicMock(message=MagicMock(content="这是一张图", tool_calls=None))])
         # 模拟多模态消息
         msgs = [
-            {"role": "user", "content": [
-                {"type": "text", "text": "这是什么？"},
-                {"type": "image_url", "image_url": {"url": "data:image/png;base64,fake"}},
-            ]}
+            {
+                "role": "user",
+                "content": [
+                    {"type": "text", "text": "这是什么？"},
+                    {"type": "image_url", "image_url": {"url": "data:image/png;base64,fake"}},
+                ],
+            }
         ]
         api.create_chat_stream(msgs, [])
         _, kwargs = api.ctx.client.chat.completions.create.call_args
@@ -687,9 +708,7 @@ class TestCreateChatStreamParams:
     def test_no_stream_chunk_true_sets_stream_false(self):
         """no_stream_chunk=True → stream=False"""
         api = self._make_api(no_stream_chunk=True)
-        api.ctx.client.chat.completions.create.return_value = MagicMock(
-            choices=[MagicMock(message=MagicMock(content="ok", tool_calls=None))]
-        )
+        api.ctx.client.chat.completions.create.return_value = MagicMock(choices=[MagicMock(message=MagicMock(content="ok", tool_calls=None))])
         api.create_chat_stream([{"role": "user", "content": "hi"}], [])
         _, kwargs = api.ctx.client.chat.completions.create.call_args
         assert kwargs["stream"] is False
@@ -697,9 +716,7 @@ class TestCreateChatStreamParams:
     def test_no_stream_chunk_false_sets_stream_true(self):
         """no_stream_chunk=False → stream=True"""
         api = self._make_api(no_stream_chunk=False)
-        api.ctx.client.chat.completions.create.return_value = MagicMock(
-            choices=[MagicMock(message=MagicMock(content="ok", tool_calls=None))]
-        )
+        api.ctx.client.chat.completions.create.return_value = MagicMock(choices=[MagicMock(message=MagicMock(content="ok", tool_calls=None))])
         api.create_chat_stream([{"role": "user", "content": "hi"}], [])
         _, kwargs = api.ctx.client.chat.completions.create.call_args
         assert kwargs["stream"] is True
@@ -707,9 +724,7 @@ class TestCreateChatStreamParams:
     def test_vision_image_error_fallback(self):
         """图片编码失败不崩溃"""
         api = self._make_api(supports_vision=True)
-        api.ctx.client.chat.completions.create.return_value = MagicMock(
-            choices=[MagicMock(message=MagicMock(content="text", tool_calls=None))]
-        )
+        api.ctx.client.chat.completions.create.return_value = MagicMock(choices=[MagicMock(message=MagicMock(content="text", tool_calls=None))])
         # 不存在的图片路径不应导致崩溃
         api.create_chat_stream(
             [{"role": "user", "content": "text", "images": ["/nonexistent/img.png"]}],
@@ -723,6 +738,7 @@ class TestCreateChatStreamParams:
 # 5. 流式/非流式输出（已有 + 增强）
 # ════════════════════════════════════════════════════════════
 
+
 class TestProcessStreamWithReasoning:
     """_process_stream_with_reasoning 方法测试"""
 
@@ -730,8 +746,12 @@ class TestProcessStreamWithReasoning:
         mock_tk = MagicMock()
         mock_tk.meta_map = {}
         defaults = {
-            "toolkit": mock_tk, "api_key": "sk-test", "api_url": "https://api.test.com/v1",
-            "model": "test-model", "enable_thinking": False, "storage": None,
+            "toolkit": mock_tk,
+            "api_key": "sk-test",
+            "api_url": "https://api.test.com/v1",
+            "model": "test-model",
+            "enable_thinking": False,
+            "storage": None,
             "no_stream_chunk": True,
         }
         defaults.update(kwargs)
@@ -815,13 +835,18 @@ class TestProcessStreamWithReasoning:
             return chunk
 
         chunks = [make_chunk("Hello"), make_chunk(" world"), make_chunk("!")]
+
         class MockStream:
             def __init__(self, items):
                 self._items = items
                 self._idx = 0
-            def __iter__(self): return self
+
+            def __iter__(self):
+                return self
+
             def __next__(self):
-                if self._idx >= len(self._items): raise StopIteration
+                if self._idx >= len(self._items):
+                    raise StopIteration
                 item = self._items[self._idx]
                 self._idx += 1
                 return item
@@ -835,9 +860,14 @@ class TestProcessStreamWithReasoning:
     def test_streaming_empty_content(self):
         """流式模式：空内容"""
         sess = self._make_session(no_stream_chunk=False)
+
         class MockStream:
-            def __iter__(self): return self
-            def __next__(self): raise StopIteration
+            def __iter__(self):
+                return self
+
+            def __next__(self):
+                raise StopIteration
+
         cb = MagicMock()
         content, tool_calls, reasoning = sess._process_stream_with_reasoning(MockStream(), cb)
         assert content == ""
@@ -874,13 +904,20 @@ class TestProcessStreamWithReasoning:
             make_chunk(tc_index=0, tc_id="c1", tc_name="search", tc_args='{"q":'),
             make_chunk(tc_index=0, tc_args='"weather"}'),
         ]
+
         class MockStream:
             def __init__(self, items):
-                self._items = items; self._idx = 0
-            def __iter__(self): return self
+                self._items = items
+                self._idx = 0
+
+            def __iter__(self):
+                return self
+
             def __next__(self):
-                if self._idx >= len(self._items): raise StopIteration
-                item = self._items[self._idx]; self._idx += 1
+                if self._idx >= len(self._items):
+                    raise StopIteration
+                item = self._items[self._idx]
+                self._idx += 1
                 return item
 
         cb = MagicMock()
@@ -914,12 +951,20 @@ class TestProcessStreamWithReasoning:
             make_chunk("17*20=340, 17*3=51"),
             make_chunk(" 合计 391"),
         ]
+
         class MockStream:
-            def __init__(self, items): self._items = items; self._idx = 0
-            def __iter__(self): return self
+            def __init__(self, items):
+                self._items = items
+                self._idx = 0
+
+            def __iter__(self):
+                return self
+
             def __next__(self):
-                if self._idx >= len(self._items): raise StopIteration
-                item = self._items[self._idx]; self._idx += 1
+                if self._idx >= len(self._items):
+                    raise StopIteration
+                item = self._items[self._idx]
+                self._idx += 1
                 return item
 
         cb = MagicMock()
@@ -969,12 +1014,20 @@ class TestProcessStreamWithReasoning:
             return chunk
 
         chunks = [make_chunk("直接回复")]
+
         class MockStream:
-            def __init__(self, items): self._items = items; self._idx = 0
-            def __iter__(self): return self
+            def __init__(self, items):
+                self._items = items
+                self._idx = 0
+
+            def __iter__(self):
+                return self
+
             def __next__(self):
-                if self._idx >= len(self._items): raise StopIteration
-                item = self._items[self._idx]; self._idx += 1
+                if self._idx >= len(self._items):
+                    raise StopIteration
+                item = self._items[self._idx]
+                self._idx += 1
                 return item
 
         cb = MagicMock()
@@ -1008,6 +1061,7 @@ class TestProcessStreamWithReasoning:
 # 6. 工具轮多轮调用与压缩（新增）
 # ════════════════════════════════════════════════════════════
 
+
 class TestToolLoopAndCompression:
     """工具循环、压缩、修复"""
 
@@ -1017,9 +1071,14 @@ class TestToolLoopAndCompression:
         # 模拟 call_tool 返回结果
         mock_tk.call_tool.return_value = "mock_result"
         defaults = {
-            "toolkit": mock_tk, "api_key": "sk-test", "api_url": "https://api.test.com/v1",
-            "model": "test-model", "enable_thinking": False, "storage": None,
-            "no_stream_chunk": True, "max_iterations": 5,
+            "toolkit": mock_tk,
+            "api_key": "sk-test",
+            "api_url": "https://api.test.com/v1",
+            "model": "test-model",
+            "enable_thinking": False,
+            "storage": None,
+            "no_stream_chunk": True,
+            "max_iterations": 5,
         }
         defaults.update(kwargs)
         return OnlineToolSession(**defaults)
@@ -1027,6 +1086,7 @@ class TestToolLoopAndCompression:
     def test_compress_tool_rounds_short(self):
         """短 rounds 不截断"""
         from tea_agent.basesession import BaseChatSession
+
         rounds = [
             {"role": "user", "content": "hi"},
             {"role": "assistant", "content": "hello"},
@@ -1038,6 +1098,7 @@ class TestToolLoopAndCompression:
     def test_compress_tool_rounds_long_truncated(self):
         """超长 rounds 被截断"""
         from tea_agent.basesession import BaseChatSession
+
         # 构造超过 30 轮的对话
         rounds = []
         for i in range(40):
@@ -1053,6 +1114,7 @@ class TestToolLoopAndCompression:
     def test_repair_incomplete_tool_chains_complete(self):
         """完整工具链不修复"""
         from tea_agent.basesession import BaseChatSession
+
         rounds = [
             {"role": "assistant", "tool_calls": [{"id": "c1", "function": {"name": "test"}}]},
             {"role": "tool", "content": "result", "tool_call_id": "c1"},
@@ -1064,6 +1126,7 @@ class TestToolLoopAndCompression:
     def test_repair_incomplete_tool_chains_missing_tool(self):
         """不完整工具链：缺失 tool 响应"""
         from tea_agent.basesession import BaseChatSession
+
         rounds = [
             {"role": "assistant", "tool_calls": [{"id": "c1", "function": {"name": "test"}}]},
             {"role": "assistant", "content": "最终回复"},
@@ -1075,6 +1138,7 @@ class TestToolLoopAndCompression:
     def test_repair_incomplete_tool_chains_missing_assistant_prefix(self):
         """不完整工具链：tool 响应在最后"""
         from tea_agent.basesession import BaseChatSession
+
         rounds = [
             {"role": "user", "content": "hi"},
             {"role": "assistant", "tool_calls": [{"id": "c1", "function": {"name": "test"}}]},
@@ -1100,11 +1164,11 @@ class TestToolLoopAndCompression:
         assert threshold == BaseChatSession._TEXT_FILE_THRESHOLD
 
         # KB 工具 → 64KB
-        threshold = BaseChatSession._guess_tool_threshold("toolkit_kb", '{}')
+        threshold = BaseChatSession._guess_tool_threshold("toolkit_kb", "{}")
         assert threshold == BaseChatSession._KB_THRESHOLD
 
         # 默认 → 2KB
-        threshold = BaseChatSession._guess_tool_threshold("toolkit_exec", '{}')
+        threshold = BaseChatSession._guess_tool_threshold("toolkit_exec", "{}")
         assert threshold == BaseChatSession._DEFAULT_TOOL_THRESHOLD
 
 
@@ -1123,9 +1187,14 @@ class TestExecuteToolLoop:
         mock_tk.get_config.return_value = None
 
         sess = OnlineToolSession(
-            toolkit=mock_tk, api_key="sk-test", api_url="https://api.test.com/v1",
-            model="test-model", enable_thinking=False, storage=None,
-            no_stream_chunk=True, **kwargs
+            toolkit=mock_tk,
+            api_key="sk-test",
+            api_url="https://api.test.com/v1",
+            model="test-model",
+            enable_thinking=False,
+            storage=None,
+            no_stream_chunk=True,
+            **kwargs,
         )
 
         # Mock _build_api_messages
@@ -1145,8 +1214,7 @@ class TestExecuteToolLoop:
 
         # 第一轮 LLM 返回工具调用
         sess._process_stream_with_reasoning.side_effect = [
-            ("", [{"id": "c1", "type": "function",
-                   "function": {"name": "search", "arguments": '{"q":"test"}'}}], ""),
+            ("", [{"id": "c1", "type": "function", "function": {"name": "search", "arguments": '{"q":"test"}'}}], ""),
             # 第二轮及之后返回文本
             ("搜索结果如下...", [], ""),
             ("搜索结果如下...", [], ""),
@@ -1156,7 +1224,10 @@ class TestExecuteToolLoop:
 
         sess.tools_comp.parse_tool_calls_from_stream.side_effect = [
             [MagicMock(id="c1", function=MagicMock(name="search", arguments='{"q":"test"}'))],
-            [], [], [], [],
+            [],
+            [],
+            [],
+            [],
         ]
         sess.tools_comp.execute_tool_call.return_value = ("c1", "search", "mock_result")
 
@@ -1171,18 +1242,16 @@ class TestExecuteToolLoop:
 
         # 模拟 3 轮工具调用 + 1 轮最终回复
         responses = [
-            ("", [{"id": "c1", "type": "function",
-                   "function": {"name": "search", "arguments": '{}'}}], ""),
-            ("", [{"id": "c2", "type": "function",
-                   "function": {"name": "read_file", "arguments": '{}'}}], ""),
-            ("", [{"id": "c3", "type": "function",
-                   "function": {"name": "analyze", "arguments": '{}'}}], ""),
+            ("", [{"id": "c1", "type": "function", "function": {"name": "search", "arguments": "{}"}}], ""),
+            ("", [{"id": "c2", "type": "function", "function": {"name": "read_file", "arguments": "{}"}}], ""),
+            ("", [{"id": "c3", "type": "function", "function": {"name": "analyze", "arguments": "{}"}}], ""),
             ("分析完成！最终答案在这里", [], ""),
         ]
         sess._process_stream_with_reasoning.side_effect = responses
 
         def mock_tc(name):
             return MagicMock(id="c1", function=MagicMock(name=name, arguments="{}"))
+
         sess.tools_comp.parse_tool_calls_from_stream.side_effect = [
             [mock_tc("search")],
             [mock_tc("read_file")],
@@ -1216,8 +1285,7 @@ class TestExecuteToolLoop:
         sess = self._make_session_with_api_mock()
         sess._process_stream_with_reasoning.return_value = (
             "",
-            [{"id": "c1", "type": "function",
-              "function": {"name": "toolkit_exec", "arguments": '{"app": bash'}}],
+            [{"id": "c1", "type": "function", "function": {"name": "toolkit_exec", "arguments": '{"app": bash'}}],
             "",
         )
         sess.tools_comp.parse_tool_calls_from_stream.return_value = []
@@ -1235,9 +1303,11 @@ class TestExecuteToolLoop:
         sess = self._make_session_with_api_mock(max_iterations=3)
         # 每轮都返回工具调用
         mock_tc = MagicMock(id="c1", function=MagicMock(name="search", arguments="{}"))
-        sess._process_stream_with_reasoning.return_value = ("", [
-            {"id": "c1", "type": "function", "function": {"name": "search", "arguments": "{}"}}
-        ], "")
+        sess._process_stream_with_reasoning.return_value = (
+            "",
+            [{"id": "c1", "type": "function", "function": {"name": "search", "arguments": "{}"}}],
+            "",
+        )
         sess.tools_comp.parse_tool_calls_from_stream.return_value = [mock_tc]
         sess.tools_comp.execute_tool_call.return_value = ("c1", "search", "result")
 
@@ -1283,12 +1353,14 @@ class TestLoopDetector:
 
     def test_no_repeat_on_first_call(self):
         from tea_agent.session.tool_loop_runner import LoopDetector
+
         ld = LoopDetector()
         result = ld.check_and_record("hello", [("search", '{"q":"test"}')])
         assert result["is_loop"] is False
 
     def test_detects_exact_duplicate_tool_call(self):
         from tea_agent.session.tool_loop_runner import LoopDetector
+
         ld = LoopDetector(window=5)
         for _ in range(3):
             ld.check_and_record("", [("search", '{"q":"test"}')])
@@ -1298,6 +1370,7 @@ class TestLoopDetector:
 
     def test_detects_content_repeat(self):
         from tea_agent.session.tool_loop_runner import LoopDetector
+
         ld = LoopDetector(window=5, similarity_threshold=0.5)
         ld.check_and_record("相同的输出内容", [])
         result = ld.check_and_record("相同的输出内容", [])
@@ -1306,8 +1379,9 @@ class TestLoopDetector:
 
     def test_reset_clears_state(self):
         from tea_agent.session.tool_loop_runner import LoopDetector
+
         ld = LoopDetector()
-        ld.check_and_record("hello", [("search", '{}')])
+        ld.check_and_record("hello", [("search", "{}")])
         ld.reset()
         assert len(ld._tool_hashes) == 0
 
@@ -1315,6 +1389,7 @@ class TestLoopDetector:
 # ════════════════════════════════════════════════════════════
 # 4. 历史轮图像剥离（onlinesession 接线契约，400 回归）
 # ════════════════════════════════════════════════════════════
+
 
 class TestStripHistoricalImagesWired:
     """_build_api_messages 必须剥离历史轮图像结构、保留当前轮。
@@ -1324,29 +1399,31 @@ class TestStripHistoricalImagesWired:
     """
 
     def test_history_images_stripped_current_kept(self, tmp_path):
-        ctx = SessionContext(model="test-model", enable_thinking=False,
-                             supports_reasoning=False, disable_summary=False,
-                             supports_vision=True)
+        ctx = SessionContext(model="test-model", enable_thinking=False, supports_reasoning=False, disable_summary=False, supports_vision=True)
         old_img = tmp_path / "old.png"
         old_img.write_bytes(b"old")
         new_img = tmp_path / "new.png"
         new_img.write_bytes(b"new")
         ctx.messages = [
-            {"role": "user", "content": "看这张图",
-             "images": [str(old_img)],
-             "_b64_cache": {str(old_img): "b3Zs"}},
-            {"role": "assistant",
-             "content": [{"type": "text", "text": "图里是猫"},
-                          {"type": "image_url",
-                           "image_url": {"url": "data:image/png;base64,QQ=="}}]},
+            {"role": "user", "content": "看这张图", "images": [str(old_img)], "_b64_cache": {str(old_img): "b3Zs"}},
+            {
+                "role": "assistant",
+                "content": [{"type": "text", "text": "图里是猫"}, {"type": "image_url", "image_url": {"url": "data:image/png;base64,QQ=="}}],
+            },
             {"role": "user", "content": "当前轮也带图", "images": [str(new_img)]},
         ]
         mock_tk = MagicMock()
         mock_tk.meta_map = {}
         sess = OnlineToolSession(
-            toolkit=mock_tk, api_key="sk-test", api_url="https://api.test.com/v1",
-            model="test-model", enable_thinking=False, storage=None,
-            supports_vision=True, supports_reasoning=False, disable_summary=False,
+            toolkit=mock_tk,
+            api_key="sk-test",
+            api_url="https://api.test.com/v1",
+            model="test-model",
+            enable_thinking=False,
+            storage=None,
+            supports_vision=True,
+            supports_reasoning=False,
+            disable_summary=False,
         )
         sess.context = ctx
         sess.system_prompt = "You are a test assistant."
@@ -1359,21 +1436,17 @@ class TestStripHistoricalImagesWired:
         assert "_b64_cache" not in result[1]
 
         # 真实当前轮定位（跳过尾部 [动态上下文 合成 user）
-        real_users = [i for i, m in enumerate(result)
-                      if m["role"] == "user"
-                      and not str(m.get("content", "")).startswith("[动态上下文")]
+        real_users = [i for i, m in enumerate(result) if m["role"] == "user" and not str(m.get("content", "")).startswith("[动态上下文")]
         last_real = real_users[-1]
         assert last_real == 3, f"当前轮定位漂移: {last_real}"
 
         # 当前轮带图原样保留（to_multimodal 已转 parts，image_url 仍在 → 视觉切换可路由）
         cur = result[last_real]
         assert isinstance(cur["content"], list)
-        assert any(isinstance(p, dict) and p.get("type") == "image_url"
-                   for p in cur["content"])
+        assert any(isinstance(p, dict) and p.get("type") == "image_url" for p in cur["content"])
 
         # 全历史（当前轮之前）绝无 image_url 残留
         for m in result[:last_real]:
             c = m.get("content")
             if isinstance(c, list):
-                assert all(not (isinstance(p, dict) and p.get("type") == "image_url")
-                           for p in c), m
+                assert all(not (isinstance(p, dict) and p.get("type") == "image_url") for p in c), m

@@ -16,6 +16,7 @@ from unittest.mock import MagicMock, patch
 # lsp_engine
 # ============================================================
 
+
 class TestLspEngineDiagnose:
     """诊断功能测试"""
 
@@ -26,18 +27,20 @@ class TestLspEngineDiagnose:
         with patch("subprocess.run") as mock_run:
             mock_run.return_value = MagicMock(
                 returncode=0,
-                stdout=json.dumps([
-                    {
-                        "location": {
-                            "file": "test.py",
-                            "row": 1,
-                            "column": 1,
-                        },
-                        "message": "Unused import",
-                        "severity": "warning",
-                        "code": "F401",
-                    }
-                ]),
+                stdout=json.dumps(
+                    [
+                        {
+                            "location": {
+                                "file": "test.py",
+                                "row": 1,
+                                "column": 1,
+                            },
+                            "message": "Unused import",
+                            "severity": "warning",
+                            "code": "F401",
+                        }
+                    ]
+                ),
                 stderr="",
             )
             result = diagnose("test.py")
@@ -50,9 +53,7 @@ class TestLspEngineDiagnose:
         from tea_agent.lsp.lsp_engine import diagnose
 
         with patch("subprocess.run") as mock_run:
-            mock_run.return_value = MagicMock(
-                returncode=0, stdout="[]", stderr=""
-            )
+            mock_run.return_value = MagicMock(returncode=0, stdout="[]", stderr="")
             result = diagnose("test.py")
         assert result["diagnostics"] == []
 
@@ -71,9 +72,7 @@ class TestLspEngineDiagnose:
         from tea_agent.lsp.lsp_engine import diagnose
 
         with patch("subprocess.run") as mock_run:
-            mock_run.return_value = MagicMock(
-                returncode=0, stdout="[]", stderr=""
-            )
+            mock_run.return_value = MagicMock(returncode=0, stdout="[]", stderr="")
             result = diagnose("readme.md")
         assert result["diagnostics"] == []
 
@@ -111,10 +110,7 @@ class TestLspEngineSemanticDiagnose:
         try:
             result = semantic_diagnose(os.path.dirname(fname), fname)
             assert isinstance(result, dict)
-            [
-                i for i in result.get("issues", [])
-                if i.get("type") == "unresolved_reference"
-            ]
+            [i for i in result.get("issues", []) if i.get("type") == "unresolved_reference"]
         finally:
             os.unlink(fname)
             os.rmdir(os.path.dirname(fname))
@@ -193,6 +189,7 @@ class TestLspEngineCompletion:
 # ============================================================
 # symbol_index
 # ============================================================
+
 
 class TestSymbolIndex:
     """SymbolIndex 构建与搜索测试"""
@@ -291,6 +288,7 @@ class TestSymbolIndex:
 # ts_analyzer
 # ============================================================
 
+
 class TestTsAnalyzer:
     """Tree-sitter 分析器测试"""
 
@@ -298,9 +296,7 @@ class TestTsAnalyzer:
         """应能解析有效的 Python 文件"""
         from tea_agent.lsp.ts_analyzer import parse_file
 
-        with tempfile.NamedTemporaryFile(
-            mode="w", suffix=".py", delete=False
-        ) as f:
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".py", delete=False) as f:
             f.write("""
 def hello():
     return "world"
@@ -330,9 +326,7 @@ class MyClass:
         """空文件应返回空结构"""
         from tea_agent.lsp.ts_analyzer import parse_file
 
-        with tempfile.NamedTemporaryFile(
-            mode="w", suffix=".py", delete=False
-        ) as f:
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".py", delete=False) as f:
             f.write("# just a comment\n")
             fname = f.name
 
@@ -348,9 +342,7 @@ class MyClass:
         """语法错误的文件应优雅降级"""
         from tea_agent.lsp.ts_analyzer import parse_file
 
-        with tempfile.NamedTemporaryFile(
-            mode="w", suffix=".py", delete=False
-        ) as f:
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".py", delete=False) as f:
             f.write("def broken(:\n")
             fname = f.name
 
@@ -424,9 +416,7 @@ class Calculator:
     def _internal(self, x):
         return x * self.factor
 """
-        with tempfile.NamedTemporaryFile(
-            mode="w", suffix=".py", delete=False
-        ) as f:
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".py", delete=False) as f:
             f.write(code)
             fname = f.name
 

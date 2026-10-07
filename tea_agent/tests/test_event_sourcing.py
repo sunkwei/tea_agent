@@ -18,6 +18,8 @@ import pytest
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..")))
 
+import contextlib
+
 from tea_agent.store._core import Storage  # noqa: E402
 
 
@@ -27,10 +29,8 @@ def storage():
     db_path = os.path.join(tempfile.mkdtemp(), "test_events.db")
     st = Storage(db_path)
     yield st
-    try:
+    with contextlib.suppress(Exception):
         st.close()
-    except Exception:
-        pass
 
 
 def test_append_and_seq(storage):
@@ -53,9 +53,10 @@ def test_save_msg_records_turn_events(storage):
     tid = storage.topics.create_topic("ES")
     cid = storage.conversations.save_msg(tid, "问题", "", False)
     storage.conversations.update_msg_rounds(
-        cid, "答案", True,
-        [{"role": "assistant", "content": "答案",
-          "tool_calls": [{"function": {"name": "toolkit_search", "arguments": "{}"}}]}],
+        cid,
+        "答案",
+        True,
+        [{"role": "assistant", "content": "答案", "tool_calls": [{"function": {"name": "toolkit_search", "arguments": "{}"}}]}],
     )
     events = storage.events.replay(tid)
     types = [e["event_type"] for e in events]
@@ -194,7 +195,7 @@ def test_level2_recompute_on_new_message():
     from tea_agent.session.history_builder import _solidify_level2
 
     ctx = _mk_ctx_with_level2()
-    first = _solidify_level2(ctx)
+    _solidify_level2(ctx)
     assert ctx._level2_dirty is False
 
     # 新消息到来（add_user_message 会置 dirty）
@@ -253,7 +254,9 @@ def test_trim_reasoning_solidified():
     ]
     r4 = _progressive_trim(
         [dict(ctx2.messages[i], **{"_src_idx": i}) for i in range(1, len(ctx2.messages))],
-        200, ctx2, tool_prune_threshold=100,
+        200,
+        ctx2,
+        tool_prune_threshold=100,
     )
     assert [m["reasoning_content"] for m in r4 if m.get("reasoning_content")][0] == rc2
 

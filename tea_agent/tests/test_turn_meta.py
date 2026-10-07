@@ -93,14 +93,13 @@ class TestPrefixStableInvariant:
         assistant 的 reasoning_content 置空以治理上下文填充。旧实现把它
         当作「历史被旁路改写」刷 ERROR（实测 prev=123→current=125 噪声）。
         """
-        def _asst(content, rc, cid):
-            return {"role": "assistant", "content": content,
-                    "reasoning_content": rc, "tool_calls": [{"id": cid}]}
 
-        prev = [_msg("system", "sp"), _msg("user", "u1"),
-                _asst("a0", "THINK-0", "c0"),
-                {"role": "tool", "content": "r0", "tool_call_id": "c0"}]
+        def _asst(content, rc, cid):
+            return {"role": "assistant", "content": content, "reasoning_content": rc, "tool_calls": [{"id": cid}]}
+
+        prev = [_msg("system", "sp"), _msg("user", "u1"), _asst("a0", "THINK-0", "c0"), {"role": "tool", "content": "r0", "tool_call_id": "c0"}]
         import copy
+
         cur = copy.deepcopy(prev)
         cur.append(_asst("a1", "THINK-1", "c1"))
         cur.append({"role": "tool", "content": "r1", "tool_call_id": "c1"})
@@ -117,12 +116,8 @@ class TestPrefixStableInvariant:
     def test_real_rewrite_with_rc_field_still_violation(self):
         """对话内容被偷改（即使消息携带 RC）仍须报违例 —— 守卫不能被修瞎。"""
         t = TurnMetaTracker()
-        t.note_request([_msg("system", "sp"), _msg("user", "u1"),
-                        {"role": "assistant", "content": "a0",
-                         "reasoning_content": "THINK"}])
-        t.note_request([_msg("system", "sp"), _msg("user", "被偷改"),
-                        {"role": "assistant", "content": "a0",
-                         "reasoning_content": "THINK"}])
+        t.note_request([_msg("system", "sp"), _msg("user", "u1"), {"role": "assistant", "content": "a0", "reasoning_content": "THINK"}])
+        t.note_request([_msg("system", "sp"), _msg("user", "被偷改"), {"role": "assistant", "content": "a0", "reasoning_content": "THINK"}])
         assert t.last_violations, "对话内容改写必须报违例"
         assert "prefix_stable" in t.last_violations[0].invariant
 

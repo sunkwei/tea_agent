@@ -44,8 +44,8 @@ class TestMakeSample:
 
     def test_decode_window_excludes_ttft(self):
         """排队/prefill 久（TTFT 大）不应拉低解码窗口 —— 两者必须分离。"""
-        short_wait = make_sample(0.0, 1.0, 11.0, 100)      # TTFT 1s, 解码 10s
-        long_wait = make_sample(0.0, 9.0, 19.0, 100)       # TTFT 9s, 解码 10s
+        short_wait = make_sample(0.0, 1.0, 11.0, 100)  # TTFT 1s, 解码 10s
+        long_wait = make_sample(0.0, 9.0, 19.0, 100)  # TTFT 9s, 解码 10s
         assert short_wait["decode_seconds"] == pytest.approx(long_wait["decode_seconds"])
         assert short_wait["ttft_seconds"] < long_wait["ttft_seconds"]
 
@@ -135,7 +135,7 @@ class TestSummarize:
         当成整体表现，Σ/Σ 才代表「这次会话真实解码了多少」。
         """
         samples = [
-            make_sample(0.0, 1.0, 11.0, 100),    # 100 tok / 10 s = 10 tok/s
+            make_sample(0.0, 1.0, 11.0, 100),  # 100 tok / 10 s = 10 tok/s
             make_sample(20.0, 21.0, 23.0, 100),  # 100 tok / 2 s  = 50 tok/s
         ]
         out = summarize(samples)
@@ -172,8 +172,7 @@ class TestSummarize:
 
     @pytest.mark.parametrize(
         "junk",
-        [None, [], {}, "not-a-list", [None, 1, "x"], [{"completion_tokens": 0}],
-         [{"completion_tokens": "x", "decode_seconds": 1}], [[]]],
+        [None, [], {}, "not-a-list", [None, 1, "x"], [{"completion_tokens": 0}], [{"completion_tokens": "x", "decode_seconds": 1}], [[]]],
     )
     def test_garbage_input_returns_none(self, junk):
         """任何畸形输入都降级为 None，不抛异常（旁路观测不得冒泡）。"""
@@ -196,8 +195,7 @@ class TestSummarize:
         out = summarize([make_sample(0.0, 2.0, 12.0, 100), make_sample(0.0, 4.0, 14.0, 100)])
         assert out["ttft_seconds"] == pytest.approx(3.0)
         # 无 TTFT（缺 t_request）时字段为 None 而非 0
-        no_ttft = summarize([{"completion_tokens": 10, "decode_seconds": 1.0,
-                              "ttft_seconds": None}])
+        no_ttft = summarize([{"completion_tokens": 10, "decode_seconds": 1.0, "ttft_seconds": None}])
         assert no_ttft["ttft_seconds"] is None
 
 
@@ -256,8 +254,7 @@ class TestRecorderIsolation:
 
         monkeypatch.setattr(ds, "make_sample", _boom)
         with _CaplogCapture() as records:
-            assert sess._record_decode_sample(
-                SimpleNamespace(completion_tokens=10), t_first=1.0, t_end=2.0) is None
+            assert sess._record_decode_sample(SimpleNamespace(completion_tokens=10), t_first=1.0, t_end=2.0) is None
         assert records, "应以 debug 级留痕"
         assert all(r.levelno < logging.ERROR for r in records)
         assert sess.context._decode_samples == []
@@ -271,8 +268,7 @@ class TestRecorderIsolation:
         sess.context._stream_t_request = 0.0
         monkeypatch.setattr(ds, "MAX_SAMPLES", 3)
         for i in range(10):
-            sess._record_decode_sample(SimpleNamespace(completion_tokens=10),
-                                       t_first=float(i), t_end=float(i) + 5)
+            sess._record_decode_sample(SimpleNamespace(completion_tokens=10), t_first=float(i), t_end=float(i) + 5)
         assert len(sess.context._decode_samples) <= 3
 
 
@@ -365,8 +361,7 @@ class TestRequestTimestampStamped:
                         return "STREAM"
 
         ctx.client = _Cli
-        comp.create_chat_stream([{"role": "user", "content": "hi"}], tools=[],
-                                is_cheap=True)
+        comp.create_chat_stream([{"role": "user", "content": "hi"}], tools=[], is_cheap=True)
         assert ctx._stream_t_request == 555.0
 
 
@@ -378,7 +373,7 @@ class TestRequestTimestampStamped:
 class TestLedgerFields:
     def test_wait_and_request_are_derived_from_total(self):
         """等待 = 请求总时长 − 解码窗口；这是 ⚡ 没算进去的那一半。"""
-        s = make_sample(1000.0, 1022.0, 1032.8, 886)      # 等 22s / 解码 10.8s
+        s = make_sample(1000.0, 1022.0, 1032.8, 886)  # 等 22s / 解码 10.8s
         out = summarize([s])
         assert out["wait_seconds"] == pytest.approx(22.0, abs=0.01)
         assert out["request_seconds"] == pytest.approx(32.8, abs=0.01)
@@ -386,8 +381,7 @@ class TestLedgerFields:
 
     def test_wait_sums_across_streams(self):
         """多轮工具的等待要累加（回合体感），不是取平均。"""
-        ss = [make_sample(0.0 + i * 40, 22.0 + i * 40, 32.8 + i * 40, 886)
-              for i in range(18)]
+        ss = [make_sample(0.0 + i * 40, 22.0 + i * 40, 32.8 + i * 40, 886) for i in range(18)]
         out = summarize(ss)
         assert out["streams"] == 18
         assert out["wait_seconds"] == pytest.approx(22.0 * 18, rel=1e-3)
@@ -402,9 +396,7 @@ class TestLedgerFields:
 
     def test_missing_total_seconds_yields_no_fake_ledger(self):
         """没有总时长就不要编造等待 —— 宁可字段缺失。"""
-        out = summarize([{"completion_tokens": 100, "decode_seconds": 2.0,
-                          "total_seconds": None, "ttft_seconds": None,
-                          "estimated": False}])
+        out = summarize([{"completion_tokens": 100, "decode_seconds": 2.0, "total_seconds": None, "ttft_seconds": None, "estimated": False}])
         assert out["wait_seconds"] is None
         assert out["request_seconds"] is None
 
@@ -415,13 +407,11 @@ class TestLedgerFields:
         数字自相矛盾 → 直接被怀疑"是不是测错了"。
         """
         out = summarize([make_sample(1000.0, 1001.06, 1001.372046, 43)])
-        assert out["completion_tokens"] / out["decode_seconds"] == pytest.approx(
-            out["tok_per_sec"], rel=5e-3)
+        assert out["completion_tokens"] / out["decode_seconds"] == pytest.approx(out["tok_per_sec"], rel=5e-3)
 
     def test_ratio_of_long_context_turn_matches_reality(self):
         """复刻截图那轮：⚡≈82 而体感应慢约 3 倍。"""
-        ss = [make_sample(0.0 + i * 33, 22.0 + i * 33, 32.8 + i * 33, 886)
-              for i in range(18)]
+        ss = [make_sample(0.0 + i * 33, 22.0 + i * 33, 32.8 + i * 33, 886) for i in range(18)]
         out = summarize(ss)
         assert 80 < out["tok_per_sec"] < 85
         assert out["request_seconds"] / out["decode_seconds"] == pytest.approx(3.0, abs=0.1)

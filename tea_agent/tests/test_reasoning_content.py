@@ -9,15 +9,14 @@ reasoning_content 处理专项测试。
 3. _compress_tool_rounds 保留 reasoning_content
 4. 模拟无工具调用回传场景（确认 API 层面安全）
 """
-import json
-import sys
+
 import os
+import sys
 
 # 添加项目根目录到 path
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from tea_agent.basesession import BaseChatSession
-
 
 # ─── 测试数据 ───
 
@@ -26,53 +25,35 @@ ASSISTANT_WITH_TOOL_CALLS = {
     "role": "assistant",
     "content": "我来搜索一下",
     "reasoning_content": "用户想要搜索信息，我需要调用搜索引擎",
-    "tool_calls": [
-        {
-            "id": "call_1",
-            "type": "function",
-            "function": {"name": "toolkit_search", "arguments": '{"query": "test"}'}
-        }
-    ]
+    "tool_calls": [{"id": "call_1", "type": "function", "function": {"name": "toolkit_search", "arguments": '{"query": "test"}'}}],
 }
 
 # 包含 reasoning_content 的 assistant 消息（无 tool_calls）
-ASSISTANT_NO_TOOL_CALLS = {
-    "role": "assistant",
-    "content": "这是最终答案",
-    "reasoning_content": "我已经思考完毕，现在给出答案"
-}
+ASSISTANT_NO_TOOL_CALLS = {"role": "assistant", "content": "这是最终答案", "reasoning_content": "我已经思考完毕，现在给出答案"}
 
 # 普通的 assistant 消息（无 reasoning_content）
-ASSISTANT_PLAIN = {
-    "role": "assistant",
-    "content": "你好"
-}
+ASSISTANT_PLAIN = {"role": "assistant", "content": "你好"}
 
 # tool 消息（本不该有 reasoning_content，但模拟意外残留）
 TOOL_WITH_RC = {
     "role": "tool",
     "tool_call_id": "call_1",
     "content": "搜索结果...",
-    "reasoning_content": "意外的 RC 残留"  # 不该存在，但测试清除逻辑
+    "reasoning_content": "意外的 RC 残留",  # 不该存在，但测试清除逻辑
 }
 
 # user 消息
-USER_MSG = {
-    "role": "user",
-    "content": "帮我搜索一下"
-}
+USER_MSG = {"role": "user", "content": "帮我搜索一下"}
 
 # system 消息
-SYSTEM_MSG = {
-    "role": "system",
-    "content": "你是助手"
-}
+SYSTEM_MSG = {"role": "system", "content": "你是助手"}
 
 
 # ─── 测试函数 ───
 
 passed = 0
 failed = 0
+
 
 # 断言助手（2026-09-19 修正）：旧实现只 print 不 raise，pytest 收集到这些
 # test_* 函数后无论断言真假一律 PASS（脚本入口的 sys.exit 只在 __main__ 下触发）。
@@ -83,6 +64,7 @@ def _fail(desc, detail):
     print(f"  ❌ {desc}: {detail}")
     raise AssertionError(f"{desc}: {detail}")
 
+
 def assert_eq(actual, expected, desc):
     global passed
     if actual == expected:
@@ -90,6 +72,7 @@ def assert_eq(actual, expected, desc):
         print(f"  ✅ {desc}")
     else:
         _fail(desc, f"期望 {expected!r}, 实际 {actual!r}")
+
 
 def assert_true(cond, desc):
     global passed
@@ -119,30 +102,18 @@ def test_strip_reasoning_content():
     # 验证 assistant 消息的 reasoning_content 被保留
     assert_true(
         messages[0].get("reasoning_content") == "用户想要搜索信息，我需要调用搜索引擎",
-        f"有 tool_calls 的 assistant 保留 RC: {messages[0].get('reasoning_content')[:20]}..."
+        f"有 tool_calls 的 assistant 保留 RC: {messages[0].get('reasoning_content')[:20]}...",
     )
     assert_true(
         messages[1].get("reasoning_content") == "我已经思考完毕，现在给出答案",
-        f"无 tool_calls 的 assistant 也保留 RC: {messages[1].get('reasoning_content')[:20]}..."
+        f"无 tool_calls 的 assistant 也保留 RC: {messages[1].get('reasoning_content')[:20]}...",
     )
     # 验证普通 assistant 无 RC 的不受影响
-    assert_true(
-        "reasoning_content" not in messages[2],
-        "无 RC 的 assistant 不受影响"
-    )
+    assert_true("reasoning_content" not in messages[2], "无 RC 的 assistant 不受影响")
     # 验证非 assistant 消息的 RC 被清除
-    assert_true(
-        "reasoning_content" not in messages[3],
-        f"tool 消息的 RC 被清除（原为'意外的 RC 残留'）"
-    )
-    assert_true(
-        "reasoning_content" not in messages[4],
-        "user 消息的 RC 被清除"
-    )
-    assert_true(
-        "reasoning_content" not in messages[5],
-        "system 消息的 RC 被清除"
-    )
+    assert_true("reasoning_content" not in messages[3], "tool 消息的 RC 被清除（原为'意外的 RC 残留'）")
+    assert_true("reasoning_content" not in messages[4], "user 消息的 RC 被清除")
+    assert_true("reasoning_content" not in messages[5], "system 消息的 RC 被清除")
 
 
 def test_strip_reasoning_content_noop_on_non_assistant():
@@ -184,16 +155,13 @@ def test_repair_with_reasoning_content():
     # 验证 reasoning_content 被保留
     assert_true(
         repaired[0].get("reasoning_content") == "用户想要搜索信息，我需要调用搜索引擎",
-        f"第1条 assistant 保留 RC: {repaired[0].get('reasoning_content')[:20]}..."
+        f"第1条 assistant 保留 RC: {repaired[0].get('reasoning_content')[:20]}...",
     )
     # tool 消息不应该有 reasoning_content
-    assert_true(
-        "reasoning_content" not in repaired[1],
-        "tool 消息无 RC"
-    )
+    assert_true("reasoning_content" not in repaired[1], "tool 消息无 RC")
     assert_true(
         repaired[2].get("reasoning_content") == "我已经思考完毕，现在给出答案",
-        f"第3条 assistant 保留 RC: {repaired[2].get('reasoning_content')[:20]}..."
+        f"第3条 assistant 保留 RC: {repaired[2].get('reasoning_content')[:20]}...",
     )
 
 
@@ -210,9 +178,9 @@ def test_repair_truncates_incomplete_chain():
             "content": "",
             "reasoning_content": "思考: 需要调用两个工具",
             "tool_calls": [
-                {"id": "call_1", "type": "function", "function": {"name": "toolkit_search", "arguments": '{}'}},
-                {"id": "call_2", "type": "function", "function": {"name": "toolkit_exec", "arguments": '{}'}},
-            ]
+                {"id": "call_1", "type": "function", "function": {"name": "toolkit_search", "arguments": "{}"}},
+                {"id": "call_2", "type": "function", "function": {"name": "toolkit_exec", "arguments": "{}"}},
+            ],
         },
         {"role": "tool", "tool_call_id": "call_1", "content": "结果1"},
         # call_2 还没返回，直接来了新的 assistant（中断）
@@ -227,16 +195,11 @@ def test_repair_truncates_incomplete_chain():
 
     # 不完整链被截断，只剩最后的 assistant
     # 因为 call_2 未匹配到 tool，pending 非空时遇到新 assistant → 回滚到 last_safe_len=0
-    assert_true(len(repaired) == 1,
-                f"不完整链应截断到安全点（1条，仅最后assistant），实际 {len(repaired)} 条: "
-                f"{[r['role'] for r in repaired]}")
+    assert_true(len(repaired) == 1, f"不完整链应截断到安全点（1条，仅最后assistant），实际 {len(repaired)} 条: {[r['role'] for r in repaired]}")
 
     # 截断后保留的 assistant 消息应有 reasoning_content
     if len(repaired) > 0:
-        assert_true(
-            repaired[0].get("reasoning_content") == "继续思考...",
-            f"截断后 assistant 保留 RC: {repaired[0].get('reasoning_content')}"
-        )
+        assert_true(repaired[0].get("reasoning_content") == "继续思考...", f"截断后 assistant 保留 RC: {repaired[0].get('reasoning_content')}")
 
 
 def test_compress_rounds_preserves_reasoning():
@@ -254,11 +217,11 @@ def test_compress_rounds_preserves_reasoning():
     assert_true(len(compressed) == 3, f"压缩后仍为3条，实际{len(compressed)}")
     assert_true(
         compressed[0].get("reasoning_content") == "用户想要搜索信息，我需要调用搜索引擎",
-        f"压缩后第1条保留 RC: {compressed[0].get('reasoning_content')[:20]}..."
+        f"压缩后第1条保留 RC: {compressed[0].get('reasoning_content')[:20]}...",
     )
     assert_true(
         compressed[2].get("reasoning_content") == "我已经思考完毕，现在给出答案",
-        f"压缩后第3条保留 RC: {compressed[2].get('reasoning_content')[:20]}..."
+        f"压缩后第3条保留 RC: {compressed[2].get('reasoning_content')[:20]}...",
     )
 
 
@@ -284,13 +247,7 @@ def test_no_tool_call_rc_safety():
         "user_msg": "你好，帮我查一下天气",
         "ai_msg": "好的，我来查",
         "is_func_calling": False,  # 无工具调用
-        "rounds_json_parsed": [
-            {
-                "role": "assistant",
-                "content": "好的，我来查",
-                "reasoning_content": "用户询问天气，我需要查询天气信息"
-            }
-        ]
+        "rounds_json_parsed": [{"role": "assistant", "content": "好的，我来查", "reasoning_content": "用户询问天气，我需要查询天气信息"}],
     }
 
     # 通过 _load_single_conversation 加载
@@ -305,17 +262,11 @@ def test_no_tool_call_rc_safety():
     # is_func_calling=False 时，assistant 从 ai_msg 加载，不含 reasoning_content
     # 这是正确的——无工具调用的 RC 不传更省 token
     rc = msgs[1].get("reasoning_content", "")
-    assert_true(
-        rc == "" or rc == "用户询问天气，我需要查询天气信息",
-        f"无 tool_calls 时 RC 不存在（被优化掉）或保留（无害）: {rc}"
-    )
+    assert_true(rc == "" or rc == "用户询问天气，我需要查询天气信息", f"无 tool_calls 时 RC 不存在（被优化掉）或保留（无害）: {rc}")
 
     # 验证经过 _strip_reasoning_content 后 assistant 不受影响
     BaseChatSession._strip_reasoning_content(msgs)
-    assert_true(
-        msgs[1].get("role") == "assistant",
-        "strip 后 assistant 消息不受影响"
-    )
+    assert_true(msgs[1].get("role") == "assistant", "strip 后 assistant 消息不受影响")
 
     print("  ✅ 结论：无工具调用的助理——不传 RC 省 token（API 会忽略），传了也无害。当前实现走优化路径。")
 
@@ -331,12 +282,8 @@ def test_load_single_conversation_with_func_calling():
         "rounds_json_parsed": [
             dict(ASSISTANT_WITH_TOOL_CALLS),
             {"role": "tool", "tool_call_id": "call_1", "content": "搜索结果数据"},
-            {
-                "role": "assistant",
-                "content": "搜索完毕，结果是...",
-                "reasoning_content": "根据搜索结果整理答案..."
-            }
-        ]
+            {"role": "assistant", "content": "搜索完毕，结果是...", "reasoning_content": "根据搜索结果整理答案..."},
+        ],
     }
 
     msgs = BaseChatSession._load_single_conversation(conv)
@@ -347,13 +294,11 @@ def test_load_single_conversation_with_func_calling():
     # 验证所有 assistant 消息的 reasoning_content 都被保留
     for i, msg in enumerate(msgs):
         if msg["role"] == "assistant":
-            assert_true(
-                "reasoning_content" in msg,
-                f"第 {i+1} 条 assistant 消息保留 reasoning_content: {msg.get('reasoning_content', '')[:20]}..."
-            )
+            assert_true("reasoning_content" in msg, f"第 {i + 1} 条 assistant 消息保留 reasoning_content: {msg.get('reasoning_content', '')[:20]}...")
 
 
 # ─── 运行 ───
+
 
 def main():
     print("=" * 60)

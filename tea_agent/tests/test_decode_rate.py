@@ -444,8 +444,8 @@ def _strip_comments(text: str) -> str:
     只有真正的规则/代码才构成死代码。拿裸子串去查会因注释而误报 —— 实测踩过：
     注释写「.usage-tokens 已移除」→ 断言 exactly 因此翻转。
     """
-    text = re.sub(r"/\*.*?\*/", "", text, flags=re.S)      # 块注释
-    text = re.sub(r"(?<!:)//[^\n]*", "", text)             # 行注释（(?!:) 避免误伤 http://）
+    text = re.sub(r"/\*.*?\*/", "", text, flags=re.S)  # 块注释
+    text = re.sub(r"(?<!:)//[^\n]*", "", text)  # 行注释（(?!:) 避免误伤 http://）
     return text
 
 
@@ -491,10 +491,9 @@ class TestFrontendWiring:
         """
         js = _strip_comments((_STATIC / "app.js").read_text(encoding="utf-8"))
         i = js.index("function _usageBarHtml")
-        seg = js[i: js.index("\nfunction updateUsage", i)]
-        join = seg[seg.index("_stripLeadingSep("):]
-        assert join.index("tpsHtml") < join.index("modelHtml") < join.index("cacheHtml") \
-            < join.index("contextHtml"), "状态栏段顺序被改动"
+        seg = js[i : js.index("\nfunction updateUsage", i)]
+        join = seg[seg.index("_stripLeadingSep(") :]
+        assert join.index("tpsHtml") < join.index("modelHtml") < join.index("cacheHtml") < join.index("contextHtml"), "状态栏段顺序被改动"
         # 已移除的段（保留类名会变成死代码，也会让旧字段悄悄复活）
         for gone in ("usage-tokens", "usage-detail", "usage-cheap", "cheap_model"):
             assert gone not in seg, f"状态栏仍含已移除段 {gone}"

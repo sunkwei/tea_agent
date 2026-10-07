@@ -10,6 +10,7 @@ from tea_agent.toolkit import toolkit_server_restart as tsr
 def _patch_restart(return_value):
     """替换 server.restart_server（工具内部为延迟导入，故打补丁到源模块）。"""
     import tea_agent.server.server as srv
+
     return patch.object(srv, "restart_server", return_value=return_value)
 
 
@@ -24,6 +25,7 @@ class TestRegistration:
 
     def test_registered_in_toolkit(self):
         from tea_agent.tlk import Toolkit
+
         tk = Toolkit()
         assert "toolkit_server_restart" in tk.meta_map
         assert "toolkit_server_restart" in tk.func_map
@@ -31,8 +33,7 @@ class TestRegistration:
 
 class TestDeferMode:
     def test_default_is_defer(self):
-        with _patch_restart({"ok": True, "message": "Restart initiated (graceful)",
-                             "inflight_turns": 1}):
+        with _patch_restart({"ok": True, "message": "Restart initiated (graceful)", "inflight_turns": 1}):
             r = tsr.toolkit_server_restart()
         assert r["ok"] is True
         assert r["mode"] == "defer"
@@ -40,8 +41,8 @@ class TestDeferMode:
 
     def test_passes_graceful_and_wait(self):
         import tea_agent.server.server as srv
-        with patch.object(srv, "restart_server",
-                          return_value={"ok": True, "inflight_turns": 2}) as m:
+
+        with patch.object(srv, "restart_server", return_value={"ok": True, "inflight_turns": 2}) as m:
             tsr.toolkit_server_restart(mode="defer", wait_seconds=42)
         m.assert_called_once_with(graceful=True, wait_seconds=42.0)
 
@@ -56,15 +57,15 @@ class TestDeferMode:
 
     def test_negative_wait_clamped(self):
         import tea_agent.server.server as srv
-        with patch.object(srv, "restart_server",
-                          return_value={"ok": True, "inflight_turns": 0}) as m:
+
+        with patch.object(srv, "restart_server", return_value={"ok": True, "inflight_turns": 0}) as m:
             tsr.toolkit_server_restart(wait_seconds=-5)
         assert m.call_args.kwargs["wait_seconds"] == 0.0
 
     def test_bad_wait_falls_back(self):
         import tea_agent.server.server as srv
-        with patch.object(srv, "restart_server",
-                          return_value={"ok": True, "inflight_turns": 0}) as m:
+
+        with patch.object(srv, "restart_server", return_value={"ok": True, "inflight_turns": 0}) as m:
             tsr.toolkit_server_restart(wait_seconds="abc")  # type: ignore[arg-type]
         assert m.call_args.kwargs["wait_seconds"] == 300.0
 
@@ -72,8 +73,8 @@ class TestDeferMode:
 class TestImmediateMode:
     def test_immediate_passes_not_graceful(self):
         import tea_agent.server.server as srv
-        with patch.object(srv, "restart_server",
-                          return_value={"ok": True, "inflight_turns": 1}) as m:
+
+        with patch.object(srv, "restart_server", return_value={"ok": True, "inflight_turns": 1}) as m:
             r = tsr.toolkit_server_restart(mode="immediate")
         m.assert_called_once()
         assert m.call_args.kwargs["graceful"] is False
@@ -112,6 +113,7 @@ class TestFailureIsolation:
 
     def test_exception_in_restart_is_caught(self):
         import tea_agent.server.server as srv
+
         with patch.object(srv, "restart_server", side_effect=OSError("boom")):
             r = tsr.toolkit_server_restart()
         assert r["ok"] is False
@@ -123,10 +125,11 @@ class TestEndToEndWithRealRestartServer:
 
     def test_defer_reaches_real_restart_server(self):
         import tea_agent.server.server as srv
+
         srv._uvicorn_server = None
         srv._restart_requested = False
         try:
-            r = tsr.toolkit_server_restart()   # 真实调用，未运行 → 应被拒
+            r = tsr.toolkit_server_restart()  # 真实调用，未运行 → 应被拒
             assert r["ok"] is False
             assert "not running" in r["error"].lower()
         finally:
@@ -142,9 +145,7 @@ class TestEndToEndWithRealRestartServer:
         srv._uvicorn_server = _Fake()
         srv._restart_requested = False
         try:
-            with patch.object(srv, "_inflight_turns", return_value=1), \
-                 patch.object(srv, "_drain_then_exit"), \
-                 patch("threading.Thread"):
+            with patch.object(srv, "_inflight_turns", return_value=1), patch.object(srv, "_drain_then_exit"), patch("threading.Thread"):
                 r = tsr.toolkit_server_restart(wait_seconds=7)
             assert r["ok"] is True
             assert r["wait_seconds"] == 7.0

@@ -27,6 +27,8 @@ import pytest
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[2]))
 
+import contextlib
+
 from tea_agent.session.components.summarizer import SummarizerComponent  # noqa: E402
 from tea_agent.session.context import SessionContext  # noqa: E402
 from tea_agent.store import Storage  # noqa: E402
@@ -36,10 +38,8 @@ from tea_agent.store import Storage  # noqa: E402
 def storage(tmp_path):
     st = Storage(str(tmp_path / "chat_history.db"))
     yield st
-    try:
+    with contextlib.suppress(Exception):
         st.close()
-    except Exception:
-        pass
 
 
 def _seed_conversations(storage, topic_id: str, n: int = 4) -> None:
@@ -64,6 +64,7 @@ def _spy_unsummarized(storage, calls: list):
 
 # ─────────── 契约：SessionContext 的字段名 ───────────
 
+
 def test_session_context_has_no_current_topic_id():
     """SessionContext 不存在 current_topic_id —— 组件读它必然得到 None。
 
@@ -71,13 +72,12 @@ def test_session_context_has_no_current_topic_id():
     current_topic_id，本用例会红，提醒同步检查各组件是否已统一到 topic_id。
     """
     ctx = SessionContext()
-    assert not hasattr(ctx, "current_topic_id"), (
-        "SessionContext 不应有 current_topic_id（组件应统一读 topic_id）"
-    )
+    assert not hasattr(ctx, "current_topic_id"), "SessionContext 不应有 current_topic_id（组件应统一读 topic_id）"
     assert hasattr(ctx, "topic_id"), "SessionContext 必须有 topic_id"
 
 
 # ─────────── 行为：guard 必须被越过 ───────────
+
 
 def test_summarizer_proceeds_when_ctx_topic_id_set(storage):
     """设了 ctx.topic_id → 摘要流程必须真的启动（越过 guard）。
@@ -96,9 +96,7 @@ def test_summarizer_proceeds_when_ctx_topic_id_set(storage):
 
     comp.summarize_old_history(_ApiStub(), lambda: (_ for _ in ()).throw(RuntimeError("no client")))
 
-    assert calls == [tid], (
-        f"guard 未越过 —— 摘要组件读错了主题字段（实际调用: {calls}）"
-    )
+    assert calls == [tid], f"guard 未越过 —— 摘要组件读错了主题字段（实际调用: {calls}）"
 
 
 def test_summarizer_skips_when_no_topic(storage):
@@ -133,6 +131,7 @@ def test_summarizer_skips_when_disabled(storage):
 
 # ─────────── numpy 依赖声明 ───────────
 
+
 def _pyproject() -> dict:
     import tomllib
 
@@ -143,17 +142,13 @@ def _pyproject() -> dict:
 def test_numpy_not_a_core_dependency():
     """numpy 不应是核心依赖 —— 核心包零使用，声明它会误导用户装无用重依赖。"""
     deps = _pyproject()["project"]["dependencies"]
-    assert not any("numpy" in d for d in deps), (
-        f"numpy 不应出现在核心依赖（核心包零使用）: {deps}"
-    )
+    assert not any("numpy" in d for d in deps), f"numpy 不应出现在核心依赖（核心包零使用）: {deps}"
 
 
 def test_numpy_declared_in_demo_extra():
     """numpy 必须仍被 demo extra 声明 —— 否则 demo 脚本跑不起来。"""
     extras = _pyproject()["project"]["optional-dependencies"]
-    assert any("numpy" in d for d in extras.get("demo", [])), (
-        "demo/ 下的脚本需要 numpy，应保留在 [demo] extra"
-    )
+    assert any("numpy" in d for d in extras.get("demo", [])), "demo/ 下的脚本需要 numpy，应保留在 [demo] extra"
 
 
 def test_core_package_has_no_numpy_import():
@@ -168,9 +163,7 @@ def test_core_package_has_no_numpy_import():
         s = f.as_posix()
         if "/demo/" in s or "__pycache__" in s:
             continue
-        for i, line in enumerate(
-            f.read_text(encoding="utf-8", errors="ignore").splitlines(), 1
-        ):
+        for i, line in enumerate(f.read_text(encoding="utf-8", errors="ignore").splitlines(), 1):
             if line.strip().startswith(("import numpy", "from numpy")):
                 offenders.append(f"{s}:{i}")
     assert not offenders, f"核心包出现 numpy import（移除依赖会 ImportError）: {offenders}"

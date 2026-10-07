@@ -26,11 +26,9 @@ def test_init_storage_uses_active_db_path_contract():
 
     二者在默认配置 + 项目目录下不同；用错就会与 get_storage() 分叉成两个库。
     """
-    seg = (_ROOT / "tea_agent" / "agent.py").read_text(encoding="utf-8").split(
-        "def _init_storage", 1)[1].split("\n    def ", 1)[0]
+    seg = (_ROOT / "tea_agent" / "agent.py").read_text(encoding="utf-8").split("def _init_storage", 1)[1].split("\n    def ", 1)[0]
     assert "active_db_path_abs" in seg, (
-        "Agent._init_storage 必须使用 active_db_path_abs —— 否则会话与 "
-        "store.get_storage()（记忆工具）会打开两个数据库，删除记忆看似成功实则无效"
+        "Agent._init_storage 必须使用 active_db_path_abs —— 否则会话与 store.get_storage()（记忆工具）会打开两个数据库，删除记忆看似成功实则无效"
     )
 
 
@@ -41,7 +39,9 @@ def test_default_scope_resolves_to_project_run_dir(tmp_path):
     """
     user_db = str(tmp_path / "home" / ".tea_agent" / "chat_history.db")
     active = resolve_db_path(
-        user_db_abs=user_db, db_path_cfg="", cwd=str(tmp_path),
+        user_db_abs=user_db,
+        db_path_cfg="",
+        cwd=str(tmp_path),
         storage_scope_cfg="auto",
     )
     assert os.path.dirname(active).endswith(PROJECT_RUN_DIR), active
@@ -53,7 +53,9 @@ def test_user_scope_keeps_single_db(tmp_path):
     """storage_scope=user → active == 用户级（旧行为），此配置下本无分叉。"""
     user_db = str(tmp_path / "home" / ".tea_agent" / "chat_history.db")
     active = resolve_db_path(
-        user_db_abs=user_db, db_path_cfg="", cwd=str(tmp_path),
+        user_db_abs=user_db,
+        db_path_cfg="",
+        cwd=str(tmp_path),
         storage_scope_cfg="user",
     )
     assert os.path.abspath(active) == os.path.abspath(user_db)
@@ -61,10 +63,11 @@ def test_user_scope_keeps_single_db(tmp_path):
 
 def test_explicit_absolute_db_path_is_respected(tmp_path):
     """显式绝对 db_path → 尊重用户指定位置（不自动项目化）。"""
-    user_db = str(tmp_path / "home" / ".tea_agent" / "chat_history.db")
     abs_cfg = str(tmp_path / "custom" / "my.db")
     active = resolve_db_path(
-        user_db_abs=abs_cfg, db_path_cfg=abs_cfg, cwd=str(tmp_path),
+        user_db_abs=abs_cfg,
+        db_path_cfg=abs_cfg,
+        cwd=str(tmp_path),
         storage_scope_cfg="auto",
     )
     assert os.path.abspath(active) == os.path.abspath(abs_cfg)

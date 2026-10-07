@@ -116,7 +116,7 @@ class TestAcpTurnWiring:
 
         sess = SimpleNamespace(current_topic_id="sess-z", chat_stream=_fake_chat_stream)
         agent = SimpleNamespace(sess=sess, current_topic_id="sess-z")
-        srv._init_agent = lambda session_id="": agent   # type: ignore[method-assign]
+        srv._init_agent = lambda session_id="": agent  # type: ignore[method-assign]
 
         events: list = []
         srv._run_stream("hi", "sess-z", lambda t: None, events.append)
@@ -138,7 +138,7 @@ class TestAcpTurnWiring:
         srv = acp_server.ACPProtocolServer()
         sess = SimpleNamespace(current_topic_id="s1", chat_stream=lambda *a, **k: ("ok", False))
         agent = SimpleNamespace(sess=sess, current_topic_id="s1")
-        srv._init_agent = lambda session_id="": agent   # type: ignore[method-assign]
+        srv._init_agent = lambda session_id="": agent  # type: ignore[method-assign]
 
         events: list = []
         srv._run_stream("hi", "s1", lambda t: None, events.append)

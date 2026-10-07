@@ -272,9 +272,7 @@ def test_stream_real_reasoning_not_overwritten_by_synthesis():
     """原生 reasoning_content 存在时，合成器不得介入（[THINK] 只来自真实 RC）。"""
     sess = _FakeSession(model="muse-spark", enable_thinking=True)
     cb = MagicMock()
-    _content, _tools, reasoning = sess._process_stream_with_reasoning(
-        iter([_chunk("正文很长很长很长很长很长很长", reasoning="原生思考内容")]), cb
-    )
+    _content, _tools, reasoning = sess._process_stream_with_reasoning(iter([_chunk("正文很长很长很长很长很长很长", reasoning="原生思考内容")]), cb)
     assert reasoning == "原生思考内容"
 
 
@@ -283,9 +281,7 @@ def test_stream_synthesis_state_not_leaked_to_instance():
     sess = _FakeSession(model="muse-spark", enable_thinking=True)
     for _ in range(2):
         cb = MagicMock()
-        sess._process_stream_with_reasoning(
-            iter([_chunk("第一段足够长的思考内容"), _chunk("第二段继续")]), cb
-        )
+        sess._process_stream_with_reasoning(iter([_chunk("第一段足够长的思考内容"), _chunk("第二段继续")]), cb)
         assert "[THINK_DONE]" in _calls(cb)
     assert not hasattr(sess, "_muse_syn_done")
     assert not hasattr(sess, "_muse_syn_active")

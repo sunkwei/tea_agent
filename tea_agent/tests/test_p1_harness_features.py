@@ -16,12 +16,14 @@ from tea_agent.tool_hooks import tool_hooks  # noqa: E402
 
 # ═══ 1. post-hooks 系统 ═══════════════════════════════════
 
+
 class TestToolHooks:
     def setup_method(self):
         tool_hooks.clear()
 
     def test_post_hook_result_rewrite(self):
         """post-hook 可以改写工具结果。"""
+
         @tool_hooks.on_post("toolkit_demo")
         def _rewrite(tool_name, args, result):
             return {"result": {"ok": True, "data": "rewritten"}}
@@ -32,6 +34,7 @@ class TestToolHooks:
 
     def test_post_hook_additional_context(self):
         """post-hook 可附加 additionalContexts。"""
+
         @tool_hooks.on_post("toolkit_demo")
         def _with_ctx(tool_name, args, result):
             return {"result": result, "additional_context": {"source": "demo", "note": "extra"}}
@@ -41,6 +44,7 @@ class TestToolHooks:
 
     def test_pre_hook_deny(self):
         """pre-hook 可拒绝执行并给出原因。"""
+
         @tool_hooks.on_pre("toolkit_demo")
         def _deny(tool_name, args):
             if args.get("action") == "write":
@@ -71,6 +75,7 @@ class TestToolHooks:
 
     def test_wildcard_hook_matches_all(self):
         """全局钩子（*）匹配所有工具。"""
+
         @tool_hooks.on_post()
         def _global(tool_name, args, result):
             return {"result": {"tool": tool_name}}
@@ -89,9 +94,11 @@ class TestToolHooks:
 
 # ═══ 2. Session fork ══════════════════════════════════════
 
+
 class TestSessionFork:
     def _make_storage(self):
         from tea_agent.store._core import Storage
+
         db = os.path.join(tempfile.mkdtemp(), "test_fork.db")
         return Storage(db)
 
@@ -132,6 +139,7 @@ class TestSessionFork:
 
 # ═══ 3. 防御模式 ═════════════════════════════════════════
 
+
 def _load_exec_module():
     path = os.path.join(os.path.dirname(__file__), "..", "toolkit", "toolkit_exec.py")
     spec = importlib.util.spec_from_file_location("tk_exec_test", path)
@@ -158,6 +166,7 @@ class TestOrthogonalReporting:
     def test_scrubbed_env(self):
         m = _load_exec_module()
         import os as _os
+
         _os.environ["TEST_API_KEY_X"] = "secret"
         scrubbed = m._build_scrubbed_env()
         assert "TEST_API_KEY_X" not in scrubbed
@@ -167,6 +176,7 @@ class TestOrthogonalReporting:
 class TestDisposeQuiescence:
     def test_stop_analyzer_reaches_quiescence(self):
         from tea_agent import agent_background as ab
+
         t = ab.start_interruption_analyzer(interval_h=0.00001)
         assert t is not None and t.is_alive()
         time.sleep(0.3)  # 让线程至少跑一次

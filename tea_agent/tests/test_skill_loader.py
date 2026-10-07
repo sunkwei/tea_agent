@@ -26,9 +26,7 @@ from tea_agent.skill_loader import (
 )
 
 # 真实 skills 目录（17 个内置 SKILL.md）
-SKILLS_DIR = os.path.abspath(
-    os.path.join(os.path.dirname(__file__), "..", "skills")
-)
+SKILLS_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "skills"))
 
 
 @pytest.fixture(autouse=True)
@@ -44,14 +42,17 @@ def _make_context(messages: list[dict], tools: set[str] | None = None) -> Sessio
     ctx = SessionContext()
     ctx.messages = messages
     if tools is not None:
+
         class _FakeToolkit:
             def __init__(self, names):
                 self.func_map = {n: lambda *a, **k: None for n in names}
+
         ctx.toolkit = _FakeToolkit(tools)
     return ctx
 
 
 # ── 1. 扫描 ──
+
 
 def test_scan_discovers_all_skills():
     ev = SkillLoadEvaluator(skills_dir=SKILLS_DIR)
@@ -59,8 +60,7 @@ def test_scan_discovers_all_skills():
     names = {m["name"] for m in items}
     assert len(items) >= 17
     # 关键 skill 都在
-    for expected in ("agent-browser", "optimize-sql", "caveman", "writing-style",
-                     "process-excel", "manage-docker", "output-format-constraint"):
+    for expected in ("agent-browser", "optimize-sql", "caveman", "writing-style", "process-excel", "manage-docker", "output-format-constraint"):
         assert expected in names
 
 
@@ -72,6 +72,7 @@ def test_scan_parses_front_matter():
 
 
 # ── 2. 必要性 / 充分性 ──
+
 
 def test_necessity_high_for_related_task():
     ev = SkillLoadEvaluator(skills_dir=SKILLS_DIR)
@@ -89,8 +90,7 @@ def test_necessity_low_for_unrelated_task():
 
 def test_sufficiency_covered_by_tools():
     ev = SkillLoadEvaluator(skills_dir=SKILLS_DIR)
-    tools = {"toolkit_browser_tab", "toolkit_js_fetch",
-             "toolkit_input", "toolkit_screenshot"}
+    tools = {"toolkit_browser_tab", "toolkit_js_fetch", "toolkit_input", "toolkit_screenshot"}
     s = ev._sufficiency("agent-browser", tools)
     assert s >= SUFFICIENCY_THRESHOLD
 
@@ -103,6 +103,7 @@ def test_sufficiency_zero_without_tools():
 
 # ── 3. 决策矩阵 ──
 
+
 def test_decision_load_when_necessary_and_insufficient():
     ev = SkillLoadEvaluator(skills_dir=SKILLS_DIR)
     decs = ev.evaluate("用户要求用 docker 优化镜像瘦身", available_tools=set())
@@ -112,8 +113,7 @@ def test_decision_load_when_necessary_and_insufficient():
 
 def test_decision_no_load_when_already_covered():
     ev = SkillLoadEvaluator(skills_dir=SKILLS_DIR)
-    tools = {"toolkit_browser_tab", "toolkit_js_fetch",
-             "toolkit_input", "toolkit_screenshot"}
+    tools = {"toolkit_browser_tab", "toolkit_js_fetch", "toolkit_input", "toolkit_screenshot"}
     decs = ev.evaluate("帮我在浏览器里自动填表并截图", available_tools=tools)
     by_name = {d.name: d for d in decs}
     assert by_name["agent-browser"].action == "no_load"
@@ -134,17 +134,20 @@ def test_output_format_constraint_skipped():
 
 # ── 4. evaluate_and_load 集成 ──
 
+
 def test_eval_load_insufficient_evidence_returns_none():
     ctx = _make_context([{"role": "user", "content": "优化一下 SQL 慢查询"}])
     assert evaluate_and_load(ctx) is None  # 只有 1 轮证据
 
 
 def test_eval_load_with_evidence_loads_skill():
-    ctx = _make_context([
-        {"role": "user", "content": "先看下项目的 Excel 报表"},
-        {"role": "assistant", "content": "好的"},
-        {"role": "user", "content": "帮我清洗这个 Excel，合并单元格很多"},
-    ])
+    ctx = _make_context(
+        [
+            {"role": "user", "content": "先看下项目的 Excel 报表"},
+            {"role": "assistant", "content": "好的"},
+            {"role": "user", "content": "帮我清洗这个 Excel，合并单元格很多"},
+        ]
+    )
     result = evaluate_and_load(ctx)
     assert result is not None
     assert "process-excel" in result
@@ -152,11 +155,13 @@ def test_eval_load_with_evidence_loads_skill():
 
 
 def test_eval_load_dedup_not_reinjected():
-    ctx = _make_context([
-        {"role": "user", "content": "处理一下 excel 多表合并"},
-        {"role": "assistant", "content": "好的"},
-        {"role": "user", "content": "继续清洗 excel 数据"},
-    ])
+    ctx = _make_context(
+        [
+            {"role": "user", "content": "处理一下 excel 多表合并"},
+            {"role": "assistant", "content": "好的"},
+            {"role": "user", "content": "继续清洗 excel 数据"},
+        ]
+    )
     first = evaluate_and_load(ctx)
     assert first is not None
     # 已加载的 skill 记录在 context，第二轮不再重复注入
@@ -167,11 +172,13 @@ def test_eval_load_dedup_not_reinjected():
 
 def test_eval_load_respects_max_per_round():
     # 同时涉及多个领域 → 最多加载 MAX_LOAD_PER_ROUND 个
-    ctx = _make_context([
-        {"role": "user", "content": "帮我用 docker 和 sql 优化两件事"},
-        {"role": "assistant", "content": "好的"},
-        {"role": "user", "content": "docker 镜像瘦身 + 慢查询索引优化"},
-    ])
+    ctx = _make_context(
+        [
+            {"role": "user", "content": "帮我用 docker 和 sql 优化两件事"},
+            {"role": "assistant", "content": "好的"},
+            {"role": "user", "content": "docker 镜像瘦身 + 慢查询索引优化"},
+        ]
+    )
     result = evaluate_and_load(ctx)
     if result is not None:
         assert result.count("<loaded_skill") <= 2
@@ -179,11 +186,10 @@ def test_eval_load_respects_max_per_round():
 
 # ── 5. 知识结晶废除验证 ──
 
+
 def test_knowledge_crystallization_deprecated():
     """history_builder 不再引用 SkillRegistry.recommend（废除知识结晶推荐）。"""
-    hb_path = os.path.abspath(
-        os.path.join(os.path.dirname(__file__), "..", "session", "history_builder.py")
-    )
+    hb_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "session", "history_builder.py"))
     with open(hb_path, encoding="utf-8") as f:
         src = f.read()
     assert "SkillRegistry" not in src

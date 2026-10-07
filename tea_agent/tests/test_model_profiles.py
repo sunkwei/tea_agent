@@ -25,17 +25,11 @@ def agent_dir(tmp_path):
     d = tmp_path / "agent"
     d.mkdir()
     (d / "config.yaml").write_text(
-        "main_model:\n"
-        "  api_key: sk-should-be-ignored\n"
-        "  api_url: https://api.deepseek.com\n"
-        '  model_name: "deepseek-chat"\n',
-        encoding="utf-8")
+        'main_model:\n  api_key: sk-should-be-ignored\n  api_url: https://api.deepseek.com\n  model_name: "deepseek-chat"\n', encoding="utf-8"
+    )
     (d / "config_ds.yaml").write_text(
-        "main_model:\n"
-        "  api_key: sk-also-ignored\n"
-        "  api_url: https://api.deepseek.com\n"
-        '  model_name: "deepseek-v4-pro"\n',
-        encoding="utf-8")
+        'main_model:\n  api_key: sk-also-ignored\n  api_url: https://api.deepseek.com\n  model_name: "deepseek-v4-pro"\n', encoding="utf-8"
+    )
     return d
 
 
@@ -52,6 +46,7 @@ def pstore(tmp_path, monkeypatch, agent_dir):
 
 
 # ── 已停用契约 ────────────────────────────────────────────
+
 
 def test_scan_config_profiles_is_disabled(agent_dir):
     """即便 config*.yaml 存在，也不再派生任何提供商。"""
@@ -70,8 +65,7 @@ def test_config_profiles_do_not_seed_providers(pstore, agent_dir):
 
 def test_provider_yaml_is_single_source(pstore, tmp_path):
     """写入只落 provider.yaml，不生成 model_config.json。"""
-    pstore.upsert_provider("MyProv", {"api_url": "https://x.example/v1",
-                                      "api_key": "sk-x"})
+    pstore.upsert_provider("MyProv", {"api_url": "https://x.example/v1", "api_key": "sk-x"})
     pstore.save()
     assert pstore.file_path.exists()
     assert not (tmp_path / "model_config.json").exists()

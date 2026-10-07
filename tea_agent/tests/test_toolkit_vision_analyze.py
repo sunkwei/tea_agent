@@ -8,6 +8,7 @@ from unittest.mock import MagicMock, patch
 def test_meta_exists():
     """工具应注册到 Toolkit.meta_map"""
     from tea_agent.tlk import Toolkit
+
     tk = Toolkit()
     assert "toolkit_vision_analyze" in tk.meta_map
     meta = tk.meta_map["toolkit_vision_analyze"]
@@ -20,6 +21,7 @@ def test_meta_exists():
 def test_to_data_url_passthrough_data_url():
     """data URL 原样透传"""
     from tea_agent.toolkit.toolkit_vision_analyze import _to_data_url
+
     url = "data:image/png;base64,AAAA"
     assert _to_data_url(url) == url
 
@@ -27,12 +29,14 @@ def test_to_data_url_passthrough_data_url():
 def test_to_data_url_remote_url():
     """http(s) URL 原样透传（模型端拉取）"""
     from tea_agent.toolkit.toolkit_vision_analyze import _to_data_url
+
     assert _to_data_url("https://x.com/a.png") == "https://x.com/a.png"
 
 
 def test_to_data_url_local_file(tmp_path):
     """本地文件编码为 base64 data URL"""
     from tea_agent.toolkit.toolkit_vision_analyze import _to_data_url
+
     img = tmp_path / "test.png"
     img.write_bytes(b"\x89PNG fake")
     result = _to_data_url(str(img))
@@ -42,14 +46,15 @@ def test_to_data_url_local_file(tmp_path):
 def test_to_data_url_missing_file():
     """不存在的路径返回 None"""
     from tea_agent.toolkit.toolkit_vision_analyze import _to_data_url
+
     assert _to_data_url("nonexistent.png") is None
 
 
 def test_analyze_no_vision_model():
     """未配置视觉模型时返回清晰错误"""
-    with patch("tea_agent.toolkit.toolkit_vision_analyze._get_vision_client",
-               return_value=(None, None, None)):
+    with patch("tea_agent.toolkit.toolkit_vision_analyze._get_vision_client", return_value=(None, None, None)):
         from tea_agent.toolkit.toolkit_vision_analyze import toolkit_vision_analyze
+
         result = toolkit_vision_analyze(image="/tmp/x.png")
         assert result["ok"] is False
         assert "无可用视觉模型" in result["error"]
@@ -62,12 +67,10 @@ def test_analyze_success():
     mock_resp.choices[0].message.content = "图片中有一只猫"
     mock_client.chat.completions.create.return_value = mock_resp
 
-    with patch("tea_agent.toolkit.toolkit_vision_analyze._get_vision_client",
-               return_value=(mock_client, "mimo-v2.5", {"supports_reasoning": True})):
+    with patch("tea_agent.toolkit.toolkit_vision_analyze._get_vision_client", return_value=(mock_client, "mimo-v2.5", {"supports_reasoning": True})):
         from tea_agent.toolkit.toolkit_vision_analyze import toolkit_vision_analyze
-        result = toolkit_vision_analyze(
-            image="data:image/png;base64,AAAA", prompt="描述这张图"
-        )
+
+        result = toolkit_vision_analyze(image="data:image/png;base64,AAAA", prompt="描述这张图")
         assert result["ok"] is True
         assert result["text"] == "图片中有一只猫"
         assert result["model"] == "mimo-v2.5"
@@ -92,9 +95,9 @@ def test_analyze_empty_content_on_length():
     mock_resp.choices[0].finish_reason = "length"
     mock_client.chat.completions.create.return_value = mock_resp
 
-    with patch("tea_agent.toolkit.toolkit_vision_analyze._get_vision_client",
-               return_value=(mock_client, "deepseek-v4-flash-vision-exp", {})):
+    with patch("tea_agent.toolkit.toolkit_vision_analyze._get_vision_client", return_value=(mock_client, "deepseek-v4-flash-vision-exp", {})):
         from tea_agent.toolkit.toolkit_vision_analyze import toolkit_vision_analyze
+
         result = toolkit_vision_analyze(image="data:image/png;base64,AAAA", max_tokens=300)
         assert result["ok"] is False, "空文本不得伪装成功"
         assert "max_tokens" in result["error"]
@@ -109,9 +112,9 @@ def test_analyze_empty_content_on_stop():
     mock_resp.choices[0].finish_reason = "stop"
     mock_client.chat.completions.create.return_value = mock_resp
 
-    with patch("tea_agent.toolkit.toolkit_vision_analyze._get_vision_client",
-               return_value=(mock_client, "m", {})):
+    with patch("tea_agent.toolkit.toolkit_vision_analyze._get_vision_client", return_value=(mock_client, "m", {})):
         from tea_agent.toolkit.toolkit_vision_analyze import toolkit_vision_analyze
+
         result = toolkit_vision_analyze(image="data:image/png;base64,AAAA")
         assert result["ok"] is False
         assert "输出为空" in result["error"]
@@ -122,9 +125,9 @@ def test_analyze_api_error():
     mock_client = MagicMock()
     mock_client.chat.completions.create.side_effect = RuntimeError("API down")
 
-    with patch("tea_agent.toolkit.toolkit_vision_analyze._get_vision_client",
-               return_value=(mock_client, "mimo-v2.5", {})):
+    with patch("tea_agent.toolkit.toolkit_vision_analyze._get_vision_client", return_value=(mock_client, "mimo-v2.5", {})):
         from tea_agent.toolkit.toolkit_vision_analyze import toolkit_vision_analyze
+
         result = toolkit_vision_analyze(image="data:image/png;base64,AAAA")
         assert result["ok"] is False
         assert "视觉模型调用失败" in result["error"]
@@ -137,9 +140,9 @@ def test_analyze_detail_passthrough():
     mock_resp.choices[0].message.content = "蓝色"
     mock_client.chat.completions.create.return_value = mock_resp
 
-    with patch("tea_agent.toolkit.toolkit_vision_analyze._get_vision_client",
-               return_value=(mock_client, "deepseek-v4-flash-vision-exp", {})):
+    with patch("tea_agent.toolkit.toolkit_vision_analyze._get_vision_client", return_value=(mock_client, "deepseek-v4-flash-vision-exp", {})):
         from tea_agent.toolkit.toolkit_vision_analyze import toolkit_vision_analyze
+
         result = toolkit_vision_analyze(image="data:image/png;base64,AAAA", detail="high")
         assert result["ok"] is True
         _, kwargs = mock_client.chat.completions.create.call_args
@@ -156,9 +159,11 @@ def test_analyze_detail_from_options():
     mock_resp.choices[0].message.content = "红色"
     mock_client.chat.completions.create.return_value = mock_resp
 
-    with patch("tea_agent.toolkit.toolkit_vision_analyze._get_vision_client",
-               return_value=(mock_client, "deepseek-v4-flash-vision-exp", {"detail": "low"})):
+    with patch(
+        "tea_agent.toolkit.toolkit_vision_analyze._get_vision_client", return_value=(mock_client, "deepseek-v4-flash-vision-exp", {"detail": "low"})
+    ):
         from tea_agent.toolkit.toolkit_vision_analyze import toolkit_vision_analyze
+
         result = toolkit_vision_analyze(image="data:image/png;base64,AAAA")
         assert result["ok"] is True
         _, kwargs = mock_client.chat.completions.create.call_args
@@ -173,9 +178,9 @@ def test_analyze_detail_invalid_omitted():
     mock_resp.choices[0].message.content = "OK"
     mock_client.chat.completions.create.return_value = mock_resp
 
-    with patch("tea_agent.toolkit.toolkit_vision_analyze._get_vision_client",
-               return_value=(mock_client, "m", {})):
+    with patch("tea_agent.toolkit.toolkit_vision_analyze._get_vision_client", return_value=(mock_client, "m", {})):
         from tea_agent.toolkit.toolkit_vision_analyze import toolkit_vision_analyze
+
         result = toolkit_vision_analyze(image="data:image/png;base64,AAAA", detail="bogus")
         assert result["ok"] is True
         _, kwargs = mock_client.chat.completions.create.call_args
@@ -190,10 +195,7 @@ def _cands(*names):
     """构造 _vision_candidates 返回值（已配置且支持视觉的模型列表）。"""
     from types import SimpleNamespace
 
-    return [
-        SimpleNamespace(model_name=n, options={}, is_configured=True, supports_vision=True)
-        for n in names
-    ]
+    return [SimpleNamespace(model_name=n, options={}, is_configured=True, supports_vision=True) for n in names]
 
 
 def test_fallback_to_main_model_when_vision_fails():
@@ -209,18 +211,18 @@ def test_fallback_to_main_model_when_vision_fails():
     fb_resp.choices[0].message.content = "回退模型识别出的内容"
     fallback.chat.completions.create.return_value = fb_resp
 
-    with patch("tea_agent.toolkit.toolkit_vision_analyze._get_vision_client",
-               return_value=(primary, "primary-vision", {})):
-        with patch("tea_agent.toolkit.toolkit_vision_analyze._client_for",
-                   return_value=fallback):
-            with patch("tea_agent.toolkit.toolkit_vision_analyze._vision_candidates",
-                       return_value=_cands("primary-vision", "main-vision-model")):
-                from tea_agent.toolkit.toolkit_vision_analyze import toolkit_vision_analyze
-                result = toolkit_vision_analyze(image="data:image/png;base64,AAAA")
-                assert result["ok"] is True
-                assert result["text"] == "回退模型识别出的内容"
-                assert result["model"] == "main-vision-model"
-                assert result["fallback_from"] == "primary-vision"
+    with (
+        patch("tea_agent.toolkit.toolkit_vision_analyze._get_vision_client", return_value=(primary, "primary-vision", {})),
+        patch("tea_agent.toolkit.toolkit_vision_analyze._client_for", return_value=fallback),
+        patch("tea_agent.toolkit.toolkit_vision_analyze._vision_candidates", return_value=_cands("primary-vision", "main-vision-model")),
+    ):
+        from tea_agent.toolkit.toolkit_vision_analyze import toolkit_vision_analyze
+
+        result = toolkit_vision_analyze(image="data:image/png;base64,AAAA")
+        assert result["ok"] is True
+        assert result["text"] == "回退模型识别出的内容"
+        assert result["model"] == "main-vision-model"
+        assert result["fallback_from"] == "primary-vision"
 
 
 def test_fallback_on_empty_output():
@@ -237,16 +239,16 @@ def test_fallback_on_empty_output():
     fb_resp.choices[0].finish_reason = "stop"
     fallback.chat.completions.create.return_value = fb_resp
 
-    with patch("tea_agent.toolkit.toolkit_vision_analyze._get_vision_client",
-               return_value=(primary, "primary-vision", {})):
-        with patch("tea_agent.toolkit.toolkit_vision_analyze._client_for",
-                   return_value=fallback):
-            with patch("tea_agent.toolkit.toolkit_vision_analyze._vision_candidates",
-                       return_value=_cands("primary-vision", "main-vision-model")):
-                from tea_agent.toolkit.toolkit_vision_analyze import toolkit_vision_analyze
-                result = toolkit_vision_analyze(image="data:image/png;base64,AAAA")
-                assert result["ok"] is True
-                assert result["text"] == "回退成功"
+    with (
+        patch("tea_agent.toolkit.toolkit_vision_analyze._get_vision_client", return_value=(primary, "primary-vision", {})),
+        patch("tea_agent.toolkit.toolkit_vision_analyze._client_for", return_value=fallback),
+        patch("tea_agent.toolkit.toolkit_vision_analyze._vision_candidates", return_value=_cands("primary-vision", "main-vision-model")),
+    ):
+        from tea_agent.toolkit.toolkit_vision_analyze import toolkit_vision_analyze
+
+        result = toolkit_vision_analyze(image="data:image/png;base64,AAAA")
+        assert result["ok"] is True
+        assert result["text"] == "回退成功"
 
 
 def test_no_fallback_when_same_model():
@@ -254,15 +256,16 @@ def test_no_fallback_when_same_model():
     primary = MagicMock()
     primary.chat.completions.create.side_effect = RuntimeError("boom")
 
-    with patch("tea_agent.toolkit.toolkit_vision_analyze._get_vision_client",
-               return_value=(primary, "same-model", {})):
-        with patch("tea_agent.toolkit.toolkit_vision_analyze._vision_candidates",
-                   return_value=_cands("same-model")):
-            from tea_agent.toolkit.toolkit_vision_analyze import toolkit_vision_analyze
-            result = toolkit_vision_analyze(image="data:image/png;base64,AAAA")
-            assert result["ok"] is False
-            assert "视觉模型调用失败" in result["error"]
-            assert primary.chat.completions.create.call_count == 1
+    with (
+        patch("tea_agent.toolkit.toolkit_vision_analyze._get_vision_client", return_value=(primary, "same-model", {})),
+        patch("tea_agent.toolkit.toolkit_vision_analyze._vision_candidates", return_value=_cands("same-model")),
+    ):
+        from tea_agent.toolkit.toolkit_vision_analyze import toolkit_vision_analyze
+
+        result = toolkit_vision_analyze(image="data:image/png;base64,AAAA")
+        assert result["ok"] is False
+        assert "视觉模型调用失败" in result["error"]
+        assert primary.chat.completions.create.call_count == 1
 
 
 def test_no_fallback_when_main_lacks_vision():
@@ -270,11 +273,12 @@ def test_no_fallback_when_main_lacks_vision():
     primary = MagicMock()
     primary.chat.completions.create.side_effect = RuntimeError("boom")
 
-    with patch("tea_agent.toolkit.toolkit_vision_analyze._get_vision_client",
-               return_value=(primary, "primary-vision", {})):
-        with patch("tea_agent.toolkit.toolkit_vision_analyze._vision_candidates",
-                   return_value=_cands("primary-vision")):
-            from tea_agent.toolkit.toolkit_vision_analyze import toolkit_vision_analyze
-            result = toolkit_vision_analyze(image="data:image/png;base64,AAAA")
-            assert result["ok"] is False
-            assert "视觉模型调用失败" in result["error"]
+    with (
+        patch("tea_agent.toolkit.toolkit_vision_analyze._get_vision_client", return_value=(primary, "primary-vision", {})),
+        patch("tea_agent.toolkit.toolkit_vision_analyze._vision_candidates", return_value=_cands("primary-vision")),
+    ):
+        from tea_agent.toolkit.toolkit_vision_analyze import toolkit_vision_analyze
+
+        result = toolkit_vision_analyze(image="data:image/png;base64,AAAA")
+        assert result["ok"] is False
+        assert "视觉模型调用失败" in result["error"]

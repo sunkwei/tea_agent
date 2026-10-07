@@ -113,23 +113,10 @@ extend-exclude = [
     "output",
     "uploads",
     "tmp",
-    "tests",
     "tea_agent/demo",
-    # 根目录一次性分析 / 构建 / 演示脚本
-    "analyze_llm_friendly.py",
-    "asr_vad.py",
+    # 根目录构建脚本（不随包分发）
     "build_mini.py",
     "build_nuitka.py",
-    "crosscut_scan.py",
-    "gen_pdf.py",
-    "launch_dag_demo.py",
-    "optimize_agent.py",
-    "optimize_config.py",
-    "start_server_wrapper.py",
-    "test_dag_demo.py",
-    "test_dag_server.py",
-    "test_multi_agent_demo.py",
-    "test_server_dag_e2e.py",
 ]
 
 [tool.ruff.lint]

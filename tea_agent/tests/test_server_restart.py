@@ -107,8 +107,7 @@ class TestBuildRestartArgs:
 
     def test_positive_control_legacy_expr_was_broken(self):
         """阳性对照：复现旧实现，证明上面的检测手段确实能发现问题。"""
-        legacy = [m for m in ["-m", "tea_agent.server", "--host", "127.0.0.1",
-                              "--port", "8282", "--config", "", "--api-key", ""] if m]
+        legacy = [m for m in ["-m", "tea_agent.server", "--host", "127.0.0.1", "--port", "8282", "--config", "", "--api-key", ""] if m]
         assert _dangling_flags(legacy) == ["--config"]  # 旧实现必然悬空
         assert srv._build_restart_args("127.0.0.1", 8282, None, None) != legacy
 
@@ -171,22 +170,22 @@ class TestRestartServer:
     def test_graceful_spawns_drain_and_does_not_exit_now(self):
         fake = _FakeUvicornServer()
         srv._uvicorn_server = fake
-        with patch.object(srv, "_inflight_topics", return_value={"t1"}), \
-             patch.object(srv, "_drain_then_exit") as drain, \
-             patch("threading.Thread") as thread:
+        with (
+            patch.object(srv, "_inflight_topics", return_value={"t1"}),
+            patch.object(srv, "_drain_then_exit") as drain,
+            patch("threading.Thread") as thread,
+        ):
             r = srv.restart_server(graceful=True, wait_seconds=0.01)
         assert r["ok"] is True
         assert r["wait_seconds"] == 0.01
         assert r["inflight_turns"] == 1
         thread.assert_called_once()
-        drain.assert_not_called()          # 由线程执行，未同步阻塞
-        assert fake.should_exit is False   # 关键：未立即退出（不切断 SSE）
+        drain.assert_not_called()  # 由线程执行，未同步阻塞
+        assert fake.should_exit is False  # 关键：未立即退出（不切断 SSE）
 
     def test_graceful_marks_requested_once(self):
         srv._uvicorn_server = _FakeUvicornServer()
-        with patch.object(srv, "_inflight_topics", return_value=set()), \
-             patch.object(srv, "_drain_then_exit"), \
-             patch("threading.Thread"):
+        with patch.object(srv, "_inflight_topics", return_value=set()), patch.object(srv, "_drain_then_exit"), patch("threading.Thread"):
             assert srv.restart_server(graceful=True)["ok"] is True
             assert srv._restart_requested  # 现记为发起时刻(monotonic)，非 0 即「重启中」
             # 第二次请求被拒（避免并发拉起多个新进程）
@@ -225,30 +224,31 @@ class TestDrainAndSpawn:
 
     def test_spawn_successor_true_when_ready(self):
         srv._restart_args = ["-m", "tea_agent.server"]
-        with patch.object(srv, "_wait_port_free", return_value=True), \
-             patch.object(srv, "_wait_ready", return_value=True), \
-             patch("subprocess.Popen") as popen:
+        with (
+            patch.object(srv, "_wait_port_free", return_value=True),
+            patch.object(srv, "_wait_ready", return_value=True),
+            patch("subprocess.Popen") as popen,
+        ):
             popen.return_value.pid = 4321
             assert srv._spawn_successor("127.0.0.1", 8282) is True
         assert popen.call_count == 1
 
     def test_spawn_successor_retries_then_gives_up(self):
-        with patch.object(srv, "_wait_port_free", return_value=True), \
-             patch.object(srv, "_wait_ready", return_value=False), \
-             patch("subprocess.Popen") as popen:
+        with (
+            patch.object(srv, "_wait_port_free", return_value=True),
+            patch.object(srv, "_wait_ready", return_value=False),
+            patch("subprocess.Popen") as popen,
+        ):
             popen.return_value.pid = 1
-            assert srv._spawn_successor("127.0.0.1", 8282,
-                                        attempts=2, wait_ready=0.01) is False
-        assert popen.call_count == 2   # 确认有重试
+            assert srv._spawn_successor("127.0.0.1", 8282, attempts=2, wait_ready=0.01) is False
+        assert popen.call_count == 2  # 确认有重试
 
     def test_spawn_skipped_while_port_busy(self):
         """端口未释放时不得拉起新进程（竞态修复的核心断言）。"""
-        with patch.object(srv, "_wait_port_free", return_value=False), \
-             patch("subprocess.Popen") as popen:
+        with patch.object(srv, "_wait_port_free", return_value=False), patch("subprocess.Popen") as popen:
             assert srv._spawn_successor("127.0.0.1", 8282, attempts=2) is False
         popen.assert_not_called()
 
     def test_spawn_handles_popen_failure(self):
-        with patch.object(srv, "_wait_port_free", return_value=True), \
-             patch("subprocess.Popen", side_effect=OSError("boom")):
+        with patch.object(srv, "_wait_port_free", return_value=True), patch("subprocess.Popen", side_effect=OSError("boom")):
             assert srv._spawn_successor("127.0.0.1", 8282, attempts=2) is False

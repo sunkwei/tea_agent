@@ -45,6 +45,7 @@ def temp_history(tmp_path, monkeypatch):
 
 # ── 引擎：check 注册与执行 ────────────────────────────────────────
 
+
 def test_checks_registered():
     assert {"command", "file", "python"} <= set(CHECKS)
 
@@ -62,10 +63,16 @@ def test_run_task_python_check_pass(tmp_path):
 
 def test_run_task_failure_isolated(tmp_path):
     """单个 check 失败不影响其他 check（失败隔离）。"""
-    r = run_task({"id": "t2", "checks": [
-        {"type": "python", "expr": "assert False, 'boom'"},
-        {"type": "python", "expr": "assert True"},
-    ]}, root=tmp_path)
+    r = run_task(
+        {
+            "id": "t2",
+            "checks": [
+                {"type": "python", "expr": "assert False, 'boom'"},
+                {"type": "python", "expr": "assert True"},
+            ],
+        },
+        root=tmp_path,
+    )
     assert r["score"] == 0.5 and not r["ok"]
     assert "boom" in r["checks"][0]["detail"]
 
@@ -98,6 +105,7 @@ def test_scrubbed_env_drops_secret_keys(monkeypatch):
 
 # ── 内置任务集：安全底座自证 ──────────────────────────────────────
 
+
 def test_builtin_safety_tasks_all_pass(temp_history):
     """A 部分（env 清洗 / 审计链 / 审批闸门）必须全绿。"""
     agg = run_bench(root=str(REPO_ROOT), kind="safety")
@@ -118,9 +126,9 @@ def test_load_tasks_kind_filter():
 
 # ── 进化曲线：记录与 keep-or-rollback ────────────────────────────
 
+
 def test_record_and_history_roundtrip(temp_history):
-    agg = {"score": 1.0, "passed": 7, "total": 7, "tasks": 3, "tasks_ok": 3,
-           "ok": True, "kind": "safety"}
+    agg = {"score": 1.0, "passed": 7, "total": 7, "tasks": 3, "tasks_ok": 3, "ok": True, "kind": "safety"}
     assert record_run(agg, tag="snap-1")
     pts = history()
     assert len(pts) == 1
@@ -129,8 +137,7 @@ def test_record_and_history_roundtrip(temp_history):
 
 
 def test_compare_decisions(temp_history):
-    temp_history.write_text(
-        json.dumps({"ts": "1", "score": 0.5}) + "\n", encoding="utf-8")
+    temp_history.write_text(json.dumps({"ts": "1", "score": 0.5}) + "\n", encoding="utf-8")
     assert compare_with_history(baseline=0.5, candidate=0.6)["decision"] == "keep"
     assert compare_with_history(baseline=0.5, candidate=0.4)["decision"] == "rollback"
     assert compare_with_history(baseline=0.5, candidate=0.5)["decision"] == "no_change"
@@ -139,8 +146,7 @@ def test_compare_decisions(temp_history):
 
 
 def test_compare_uses_last_history_point_as_baseline(temp_history):
-    temp_history.write_text(
-        json.dumps({"ts": "1", "score": 0.3}) + "\n", encoding="utf-8")
+    temp_history.write_text(json.dumps({"ts": "1", "score": 0.3}) + "\n", encoding="utf-8")
     r = compare_with_history(candidate={"score": 0.9})
     assert r["ok"] and r["baseline"] == 0.3 and r["delta"] == 0.6
 
@@ -157,8 +163,10 @@ def test_run_bench_records_snapshot(temp_history):
 
 # ── 审批分级（A3）────────────────────────────────────────────────
 
+
 def test_classify_risk_levels():
     from tea_agent.tool_approval import classify_risk as cr
+
     assert cr("toolkit_self_evolve")[0] == "critical"
     assert cr("toolkit_exec", {"app": "sudo", "args": ["ls"]})[0] == "critical"
     assert cr("toolkit_exec", {"app": "git", "args": ["status"]})[0] == "high"
@@ -170,18 +178,21 @@ def test_classify_risk_levels():
 def test_classify_risk_destructive_command_regression():
     """回归：仅扫描 args 会漏判 `rm -rf /`（app 自身须参与匹配）。"""
     from tea_agent.tool_approval import classify_risk as cr
+
     assert cr("toolkit_exec", {"app": "rm", "args": ["-rf", "/"]})[0] == "critical"
     assert cr("toolkit_exec", {"app": "mkfs", "args": ["-t", "ext4", "/dev/sda1"]})[0] == "critical"
 
 
 def test_exempt_tools_are_not_classified():
     from tea_agent.tool_approval import classify_risk as cr
+
     assert cr("toolkit_approve")[0] is None
     assert cr("toolkit_audit_log")[0] is None
 
 
 def test_approval_mode_env_override(monkeypatch):
     from tea_agent.tool_approval import approval_mode
+
     monkeypatch.setenv("TEA_APPROVAL_MODE", "enforce")
     assert approval_mode() == "enforce"
     monkeypatch.setenv("TEA_APPROVAL_MODE", "advisory")
@@ -192,8 +203,10 @@ def test_approval_mode_env_override(monkeypatch):
 
 # ── 审计日志（A2）────────────────────────────────────────────────
 
+
 def test_mask_secrets_key_and_value_form():
     from tea_agent.audit_log import mask_secrets
+
     assert mask_secrets({"api_key": "anything"})["api_key"] == "***MASKED***"
     masked = str(mask_secrets("token=sk-abcdefghijklmnop"))
     assert "sk-abcdefghijklmnop" not in masked
@@ -201,10 +214,11 @@ def test_mask_secrets_key_and_value_form():
 
 def test_audit_hash_chain_is_recomputable(tmp_path):
     from tea_agent.audit_log import GENESIS_HASH, AuditLog, _canonical
+
     al = AuditLog(directory=str(tmp_path))
     al.record("e1", tool="toolkit_x", status="ok")
     al.record("e2", tool="toolkit_x", status="ok")
-    recs = [json.loads(l) for l in Path(al.files()[0]).read_text(encoding="utf-8").splitlines() if l.strip()]
+    recs = [json.loads(ln) for ln in Path(al.files()[0]).read_text(encoding="utf-8").splitlines() if ln.strip()]
     assert recs[0]["prev"] == GENESIS_HASH
     assert recs[1]["prev"] == recs[0]["h"]
     for r in recs:
@@ -215,6 +229,7 @@ def test_audit_hash_chain_is_recomputable(tmp_path):
 
 def test_audit_tamper_detected(tmp_path):
     from tea_agent.audit_log import AuditLog
+
     al = AuditLog(directory=str(tmp_path))
     al.record("e", tool="t", status="ok")
     al.record("e", tool="t", status="ok")
@@ -230,6 +245,7 @@ def test_audit_tamper_detected(tmp_path):
 
 def test_audit_verify_intact_chain(tmp_path):
     from tea_agent.audit_log import AuditLog
+
     al = AuditLog(directory=str(tmp_path))
     al.record("a", tool="t", status="ok")
     al.record("b", tool="t", status="err")
@@ -239,6 +255,7 @@ def test_audit_verify_intact_chain(tmp_path):
 
 def test_audit_disabled_writes_nothing(tmp_path):
     from tea_agent.audit_log import AuditLog
+
     al = AuditLog(directory=str(tmp_path), enabled=False)
     assert al.record("e", tool="t") is None
     assert al.files() == []
@@ -246,8 +263,10 @@ def test_audit_disabled_writes_nothing(tmp_path):
 
 # ── 进化闸门（B2）────────────────────────────────────────────────
 
+
 def test_gate_mode_env_override(monkeypatch):
     from tea_agent.evolution_gate import gate_mode
+
     monkeypatch.setenv("TEA_EVOLVE_GATE", "enforce")
     assert gate_mode() == "enforce"
     monkeypatch.setenv("TEA_EVOLVE_GATE", "off")
@@ -258,6 +277,7 @@ def test_gate_mode_env_override(monkeypatch):
 
 def test_gate_threshold_parsing(monkeypatch):
     from tea_agent.evolution_gate import gate_threshold
+
     monkeypatch.setenv("TEA_EVOLVE_GATE_THRESHOLD", "0.25")
     assert gate_threshold() == 0.25
     monkeypatch.setenv("TEA_EVOLVE_GATE_THRESHOLD", "not-a-number")
@@ -267,6 +287,7 @@ def test_gate_threshold_parsing(monkeypatch):
 def test_install_gate_is_idempotent():
     from tea_agent.evolution_gate import install_evolution_gate
     from tea_agent.tool_hooks import ToolHookRegistry
+
     reg = ToolHookRegistry()
     install_evolution_gate(reg)
     install_evolution_gate(reg)
@@ -276,6 +297,7 @@ def test_install_gate_is_idempotent():
 
 def test_restore_latest_backup(tmp_path):
     from tea_agent.evolution_gate import _restore_latest_backup
+
     target = tmp_path / "mod.py"
     target.write_text("NEW = 1\n", encoding="utf-8")
     (tmp_path / "mod.py.bak.20260101_000000").write_text("OLD = 1\n", encoding="utf-8")
@@ -287,6 +309,7 @@ def test_restore_latest_backup(tmp_path):
 
 def test_restore_without_backup_reports_error(tmp_path):
     from tea_agent.evolution_gate import _restore_latest_backup
+
     target = tmp_path / "nobak.py"
     target.write_text("x = 1\n", encoding="utf-8")
     res = _restore_latest_backup(str(target))
@@ -296,6 +319,7 @@ def test_restore_without_backup_reports_error(tmp_path):
 def test_builtin_hooks_installed_lazily():
     """run_pre 应自动挂载内建审批/审计钩子（无需手工初始化）。"""
     from tea_agent.tool_hooks import ToolHookRegistry
+
     reg = ToolHookRegistry()
     assert reg._pre_hooks == {}
     reg.run_pre("toolkit_noop", {})
@@ -305,11 +329,10 @@ def test_builtin_hooks_installed_lazily():
 def test_toolkit_evo_bench_tool_actions(temp_history):
     """工具层接口：run / history / compare 三动作闭环。"""
     from tea_agent.toolkit.toolkit_evo_bench import toolkit_evo_bench
-    run1 = toolkit_evo_bench(action="run", kind="safety", root=str(REPO_ROOT),
-                             record=True, tag="r1", verbose=False)
+
+    run1 = toolkit_evo_bench(action="run", kind="safety", root=str(REPO_ROOT), record=True, tag="r1", verbose=False)
     assert run1["ok"] and "results" not in run1
-    run2 = toolkit_evo_bench(action="run", kind="safety", root=str(REPO_ROOT),
-                             record=True, tag="r2", verbose=False)
+    run2 = toolkit_evo_bench(action="run", kind="safety", root=str(REPO_ROOT), record=True, tag="r2", verbose=False)
     assert run2["ok"]
     hist = toolkit_evo_bench(action="history")
     assert hist["ok"] and hist["points"] == 2
@@ -319,6 +342,7 @@ def test_toolkit_evo_bench_tool_actions(temp_history):
 
 # ── 覆盖感知决策（20 轮实验发现的 pass-ratio 盲区修复） ──────────────
 
+
 def test_compare_coverage_only_improvement_is_keep(temp_history):
     """同分但覆盖扩大 → keep。
 
@@ -326,8 +350,7 @@ def test_compare_coverage_only_improvement_is_keep(temp_history):
     """
     from tea_agent.evaluation.evo_bench import compare_with_history
 
-    r = compare_with_history(baseline={"score": 1.0, "total": 7},
-                             candidate={"score": 1.0, "total": 13})
+    r = compare_with_history(baseline={"score": 1.0, "total": 7}, candidate={"score": 1.0, "total": 13})
     assert r["decision"] == "keep", r
     assert r["basis"] == "coverage", r
     assert r["coverage_delta"] == 6
@@ -338,8 +361,7 @@ def test_compare_coverage_shrink_is_rollback(temp_history):
     """同分但覆盖收缩 → rollback（不能因为分数没掉就放过）。"""
     from tea_agent.evaluation.evo_bench import compare_with_history
 
-    r = compare_with_history(baseline={"score": 1.0, "total": 13},
-                             candidate={"score": 1.0, "total": 7})
+    r = compare_with_history(baseline={"score": 1.0, "total": 13}, candidate={"score": 1.0, "total": 7})
     assert r["decision"] == "rollback" and r["basis"] == "coverage", r
 
 
@@ -347,12 +369,10 @@ def test_compare_score_takes_priority_over_coverage(temp_history):
     """分数变化优先于覆盖变化（两个方向都要）。"""
     from tea_agent.evaluation.evo_bench import compare_with_history
 
-    up = compare_with_history(baseline={"score": 0.5, "total": 10},
-                              candidate={"score": 0.9, "total": 5})
+    up = compare_with_history(baseline={"score": 0.5, "total": 10}, candidate={"score": 0.9, "total": 5})
     assert up["decision"] == "keep" and up["basis"] == "score", up
 
-    down = compare_with_history(baseline={"score": 0.9, "total": 5},
-                                candidate={"score": 0.5, "total": 20})
+    down = compare_with_history(baseline={"score": 0.9, "total": 5}, candidate={"score": 0.5, "total": 20})
     assert down["decision"] == "rollback" and down["basis"] == "score", down
 
 
@@ -372,9 +392,7 @@ def test_compare_coverage_threshold_respected(temp_history):
     """覆盖增量未超阈值 → 不保留（阈值可调）。"""
     from tea_agent.evaluation.evo_bench import compare_with_history
 
-    r = compare_with_history(baseline={"score": 1.0, "total": 7},
-                             candidate={"score": 1.0, "total": 8},
-                             coverage_threshold=2)
+    r = compare_with_history(baseline={"score": 1.0, "total": 7}, candidate={"score": 1.0, "total": 8}, coverage_threshold=2)
     assert r["decision"] == "no_change", r
 
 

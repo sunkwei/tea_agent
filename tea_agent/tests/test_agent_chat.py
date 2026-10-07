@@ -33,9 +33,11 @@ def _mock_openai_client():
     这里把三处构造点指向同一个 mock，使 ``MockOpenAI.return_value = mock_client``
     对所有调用点生效。
     """
-    with patch("openai.OpenAI") as mock_cls, \
-         patch("tea_agent.onlinesession.OpenAI", new=mock_cls), \
-         patch("tea_agent.litesession.OpenAI", new=mock_cls):
+    with (
+        patch("openai.OpenAI") as mock_cls,
+        patch("tea_agent.onlinesession.OpenAI", new=mock_cls),
+        patch("tea_agent.litesession.OpenAI", new=mock_cls),
+    ):
         yield mock_cls
 
 
@@ -69,6 +71,7 @@ def _write_config(path, **overrides):
     kb_dir = overrides.get("kb_dir", "./kb")
 
     import yaml as _yaml
+
     config = {
         "main_model": {
             "api_key": "sk-test",
@@ -262,12 +265,7 @@ class TestAgentChatIntegration:
             topic_id = agent._db.create_topic("Pipeline Test")
 
             # 测试 _post_chat_pipeline
-            agent._post_chat_pipeline(
-                ai_msg="AI response",
-                used_tools=True,
-                user_msg="User message",
-                topic_id=topic_id
-            )
+            agent._post_chat_pipeline(ai_msg="AI response", used_tools=True, user_msg="User message", topic_id=topic_id)
 
             # 验证对话已保存
             conversations = agent._db.get_conversations(topic_id, limit=5)
@@ -323,4 +321,3 @@ class TestAgentChatErrorHandling:
             assert isinstance(result, list | dict)
 
             agent.close()
-

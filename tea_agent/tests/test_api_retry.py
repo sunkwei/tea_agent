@@ -1,4 +1,5 @@
 """api_retry 弹性重试工具测试。"""
+
 import time
 
 import pytest
@@ -34,8 +35,7 @@ def test_retry_success_after_failures():
             raise APIConnectionError("connect error")
         return "ok"
 
-    result = call_with_retry(flaky_fn, max_retries=3, backoff=0.01,
-                             sleep_recovery_wait=0.0)
+    result = call_with_retry(flaky_fn, max_retries=3, backoff=0.01, sleep_recovery_wait=0.0)
     assert result == "ok"
     assert len(calls) == 3  # 首次 + 2 次重试
 
@@ -49,8 +49,7 @@ def test_retry_exhausted_raises():
         raise APIConnectionError("still down")
 
     with pytest.raises(APIConnectionError):
-        call_with_retry(always_fail, max_retries=2, backoff=0.01,
-                        sleep_recovery_wait=0.0)
+        call_with_retry(always_fail, max_retries=2, backoff=0.01, sleep_recovery_wait=0.0)
     assert len(calls) == 3  # 首次 + 2 次重试
 
 
@@ -80,8 +79,7 @@ def test_on_retry_callback_invoked():
     def on_retry(attempt, exc, wait):
         retries.append((attempt, type(exc).__name__, wait))
 
-    call_with_retry(flaky, max_retries=3, backoff=0.01,
-                    sleep_recovery_wait=0.0, on_retry=on_retry)
+    call_with_retry(flaky, max_retries=3, backoff=0.01, sleep_recovery_wait=0.0, on_retry=on_retry)
     assert len(retries) == 1
     assert retries[0][0] == 1
     assert retries[0][1] == "APIConnectionError"
@@ -119,8 +117,7 @@ def test_backoff_increases():
             raise APIConnectionError("down")
         return "ok"
 
-    call_with_retry(flaky, max_retries=5, backoff=0.01,
-                    sleep_recovery_wait=0.0, on_retry=on_retry)
+    call_with_retry(flaky, max_retries=5, backoff=0.01, sleep_recovery_wait=0.0, on_retry=on_retry)
     # 退避序列：0.01, 0.02, 0.04（2^0, 2^1, 2^2）
     assert len(waits) == 3
     assert waits[1] > waits[0]
@@ -150,9 +147,7 @@ def test_kwargs_passed_through():
         seen["stream"] = stream
         return "ok"
 
-    result = call_with_retry(
-        target, model="m", messages=[1], stream=True, max_retries=1
-    )
+    result = call_with_retry(target, model="m", messages=[1], stream=True, max_retries=1)
     assert result == "ok"
     assert seen == {"model": "m", "messages": [1], "stream": True}
 

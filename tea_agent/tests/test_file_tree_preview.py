@@ -25,10 +25,7 @@ import pytest
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
 # 1x1 透明 PNG（最小合法图片）
-PNG_1PX = bytes.fromhex(
-    "89504e470d0a1a0a0000000d494844520000000100000001080600000"
-    "01f15c4890000000a49444154789c6300010000050001"
-)
+PNG_1PX = bytes.fromhex("89504e470d0a1a0a0000000d49484452000000010000000108060000001f15c4890000000a49444154789c6300010000050001")
 
 
 @pytest.fixture
@@ -64,6 +61,7 @@ def client():
 # ════════════════════════════════════════════════════════════
 # 1. 纯函数：类型判定
 # ════════════════════════════════════════════════════════════
+
 
 class TestClassifyFile:
     @pytest.mark.parametrize("name", ["a.png", "a.PNG", "a.jpg", "a.jpeg", "a.gif", "a.webp", "a.svg", "a.bmp"])
@@ -108,6 +106,7 @@ class TestClassifyFile:
 # 2. 文件树：图片必须可见 + kind 标注
 # ════════════════════════════════════════════════════════════
 
+
 class TestFileTree:
     def test_images_are_listed(self, client, sandbox):
         """核心回归：图片此前被 ignored_exts 过滤，树里根本看不到。"""
@@ -145,6 +144,7 @@ class TestFileTree:
 # ════════════════════════════════════════════════════════════
 # 3. /api/file：按 kind 分流
 # ════════════════════════════════════════════════════════════
+
 
 class TestFileRead:
     def test_text_returns_content_and_hint(self, client, sandbox):
@@ -190,6 +190,7 @@ class TestFileRead:
 # 4. /api/file/raw：图片内联
 # ════════════════════════════════════════════════════════════
 
+
 class TestFileRaw:
     def test_png_inline_with_correct_mime(self, client, sandbox):
         r = client.get("/api/file/raw?path=pic.png")
@@ -205,9 +206,7 @@ class TestFileRaw:
 
     def test_svg_gets_sandbox_csp(self, client, sandbox):
         """SVG 可内嵌 <script>：同源内联 = 存储型 XSS，必须 sandbox。"""
-        (sandbox / "vec.svg").write_text(
-            "<svg xmlns='http://www.w3.org/2000/svg'><text>x</text></svg>", encoding="utf-8"
-        )
+        (sandbox / "vec.svg").write_text("<svg xmlns='http://www.w3.org/2000/svg'><text>x</text></svg>", encoding="utf-8")
         r = client.get("/api/file/raw?path=vec.svg")
         assert r.status_code == 200
         assert "sandbox" in r.headers.get("content-security-policy", "")
@@ -221,13 +220,17 @@ class TestFileRaw:
 # 5. 路径遍历防护（三个端点共用同一套）
 # ════════════════════════════════════════════════════════════
 
+
 class TestPathTraversal:
-    @pytest.mark.parametrize("evil", [
-        "../outside.txt",
-        "../../etc/passwd",
-        "..\\..\\windows\\win.ini",
-        "sub/../../outside.txt",
-    ])
+    @pytest.mark.parametrize(
+        "evil",
+        [
+            "../outside.txt",
+            "../../etc/passwd",
+            "..\\..\\windows\\win.ini",
+            "sub/../../outside.txt",
+        ],
+    )
     def test_traversal_rejected_on_all_endpoints(self, client, sandbox, evil):
         """新增 raw 端点不得开洞；树/读/raw 三处口径一致。"""
         for url in (

@@ -23,8 +23,8 @@ from tea_agent.tool_profiles import (  # noqa: E402
     resolve_tool_profile,
 )
 
-
 # ═══ #1 档位边界 ═══════════════════════════════════════
+
 
 class TestResolveToolProfile:
     """resolve_tool_profile：按 max_context_tokens 推导档位。"""
@@ -71,6 +71,7 @@ class TestResolveToolProfile:
 
 # ═══ #3 档位嵌套不变式 ═════════════════════════════════
 
+
 class TestProfileNesting:
     """档位须嵌套：nano ⊂ minimal ⊂ core ⊂ standard ⊂ full。"""
 
@@ -97,6 +98,7 @@ class TestProfileNesting:
 
 # ═══ #4 filter_tools_by_profile ═════════════════════════
 
+
 class TestFilterToolsByProfile:
     """过滤结果与顺序。"""
 
@@ -108,9 +110,7 @@ class TestFilterToolsByProfile:
         assert filter_tools_by_profile(tools, "full") == tools
 
     def test_nano_filters(self):
-        tools = self._make_tools(
-            ["toolkit_exec", "toolkit_file", "toolkit_edit", "toolkit_memory"]
-        )
+        tools = self._make_tools(["toolkit_exec", "toolkit_file", "toolkit_edit", "toolkit_memory"])
         result = filter_tools_by_profile(tools, "nano")
         names = [t["function"]["name"] for t in result]
         assert names == ["toolkit_exec", "toolkit_file", "toolkit_edit"]
@@ -124,6 +124,7 @@ class TestFilterToolsByProfile:
 
 
 # ═══ #5 config round-trip ═══════════════════════════════
+
 
 class TestConfigToolProfile:
     """ModelConfig.tool_profile 字段默认与读写。"""
@@ -139,6 +140,7 @@ class TestConfigToolProfile:
 
 
 # ═══ #6 context_fragments 预算缩放 ═════════════════════
+
 
 class TestAgentsMdBudgetScaling:
     """AGENTS.md 字节预算按上下文窗口缩放。"""

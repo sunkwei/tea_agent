@@ -15,6 +15,7 @@ import pytest
 # SessionContext
 # ============================================================
 
+
 class TestSessionContextDefaults:
     """SessionContext 默认值契约测试"""
 
@@ -67,12 +68,18 @@ class TestSessionContextDefaults:
         assert ctx._thinking_supported is True
         assert ctx._cheap_thinking_supported is None
         assert ctx._last_usage == {
-            "total_tokens": 0, "prompt_tokens": 0, "completion_tokens": 0,
-            "prompt_cache_hit_tokens": 0, "prompt_cache_miss_tokens": 0,
+            "total_tokens": 0,
+            "prompt_tokens": 0,
+            "completion_tokens": 0,
+            "prompt_cache_hit_tokens": 0,
+            "prompt_cache_miss_tokens": 0,
         }
         assert ctx._last_cheap_usage == {
-            "total_tokens": 0, "prompt_tokens": 0, "completion_tokens": 0,
-            "prompt_cache_hit_tokens": 0, "prompt_cache_miss_tokens": 0,
+            "total_tokens": 0,
+            "prompt_tokens": 0,
+            "completion_tokens": 0,
+            "prompt_cache_hit_tokens": 0,
+            "prompt_cache_miss_tokens": 0,
         }
         assert ctx._injected_memories_text == ""
         assert ctx._injected_memories == []
@@ -164,6 +171,7 @@ class TestSessionContextCustomInit:
 # ============================================================
 # SessionComponent
 # ============================================================
+
 
 class TestSessionComponentAbstract:
     """SessionComponent 抽象基类约束"""

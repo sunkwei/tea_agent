@@ -13,7 +13,7 @@ def _fake_input(answers: list[str]):
         try:
             return next(it)
         except StopIteration:
-            raise AssertionError(f"输入耗尽，仍在询问: {prompt!r}")
+            raise AssertionError(f"输入耗尽，仍在询问: {prompt!r}") from None
 
     return fn
 
@@ -49,8 +49,7 @@ class TestRunProviderSetupWizard:
         from tea_agent.setup_wizard import run_setup_wizard
 
         # 10=custom, url, model, key, n
-        saved = run_setup_wizard(input_fn=_fake_input(
-            ["10", "https://my-api.example.com/v1", "my-model", "sk-custom", "n"]))
+        saved = run_setup_wizard(input_fn=_fake_input(["10", "https://my-api.example.com/v1", "my-model", "sk-custom", "n"]))
 
         assert saved == str(isolated_store)
         data = yaml.safe_load(isolated_store.read_text(encoding="utf-8"))
@@ -70,8 +69,7 @@ class TestRunProviderSetupWizard:
         from tea_agent.setup_wizard import run_setup_wizard
 
         target = tmp_path / "config.yaml"
-        saved = run_setup_wizard(str(target),
-                                 input_fn=_fake_input(["1", "", "sk-x", "n"]))
+        saved = run_setup_wizard(str(target), input_fn=_fake_input(["1", "", "sk-x", "n"]))
 
         assert saved == str(isolated_store)
         assert not target.exists(), "不应再生成 config.yaml"

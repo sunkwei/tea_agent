@@ -17,15 +17,79 @@ from tea_agent.multi_agent.workflow_viz import DagVizRegistry, get_viz_html
 from tea_agent.server.route_handlers_exports import _IMAGE_MIME
 
 #: 可作为文本读取并格式化的扩展名（白名单；未列出者按二进制处理）
-_TEXT_EXTS: frozenset = frozenset({
-    ".py", ".pyi", ".pyw", ".js", ".mjs", ".cjs", ".ts", ".tsx", ".jsx", ".vue", ".svelte",
-    ".html", ".htm", ".css", ".scss", ".less", ".json", ".jsonl", ".ndjson", ".yaml", ".yml",
-    ".toml", ".ini", ".cfg", ".conf", ".properties", ".md", ".markdown", ".rst", ".txt",
-    ".log", ".csv", ".tsv", ".sh", ".bash", ".zsh", ".fish", ".bat", ".cmd", ".ps1",
-    ".sql", ".c", ".h", ".cc", ".cpp", ".hpp", ".cs", ".java", ".kt", ".rs", ".go",
-    ".rb", ".php", ".pl", ".lua", ".r", ".m", ".swift", ".dart", ".scala", ".gradle",
-    ".dockerfile", ".editorconfig", ".gitignore", ".dockerignore", ".env", ".lock", ".patch", ".diff",
-})
+_TEXT_EXTS: frozenset = frozenset(
+    {
+        ".py",
+        ".pyi",
+        ".pyw",
+        ".js",
+        ".mjs",
+        ".cjs",
+        ".ts",
+        ".tsx",
+        ".jsx",
+        ".vue",
+        ".svelte",
+        ".html",
+        ".htm",
+        ".css",
+        ".scss",
+        ".less",
+        ".json",
+        ".jsonl",
+        ".ndjson",
+        ".yaml",
+        ".yml",
+        ".toml",
+        ".ini",
+        ".cfg",
+        ".conf",
+        ".properties",
+        ".md",
+        ".markdown",
+        ".rst",
+        ".txt",
+        ".log",
+        ".csv",
+        ".tsv",
+        ".sh",
+        ".bash",
+        ".zsh",
+        ".fish",
+        ".bat",
+        ".cmd",
+        ".ps1",
+        ".sql",
+        ".c",
+        ".h",
+        ".cc",
+        ".cpp",
+        ".hpp",
+        ".cs",
+        ".java",
+        ".kt",
+        ".rs",
+        ".go",
+        ".rb",
+        ".php",
+        ".pl",
+        ".lua",
+        ".r",
+        ".m",
+        ".swift",
+        ".dart",
+        ".scala",
+        ".gradle",
+        ".dockerfile",
+        ".editorconfig",
+        ".gitignore",
+        ".dockerignore",
+        ".env",
+        ".lock",
+        ".patch",
+        ".diff",
+    }
+)
 
 #: 文本读取上限（超出即截断并提示；避免把巨型日志塞进弹窗）
 _TEXT_READ_MAX = 2 * 1024 * 1024
@@ -478,8 +542,7 @@ async def handle_file_read(request):
 
     kind, mime = classify_file(target.name)
     ext = target.suffix.lower()
-    base = {"ok": True, "path": file_path, "name": target.name, "ext": ext,
-            "size": size, "kind": kind, "mime": mime}
+    base = {"ok": True, "path": file_path, "name": target.name, "ext": ext, "size": size, "kind": kind, "mime": mime}
 
     if kind == "image":
         # 图片不做文本读取：交给 /api/file/raw 内联（正确 MIME，浏览器直接渲染）
@@ -504,8 +567,7 @@ async def handle_file_read(request):
     base["truncated"] = truncated
     if truncated:
         base["message"] = f"文件较大（{size} 字节），仅显示前 {_TEXT_READ_MAX} 字节"
-    base["format_hint"] = "json" if ext in (".json", ".jsonl", ".ndjson") else (
-        "markdown" if ext in (".md", ".markdown") else "code")
+    base["format_hint"] = "json" if ext in (".json", ".jsonl", ".ndjson") else ("markdown" if ext in (".md", ".markdown") else "code")
     return JSONResponse(base)
 
 
@@ -534,8 +596,7 @@ async def handle_file_raw(request):
     media = _IMAGE_MIME.get(ext)
     if not media:
         return JSONResponse(
-            {"ok": False, "error": f"不是可内联预览的类型: {ext or '(无扩展名)'}",
-             "previewable": sorted(_IMAGE_MIME)},
+            {"ok": False, "error": f"不是可内联预览的类型: {ext or '(无扩展名)'}", "previewable": sorted(_IMAGE_MIME)},
             status_code=415,
         )
 

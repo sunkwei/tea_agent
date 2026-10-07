@@ -13,8 +13,7 @@ from tea_agent import spill
 
 def test_small_text_passes_through():
     r = spill.spill_text("hello", threshold=100)
-    assert r == {"spilled": False, "truncated": False, "locator": "",
-                 "chars": 5, "preview": "hello"}
+    assert r == {"spilled": False, "truncated": False, "locator": "", "chars": 5, "preview": "hello"}
 
 
 def test_big_text_spills_to_file(tmp_path, monkeypatch):

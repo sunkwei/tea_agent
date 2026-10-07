@@ -10,6 +10,7 @@ Storage 委派 + StoreComponent 基类测试。
 - __getattr__ 自动路由方法调用到子组件
 - get_storage() 单例工厂
 """
+
 import sqlite3
 import uuid
 
@@ -83,12 +84,14 @@ class TestGetStorage:
 
     def test_returns_storage_instance(self, tmp_db_path):
         from tea_agent.store import Storage, get_storage
+
         s = get_storage(db_path=tmp_db_path)
         assert isinstance(s, Storage)
         s.close()
 
     def test_same_db_path_returns_same_instance(self, tmp_db_path):
         from tea_agent.store import get_storage
+
         s1 = get_storage(db_path=tmp_db_path)
         s2 = get_storage(db_path=tmp_db_path)
         assert s1 is s2
@@ -97,6 +100,7 @@ class TestGetStorage:
     def test_singleton_returns_same_instance(self, tmp_db_path):
         """get_storage 为全局单例，重复调用返回同一实例"""
         from tea_agent.store import get_storage
+
         s1 = get_storage(db_path=tmp_db_path)
         s2 = get_storage(db_path=tmp_db_path)
         assert s1 is s2
@@ -106,6 +110,7 @@ class TestGetStorage:
 # ============================================================
 # 短连接模式新增测试
 # ============================================================
+
 
 class TestDB:
     """DB 短连接上下文管理器"""
@@ -225,6 +230,7 @@ class TestThreadLocalConn:
     def test_conn_isolation_between_threads(self, tmp_db_path):
         """不同线程返回不同连接"""
         import threading
+
         comp = StoreComponent(db_path=tmp_db_path)
 
         conns = []
@@ -267,6 +273,7 @@ class TestThreadLocalConn:
 # Cursor 上下文管理器测试
 # ============================================================
 
+
 class TestCursor:
     """Cursor 上下文管理器"""
 
@@ -289,6 +296,7 @@ class TestCursor:
     def test_cursor_with_db_multi_statements(self, tmp_path):
         """with Cursor(db) 中执行多条语句"""
         from tea_agent.store._component import DB, Cursor
+
         db_path = tmp_path / "multi.db"
 
         with DB(str(db_path)) as db, Cursor(db) as c:
@@ -301,6 +309,7 @@ class TestCursor:
     def test_cursor_execute_with_params(self, tmp_path):
         """带参数执行"""
         from tea_agent.store._component import DB, Cursor
+
         db_path = tmp_path / "params.db"
 
         with DB(str(db_path)) as db, Cursor(db) as c:
@@ -312,6 +321,7 @@ class TestCursor:
     def test_cursor_fetchone_fetchall(self, tmp_path):
         """fetchone / fetchall 正常工作"""
         from tea_agent.store._component import DB, Cursor
+
         db_path = tmp_path / "fetch.db"
 
         with DB(str(db_path)) as db, Cursor(db) as c:
@@ -326,6 +336,7 @@ class TestCursor:
     def test_cursor_rowcount(self, tmp_path):
         """rowcount 属性可用"""
         from tea_agent.store._component import DB, Cursor
+
         db_path = tmp_path / "rowcount.db"
 
         with DB(str(db_path)) as db, Cursor(db) as c:
@@ -337,6 +348,7 @@ class TestCursor:
     def test_db_cursor_backward_compat(self, tmp_path):
         """DB.cursor() 仍可用（向后兼容）"""
         from tea_agent.store._component import DB
+
         db_path = tmp_path / "backward.db"
 
         with DB(str(db_path)) as db:

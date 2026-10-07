@@ -14,6 +14,7 @@ anything-llm #5683、langchain #35094 等生态证据）。
    触发 400 "must be passed back"；补空串满足"字段存在"，杜绝 400 且不再告警）
 3. rounds 收集器 / lite 会话构建器同样保留空串 RC 字段（DB 回放一致）
 """
+
 import logging
 from types import SimpleNamespace
 
@@ -57,11 +58,13 @@ def _tool_call_msg(name: str = "toolkit_todo", rc: str | None = None) -> dict:
     msg = {
         "role": "assistant",
         "content": "",
-        "tool_calls": [{
-            "id": "c1",
-            "type": "function",
-            "function": {"name": name, "arguments": "{}"},
-        }],
+        "tool_calls": [
+            {
+                "id": "c1",
+                "type": "function",
+                "function": {"name": name, "arguments": "{}"},
+            }
+        ],
     }
     if rc is not None:
         msg["reasoning_content"] = rc
@@ -81,8 +84,8 @@ class TestBuildApiMessagesDefensiveCheck:
         with caplog.at_level(logging.WARNING):
             msgs = build_api_messages(ctx, "测试")
         tc = [m for m in msgs if m.get("role") == "assistant" and m.get("tool_calls")][0]
-        assert "reasoning_content" in tc        # 字段保留
-        assert tc["reasoning_content"] == ""    # 空串原样回传
+        assert "reasoning_content" in tc  # 字段保留
+        assert tc["reasoning_content"] == ""  # 空串原样回传
         assert _warnings(caplog) == []
 
     def test_missing_rc_auto_filled(self, caplog):
@@ -93,9 +96,9 @@ class TestBuildApiMessagesDefensiveCheck:
         with caplog.at_level(logging.WARNING):
             msgs = build_api_messages(ctx, "测试")
         tc = [m for m in msgs if m.get("role") == "assistant" and m.get("tool_calls")][0]
-        assert "reasoning_content" in tc       # 字段自动补全
-        assert tc["reasoning_content"] == ""   # 空串（满足"字段存在"）
-        assert _warnings(caplog) == []         # 已修复 → 不再告警
+        assert "reasoning_content" in tc  # 字段自动补全
+        assert tc["reasoning_content"] == ""  # 空串（满足"字段存在"）
+        assert _warnings(caplog) == []  # 已修复 → 不再告警
 
     def test_non_reasoning_model_no_warning(self, caplog):
         """supports_reasoning=False（普通模型）时不做该校验，不告警。"""
@@ -115,9 +118,7 @@ class TestRoundsCollectorPreservesEmptyRC:
         stub = SimpleNamespace(
             ctx=SimpleNamespace(supports_reasoning=True, _rounds_collector=[]),
         )
-        tc = SimpleNamespace(
-            id="c1", function=SimpleNamespace(name="toolkit_todo", arguments="{}")
-        )
+        tc = SimpleNamespace(id="c1", function=SimpleNamespace(name="toolkit_todo", arguments="{}"))
         ToolComponent.collect_assistant_tool_calls_round(stub, "content", [tc], "")
         entry = stub.ctx._rounds_collector[0]
         assert "reasoning_content" in entry
@@ -140,9 +141,7 @@ class TestLiteSessionBuildMessagePreservesEmptyRC:
         from tea_agent.litesession import LiteSession
 
         stub = SimpleNamespace(supports_reasoning=True)
-        tc = SimpleNamespace(
-            id="c1", function=SimpleNamespace(name="toolkit_exec", arguments="{}")
-        )
+        tc = SimpleNamespace(id="c1", function=SimpleNamespace(name="toolkit_exec", arguments="{}"))
         msg = LiteSession._build_assistant_message(stub, "content", [tc], "")
         assert "reasoning_content" in msg
         assert msg["reasoning_content"] == ""
@@ -151,8 +150,6 @@ class TestLiteSessionBuildMessagePreservesEmptyRC:
         from tea_agent.litesession import LiteSession
 
         stub = SimpleNamespace(supports_reasoning=False)
-        tc = SimpleNamespace(
-            id="c1", function=SimpleNamespace(name="toolkit_exec", arguments="{}")
-        )
+        tc = SimpleNamespace(id="c1", function=SimpleNamespace(name="toolkit_exec", arguments="{}"))
         msg = LiteSession._build_assistant_message(stub, "content", [tc], "思考内容")
         assert "reasoning_content" not in msg

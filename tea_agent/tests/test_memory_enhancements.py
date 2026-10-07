@@ -39,8 +39,10 @@ def storage():
 
 def _mock_get_storage(s):
     """返回一个 mock 函数，让 get_storage 返回测试 storage"""
+
     def _mock(db_path=""):
         return s
+
     return _mock
 
 
@@ -188,10 +190,7 @@ class TestJiebaRemoved:
         from tea_agent import memory
 
         src = inspect.getsource(memory)
-        code_lines = [
-            ln for ln in src.splitlines()
-            if ln.strip().startswith(("import ", "from ")) and "jieba" in ln
-        ]
+        code_lines = [ln for ln in src.splitlines() if ln.strip().startswith(("import ", "from ")) and "jieba" in ln]
         assert not code_lines, f"memory.py 不应再 import jieba: {code_lines}"
 
     def test_no_jieba_warmup_in_server(self):

@@ -32,20 +32,13 @@ pytestmark = pytest.mark.skipif(
 def test_package_has_no_undefined_names():
     """全包 F821 检查：任何未定义名（含合并丢定义留下的调用）都必须为零。"""
     proc = subprocess.run(
-        [sys.executable, "-m", "ruff", "check", "--no-cache", "--select", "F821",
-         "--output-format", "concise", TARGET],
+        [sys.executable, "-m", "ruff", "check", "--no-cache", "--select", "F821", "--output-format", "concise", TARGET],
         cwd=REPO_ROOT,
         capture_output=True,
         text=True,
     )
     # ruff 退出码：0=无发现，1=有发现，2=用法/内部错误。把 2 也当失败暴露出来，
     # 否则 ruff 参数漂移会让这条防线静默失效（比没有测试更糟）。
-    assert proc.returncode in (0, 1), (
-        f"ruff 调用失败（returncode={proc.returncode}）—— 本防线失效，需要修测试:\n"
-        f"{proc.stdout}\n{proc.stderr}"
-    )
-    findings = [
-        line for line in proc.stdout.splitlines()
-        if ": F821 " in line or line.endswith("F821")
-    ]
+    assert proc.returncode in (0, 1), f"ruff 调用失败（returncode={proc.returncode}）—— 本防线失效，需要修测试:\n{proc.stdout}\n{proc.stderr}"
+    findings = [line for line in proc.stdout.splitlines() if ": F821 " in line or line.endswith("F821")]
     assert not findings, "存在未定义名（会在运行时抛 NameError）:\n" + "\n".join(findings)

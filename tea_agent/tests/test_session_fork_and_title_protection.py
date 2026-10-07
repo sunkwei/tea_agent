@@ -31,24 +31,27 @@ from tea_agent.store._topics import (  # noqa: E402
     is_title_protected,
 )
 
-
 # ══════════════════════════════════════════════════════════════
 #  1. is_title_protected — 纯函数边界
 # ══════════════════════════════════════════════════════════════
 
-@pytest.mark.parametrize("title,expected", [
-    ("※手动标题", True),
-    ("※", True),
-    ("#分叉: 实验分支", True),
-    ("#分叉", True),
-    ("#分叉A", True),          # 前缀匹配即可
-    ("普通标题", False),
-    ("", False),
-    (None, False),
-    ("chat_room_test", False),
-    ("# 分叉带空格", False),    # 前缀须精确（空格不算）
-    ("#分叉线", True),          # 仍是前缀命中
-])
+
+@pytest.mark.parametrize(
+    "title,expected",
+    [
+        ("※手动标题", True),
+        ("※", True),
+        ("#分叉: 实验分支", True),
+        ("#分叉", True),
+        ("#分叉A", True),  # 前缀匹配即可
+        ("普通标题", False),
+        ("", False),
+        (None, False),
+        ("chat_room_test", False),
+        ("# 分叉带空格", False),  # 前缀须精确（空格不算）
+        ("#分叉线", True),  # 仍是前缀命中
+    ],
+)
 def test_is_title_protected(title, expected):
     """前缀判定：受保护前缀命中即为 True，其余 False。"""
     assert is_title_protected(title) is expected
@@ -63,6 +66,7 @@ def test_protected_prefixes_include_both():
 # ══════════════════════════════════════════════════════════════
 #  2. 写侧：update_topic_title 拒绝覆盖受保护标题
 # ══════════════════════════════════════════════════════════════
+
 
 @pytest.fixture()
 def storage(tmp_path):
@@ -94,6 +98,7 @@ def test_update_title_protected_can_be_renamed_to_protected(storage):
 # ══════════════════════════════════════════════════════════════
 #  3. 读侧：auto_summary 跳过受保护标题
 # ══════════════════════════════════════════════════════════════
+
 
 @pytest.mark.parametrize("prefix", PROTECTED_TITLE_PREFIXES)
 def test_auto_summary_skips_every_protected_prefix(storage, monkeypatch, prefix):
@@ -187,6 +192,7 @@ def test_auto_summary_still_runs_for_normal_title(storage, monkeypatch):
 #  4. fork_session — 边界**包含**语义
 # ══════════════════════════════════════════════════════════════
 
+
 def _seed(storage, n=3):
     """建一个含 n 轮对话的主题，返回 (topic_id, [conv_id...])。"""
     tid = storage.create_topic("源主题")
@@ -269,8 +275,10 @@ def test_fork_duplicate_does_not_leave_orphan_topic(storage):
     # 同一 (source, target) 不会重复；这里模拟 fork_topic 内部失败路径：
     # 直接对同一 target 再 fork 会触发幂等守卫
     r2 = storage.conversations.fork_topic(
-        source_topic_id=src, target_topic_id=r1["target_topic_id"],
-        title="x", boundary_conv_id="",
+        source_topic_id=src,
+        target_topic_id=r1["target_topic_id"],
+        title="x",
+        boundary_conv_id="",
     )
     assert r2["ok"] is False
     assert "已存在" in r2["error"]
@@ -280,13 +288,12 @@ def test_fork_duplicate_does_not_leave_orphan_topic(storage):
 #  5. Pi 功能已移除（防止残留回归）
 # ══════════════════════════════════════════════════════════════
 
+
 def test_pi_features_removed_from_server():
     """Pi 功能（会话树/消息队列/压缩）应已整体移除：路由与模块均不存在。"""
     root = pathlib.Path(__file__).resolve().parents[2] / "tea_agent"
-    assert not (root / "server/modules/pi_features_module.py").exists(), \
-        "pi_features_module.py 应已删除"
-    assert not (root / "session/session_tree.py").exists(), \
-        "session_tree.py 应已删除（删除 Pi 后成死代码）"
+    assert not (root / "server/modules/pi_features_module.py").exists(), "pi_features_module.py 应已删除"
+    assert not (root / "session/session_tree.py").exists(), "session_tree.py 应已删除（删除 Pi 后成死代码）"
 
     server_src = (root / "server/server.py").read_text(encoding="utf-8")
     assert "/api/pi/" not in server_src, "Pi 路由注册应已移除"

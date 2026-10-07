@@ -8,6 +8,7 @@ SDK 方法都抛 ``TypeError: got multiple values for argument 'data'``；叠加
 
 本测试用真实 HTTP 服务器打全链路，而不是 mock——mock 恰恰会放过这次的参数错位。
 """
+
 import json
 import threading
 from http.server import BaseHTTPRequestHandler, HTTPServer
@@ -53,11 +54,9 @@ class _Handler(BaseHTTPRequestHandler):
         elif self.path == "/v1/unauthorized":
             self._respond(401, json.dumps({"error": "bad key"}))
         elif self.path.startswith("/v1/tools"):
-            self._respond(200, json.dumps({"object": "list",
-                                           "data": [{"name": "toolkit_exec"}]}))
+            self._respond(200, json.dumps({"object": "list", "data": [{"name": "toolkit_exec"}]}))
         elif self.path.startswith("/v1/sessions"):
-            self._respond(200, json.dumps({"object": "list",
-                                           "data": [{"id": "topic-1"}]}))
+            self._respond(200, json.dumps({"object": "list", "data": [{"id": "topic-1"}]}))
         else:
             self._respond(404, json.dumps({"error": "no route"}))
 
@@ -78,14 +77,11 @@ class _Handler(BaseHTTPRequestHandler):
                 )
                 self._respond(200, sse, "text/event-stream")
             else:
-                self._respond(200, json.dumps(
-                    {"choices": [{"message": {"role": "assistant",
-                                              "content": "Hello!"}}]}))
+                self._respond(200, json.dumps({"choices": [{"message": {"role": "assistant", "content": "Hello!"}}]}))
         elif self.path.endswith("/run"):
             self._respond(200, json.dumps({"ok": True, "echo": received}))
         elif self.path == "/v1/sessions":
-            self._respond(201, json.dumps({"id": "new-topic",
-                                           "title": received.get("title", "")}))
+            self._respond(201, json.dumps({"id": "new-topic", "title": received.get("title", "")}))
         else:
             self._respond(404, json.dumps({"error": "no route"}))
 
@@ -251,23 +247,15 @@ class TestAssembleSse:
     """纯函数：SSE 拼装。"""
 
     def test_concatenates_deltas(self):
-        raw = (
-            'data: {"choices":[{"delta":{"content":"a"}}]}\n\n'
-            'data: {"choices":[{"delta":{"content":"b"}}]}\n\n'
-            "data: [DONE]\n\n"
-        )
+        raw = 'data: {"choices":[{"delta":{"content":"a"}}]}\n\ndata: {"choices":[{"delta":{"content":"b"}}]}\n\ndata: [DONE]\n\n'
         assert assemble_sse(raw) == "ab"
 
     def test_ignores_role_only_and_done(self):
-        raw = (
-            'data: {"choices":[{"delta":{"role":"assistant"}}]}\n\n'
-            'data: {"choices":[{"delta":{},"finish_reason":"stop"}]}\n\n'
-            "data: [DONE]\n\n"
-        )
+        raw = 'data: {"choices":[{"delta":{"role":"assistant"}}]}\n\ndata: {"choices":[{"delta":{},"finish_reason":"stop"}]}\n\ndata: [DONE]\n\n'
         assert assemble_sse(raw) == ""
 
     def test_tolerates_garbage_frames(self):
-        raw = "data: not-json\n\ndata: {\"choices\":[{\"delta\":{\"content\":\"x\"}}]}\n\n"
+        raw = 'data: not-json\n\ndata: {"choices":[{"delta":{"content":"x"}}]}\n\n'
         assert assemble_sse(raw) == "x"
 
     def test_empty_and_none_input(self):

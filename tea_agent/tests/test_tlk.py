@@ -1,6 +1,7 @@
 """
 Toolkit 核心功能测试 — 工具注册、调用、重载、版本管理
 """
+
 import pytest
 
 
@@ -10,6 +11,7 @@ class TestToolkitRegistration:
     def test_reload_loads_builtin_tools(self):
         """reload() 应加载内置工具"""
         from tea_agent.tlk import Toolkit
+
         tk = Toolkit()
         assert "toolkit_file" in tk.func_map, "file 应被加载"
         assert "toolkit_search" in tk.func_map, "search 应被加载"
@@ -18,6 +20,7 @@ class TestToolkitRegistration:
     def test_meta_map_matches_func_map(self):
         """每个工具都应有对应的 meta 注册"""
         from tea_agent.tlk import Toolkit
+
         tk = Toolkit()
         for name in tk.func_map:
             assert name in tk.meta_map, f"{name} 缺少 meta 注册"
@@ -25,6 +28,7 @@ class TestToolkitRegistration:
     def test_call_tool_returns_result(self):
         """call_tool 应返回非 None 结果"""
         from tea_agent.tlk import Toolkit
+
         tk = Toolkit()
         result = tk.call_tool("toolkit_file", action="list", path=".")
         assert result is not None, "file 返回 None"
@@ -32,6 +36,7 @@ class TestToolkitRegistration:
     def test_llm_tool_excludes_non_llm_tools(self):
         """harness_schema/export_last_pdf 注册但不暴露给 LLM"""
         from tea_agent.tlk import Toolkit, llm_tool_names
+
         tk = Toolkit()
         assert "toolkit_harness_schema" in tk.func_map, "harness_schema 仍应注册（供外部消费）"
         assert "toolkit_export_last_pdf" in tk.func_map, "export_last_pdf 仍应注册（供 server 使用）"
@@ -45,6 +50,7 @@ class TestToolkitRegistration:
     def test_llm_tool_names_sorted(self):
         """llm_tool_names 返回排序结果（工具 Schema 顺序稳定 = 缓存命中前提）"""
         from tea_agent.tlk import llm_tool_names
+
         names = llm_tool_names({"toolkit_b", "toolkit_a", "toolkit_c"})
         assert names == ["toolkit_a", "toolkit_b", "toolkit_c"]
 
@@ -63,9 +69,7 @@ class TestToolkitUserOverride:
             "function": {
                 "name": "toolkit_hello",
                 "description": "Say hello",
-                "parameters": {"type": "object", "properties": {
-                    "name": {"type": "string", "description": "Your name"}
-                }, "required": ["name"]},
+                "parameters": {"type": "object", "properties": {"name": {"type": "string", "description": "Your name"}}, "required": ["name"]},
             },
         }
         tk.save("toolkit_hello", meta, "def toolkit_hello(name): return f'Hi, {name}!'")
@@ -82,7 +86,7 @@ class TestToolkitUserOverride:
 
         user_dir = tmp_path / "toolkit_no_meta"
         user_dir.mkdir()
-        (user_dir / "toolkit_bad.py").write_text('def toolkit_bad(): return 1')
+        (user_dir / "toolkit_bad.py").write_text("def toolkit_bad(): return 1")
 
         Toolkit(tool_dir=str(user_dir))
         # Should not crash
@@ -94,6 +98,7 @@ class TestToolkitEdgeCases:
     def test_double_reload(self):
         """连续两次 reload 应稳定"""
         from tea_agent.tlk import Toolkit
+
         tk = Toolkit()
         count_before = len(tk.func_map)
         tk.reload()
@@ -103,6 +108,7 @@ class TestToolkitEdgeCases:
     def test_call_unknown_tool_raises(self):
         """调用未知工具应抛出 KeyError"""
         from tea_agent.tlk import Toolkit
+
         tk = Toolkit()
         with pytest.raises(KeyError):
             tk.call_tool("nonexistent_tool_xyz")

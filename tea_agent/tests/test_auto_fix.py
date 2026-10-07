@@ -2,6 +2,7 @@
 AutoFix Agent 单元测试 — pytest
 覆盖：ruff扫描、AST扫描、修复生成、编译验证、边缘情况
 """
+
 import os
 import sys
 import tempfile
@@ -15,6 +16,7 @@ from tea_agent.auto_fix import AutoFixAgent, FixResult
 _HAS_RUFF = False
 try:
     import subprocess
+
     result = subprocess.run(["ruff", "--version"], capture_output=True, text=True, timeout=5)
     _HAS_RUFF = result.returncode == 0
 except (FileNotFoundError, subprocess.TimeoutExpired):
@@ -24,6 +26,7 @@ ruff_skip = pytest.mark.skipif(not _HAS_RUFF, reason="ruff 未安装")
 
 
 # ── 测试夹具 ──
+
 
 @pytest.fixture
 def sample_file():
@@ -59,6 +62,7 @@ def agent():
 
 
 # ── 扫描测试 ──
+
 
 class TestScan:
     @ruff_skip
@@ -128,18 +132,14 @@ class TestFix:
 
     def test_fix_unknown_rule(self, agent):
         """未知规则应返回 skip。"""
-        dummy = {"rule": "UNKNOWN_RULE", "via": "ruff",
-                 "file": "tests/__init__.py", "line": 1,
-                 "ruff_autofix": None}
+        dummy = {"rule": "UNKNOWN_RULE", "via": "ruff", "file": "tests/__init__.py", "line": 1, "ruff_autofix": None}
         result = agent.fix(dummy, dry_run=True)
         assert not result.ok
         assert result.action == "skip"
 
     def test_fix_line_out_of_range(self, agent, sample_file):
         """超出范围的行号应返回 ok=False。"""
-        dummy = {"rule": "NO_DOCSTRING", "via": "ast",
-                 "file": os.path.basename(sample_file), "line": 99999,
-                 "message": "", "ruff_autofix": None}
+        dummy = {"rule": "NO_DOCSTRING", "via": "ast", "file": os.path.basename(sample_file), "line": 99999, "message": "", "ruff_autofix": None}
         # 需要正确设置 project_root
         fp = os.path.relpath(sample_file, str(agent.project_root))
         dummy["file"] = fp
@@ -174,8 +174,7 @@ class TestFixAll:
         """severity 参数应正确过滤。"""
         r1 = agent.fix_all(severity="error", dry_run=True, max_fixes=5)
         r2 = agent.fix_all(severity="info", dry_run=True, max_fixes=5)
-        assert r1["filtered"] >= r2["filtered"], \
-            f"error({r1['filtered']}) ≥ info({r2['filtered']}) 应成立"
+        assert r1["filtered"] >= r2["filtered"], f"error({r1['filtered']}) ≥ info({r2['filtered']}) 应成立"
 
     def test_fix_all_zero_max(self, agent):
         """max_fixes=0 应不修复。"""
@@ -226,7 +225,7 @@ class TestEdgeCases:
     def test_ascii_only_file(self, agent):
         """纯 ASCII 文件不应有问题。"""
         with tempfile.NamedTemporaryFile(mode="w", suffix=".py", delete=False) as f:
-            f.write('# this file has no issues\nx = 42\nprint(x)\n')
+            f.write("# this file has no issues\nx = 42\nprint(x)\n")
             path = f.name
         try:
             issues = agent.scan(path)

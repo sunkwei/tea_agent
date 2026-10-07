@@ -35,19 +35,19 @@ def bench():
 def test_load_tasks_ignores_stale_sys_modules(bench, monkeypatch):
     """核心契约：即便 sys.modules 里躺着旧定义，也必须采用磁盘上的真实定义。"""
     stale = types.ModuleType("tea_agent.evaluation.evo_tasks_hard")
-    stale.HARD_TASKS = [{
-        "id": "hard-broad-except-ratchet",
-        "kind": "quality",
-        "title": "STALE-SENTINEL",
-        "checks": [{"type": "python", "expr": "assert False, '陈旧基线'"}],
-    }]
+    stale.HARD_TASKS = [
+        {
+            "id": "hard-broad-except-ratchet",
+            "kind": "quality",
+            "title": "STALE-SENTINEL",
+            "checks": [{"type": "python", "expr": "assert False, '陈旧基线'"}],
+        }
+    ]
     monkeypatch.setitem(sys.modules, "tea_agent.evaluation.evo_tasks_hard", stale)
 
     tasks = {t["id"]: t for t in bench.load_tasks()}
     task = tasks["hard-broad-except-ratchet"]
-    assert task["title"] != "STALE-SENTINEL", (
-        "load_tasks 吃到了 sys.modules 缓存 —— 编辑任务集后重跑基准仍会用旧定义"
-    )
+    assert task["title"] != "STALE-SENTINEL", "load_tasks 吃到了 sys.modules 缓存 —— 编辑任务集后重跑基准仍会用旧定义"
 
 
 def test_loaded_task_comes_from_disk(bench):
@@ -74,18 +74,14 @@ def test_load_hard_tasks_picks_up_edits(bench, tmp_path, monkeypatch):
         "HARD_TASKS = [{'id': 'probe-v2', 'title': 'V2', 'kind': 'x', 'checks': []}]\n",
         encoding="utf-8",
     )
-    assert [t["id"] for t in bench._load_hard_tasks()] == ["probe-v2"], (
-        "改文件后仍读到旧内容 —— 说明存在缓存"
-    )
+    assert [t["id"] for t in bench._load_hard_tasks()] == ["probe-v2"], "改文件后仍读到旧内容 —— 说明存在缓存"
 
 
 def test_load_hard_tasks_does_not_pollute_sys_modules(bench, monkeypatch):
     """按路径加载**不得**把模块写回 sys.modules（否则又变回缓存）。"""
     monkeypatch.delitem(sys.modules, "tea_agent.evaluation.evo_tasks_hard", raising=False)
     bench._load_hard_tasks()
-    assert "tea_agent.evaluation.evo_tasks_hard" not in sys.modules, (
-        "按路径加载污染了 sys.modules，后续读取会重新退化为缓存"
-    )
+    assert "tea_agent.evaluation.evo_tasks_hard" not in sys.modules, "按路径加载污染了 sys.modules，后续读取会重新退化为缓存"
 
 
 def test_load_hard_tasks_missing_file_is_safe(bench, tmp_path, monkeypatch):

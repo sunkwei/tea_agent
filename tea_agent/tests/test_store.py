@@ -18,6 +18,7 @@ import time
 # 1. 数据库初始化
 # ============================================================
 
+
 class TestStorageInit:
     """数据库初始化测试"""
 
@@ -38,9 +39,16 @@ class TestStorageInit:
         c.close()
 
         expected = {
-            "_meta", "topics", "conversations", "agent_rounds",
-            "topic_token_stats", "t_conv_summary", "memories",
-            "system_prompts", "reflections", "config_history",
+            "_meta",
+            "topics",
+            "conversations",
+            "agent_rounds",
+            "topic_token_stats",
+            "t_conv_summary",
+            "memories",
+            "system_prompts",
+            "reflections",
+            "config_history",
         }
         missing = expected - tables
         assert not missing, f"缺少表: {missing}"
@@ -78,6 +86,7 @@ class TestStorageInit:
 # ============================================================
 # 2. Topic CRUD
 # ============================================================
+
 
 class TestTopicCRUD:
     """主题 CRUD 测试"""
@@ -121,6 +130,7 @@ class TestTopicCRUD:
     def test_update_topic_title_chat_room_protected(self, storage):
         """chat_room_ 前缀主题标题不可修改"""
         import uuid
+
         c = storage.conn.cursor()
         tid = str(uuid.uuid4())
         c.execute("INSERT INTO topics (topic_id, title) VALUES (?, 'chat_room_test')", (tid,))
@@ -201,6 +211,7 @@ class TestTopicCRUD:
 # 3. Message CRUD
 # ============================================================
 
+
 class TestMessageCRUD:
     """消息 CRUD 测试"""
 
@@ -228,7 +239,11 @@ class TestMessageCRUD:
         cid = storage.save_msg(tid, "问题", "", False)
 
         rounds = [
-            {"role": "assistant", "content": "思考中", "tool_calls": [{"id": "call_1", "type": "function", "function": {"name": "search", "arguments": "{}"}}]},
+            {
+                "role": "assistant",
+                "content": "思考中",
+                "tool_calls": [{"id": "call_1", "type": "function", "function": {"name": "search", "arguments": "{}"}}],
+            },
             {"role": "tool", "content": "搜索结果...", "tool_call_id": "call_1"},
             {"role": "assistant", "content": "最终答案"},
         ]
@@ -287,6 +302,7 @@ class TestMessageCRUD:
 
         convs = storage.get_conversations(tid, limit=0)
         assert len(convs) == 1  # limit=0 表示不限制，返回全部
+
     def test_get_conversations_limit_exceeds_total(self, storage):
         """get_conversations limit 大于总数时返回全部"""
         tid = storage.create_topic("超限测试")
@@ -332,6 +348,7 @@ class TestMessageCRUD:
     def test_get_conversations_signature_compatibility(self, storage):
         """签名兼容性：关键字参数和位置参数都能正常工作"""
         import inspect
+
         sig = inspect.signature(storage.get_conversations)
         params = list(sig.parameters.keys())
         # 必须有 topic_id, limit, include_rounds 三个参数
@@ -372,8 +389,9 @@ class TestMessageCRUD:
         tid = storage.create_topic("round测试")
         cid = storage.save_msg(tid, "问题", "", False)
 
-        storage.save_agent_round(cid, 1, "assistant", "思考...",
-                                  tool_calls=[{"id": "t1", "type": "function", "function": {"name": "test", "arguments": "{}"}}])
+        storage.save_agent_round(
+            cid, 1, "assistant", "思考...", tool_calls=[{"id": "t1", "type": "function", "function": {"name": "test", "arguments": "{}"}}]
+        )
         storage.save_agent_round(cid, 1, "tool", "结果", tool_call_id="t1")
 
         rounds = storage.get_agent_rounds(cid)
@@ -387,6 +405,7 @@ class TestMessageCRUD:
 # ============================================================
 # 4. Memory CRUD
 # ============================================================
+
 
 class TestMemoryCRUD:
     """长期记忆 CRUD 测试"""
@@ -493,6 +512,7 @@ class TestMemoryCRUD:
 # 5. Token 统计
 # ============================================================
 
+
 class TestTokenStats:
     """Token 统计测试"""
 
@@ -536,6 +556,7 @@ class TestTokenStats:
 # 6. 摘要 CRUD
 # ============================================================
 
+
 class TestSummary:
     """摘要 CRUD 测试"""
 
@@ -569,6 +590,7 @@ class TestSummary:
 # 7. 备份与保护
 # ============================================================
 
+
 class TestBackup:
     """备份与保护测试"""
 
@@ -591,6 +613,7 @@ class TestBackup:
 # ============================================================
 # 8. 元数据读写
 # ============================================================
+
 
 class TestMeta:
     """_meta 表读写测试"""

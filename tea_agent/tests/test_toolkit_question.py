@@ -27,6 +27,7 @@ def _no_handler():
 
 def _handler_returning(value):
     """构造一个固定返回 value 的 Web handler。"""
+
     def _h(title, question, options, default, timeout):
         return value
 
@@ -34,6 +35,7 @@ def _handler_returning(value):
 
 
 # ── 路径 1：Web 回调 ──
+
 
 def test_web_handler_takes_priority():
     """有 Web handler 时必须走 handler，而不是直接返回默认值。"""
@@ -47,20 +49,23 @@ def test_web_handler_receives_all_arguments():
 
     def _h(title, question, options, default, timeout):
         seen.update(
-            title=title, question=question, options=options,
-            default=default, timeout=timeout,
+            title=title,
+            question=question,
+            options=options,
+            default=default,
+            timeout=timeout,
         )
         return "ok"
 
     with patch.object(tq, "_get_web_handler", lambda: _h):
         tq.toolkit_question("T", "Q", options=["a", "b"], default="a", timeout=7)
 
-    assert seen == {"title": "T", "question": "Q", "options": ["a", "b"],
-                    "default": "a", "timeout": 7}
+    assert seen == {"title": "T", "question": "Q", "options": ["a", "b"], "default": "a", "timeout": 7}
 
 
 def test_web_handler_failure_falls_back_to_default():
     """handler 抛错时必须降级为 default，不得把异常抛给调用方。"""
+
     def _boom(*args, **kwargs):
         raise RuntimeError("handler down")
 
@@ -70,12 +75,14 @@ def test_web_handler_failure_falls_back_to_default():
 
 # ── 路径 2：无交互通道 ──
 
+
 def test_no_handler_returns_default_and_never_reads_stdin(monkeypatch):
     """无 Web handler 时返回 default，且**绝不读取 stdin**。
 
     把 ``input`` 换成「一调用即失败」：若有人重新引入 CLI 交互路径且未加
     headless 守卫，本用例会立刻变红（而不是让 server 静默挂死）。
     """
+
     def _forbidden(*args, **kwargs):
         raise AssertionError("无交互通道时不得读取 stdin —— 会让 server 挂死")
 
@@ -106,6 +113,7 @@ def test_headless_check_never_raises():
 
 # ── 元测试：钉住 GUI/CLI 路径的移除 ──
 
+
 def test_gui_and_cli_paths_removed():
     """GUI(tkinter) 与 CLI(input) 交互路径必须已移除。
 
@@ -113,8 +121,7 @@ def test_gui_and_cli_paths_removed():
     tkinter 不在 pyproject 依赖中，重新引入会让精简版 Python 直接 ImportError。
     """
     src = pathlib.Path(tq.__file__).read_text(encoding="utf-8")
-    for forbidden in ("import tkinter", "from tkinter", "_ask_gui", "_ask_cli",
-                      "_is_gui_running", "import threading"):
+    for forbidden in ("import tkinter", "from tkinter", "_ask_gui", "_ask_cli", "_is_gui_running", "import threading"):
         assert forbidden not in src, f"toolkit_question 仍引用已废弃路径: {forbidden}"
 
 

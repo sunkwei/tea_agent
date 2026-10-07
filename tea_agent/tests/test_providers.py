@@ -45,23 +45,16 @@ class TestProvidersData:
         """default_model 应出现在模型 id 列表中（目录化后 models 为富条目）"""
         for name, info in PROVIDERS.items():
             ids = model_ids(info)
-            assert info["default_model"] in ids, (
-                f"Provider '{name}' default_model '{info['default_model']}' "
-                f"不在 models 列表中: {ids}"
-            )
+            assert info["default_model"] in ids, f"Provider '{name}' default_model '{info['default_model']}' 不在 models 列表中: {ids}"
 
     def test_providers_model_entries_have_id(self):
         """models 条目应为纯 id 字符串（代码不再内置窗口/能力属性）"""
         for name, info in PROVIDERS.items():
             for entry in model_entries(info):
                 assert "id" in entry, f"Provider '{name}' 有条目缺 id: {entry}"
-                assert isinstance(entry["id"], str) and entry["id"], (
-                    f"Provider '{name}' 模型 id 无效: {entry.get('id')!r}"
-                )
+                assert isinstance(entry["id"], str) and entry["id"], f"Provider '{name}' 模型 id 无效: {entry.get('id')!r}"
                 # 2026-09-06 起属性唯一来源 provider.yaml；内置目录不再含 context_window
-                assert "context_window" not in entry or not entry.get("context_window"), (
-                    f"Provider '{name}' 模型 {entry['id']} 仍内置 context_window"
-                )
+                assert "context_window" not in entry or not entry.get("context_window"), f"Provider '{name}' 模型 {entry['id']} 仍内置 context_window"
 
     def test_get_model_merges_provider_fallback(self):
         """get_model 返回 id + 供应商级能力继承（属性本身来自 provider.yaml）"""
@@ -78,9 +71,7 @@ class TestProvidersData:
         """没有 models 列表的 Provider 必须有 default_model"""
         for name, info in PROVIDERS.items():
             if "models" not in info:
-                assert "default_model" in info, (
-                    f"Provider '{name}' 既没有 models 列表也没有 default_model"
-                )
+                assert "default_model" in info, f"Provider '{name}' 既没有 models 列表也没有 default_model"
 
     def test_provider_names_are_unique(self):
         """Provider 名称应唯一"""
@@ -103,8 +94,7 @@ class TestListProviders:
 
     def test_each_item_has_required_keys(self):
         """每个条目必须包含 name/api_url/default_model/models 等字段"""
-        required_keys = {"name", "api_url", "default_model", "models",
-                         "supports_thinking", "supports_vision", "description"}
+        required_keys = {"name", "api_url", "default_model", "models", "supports_thinking", "supports_vision", "description"}
         for item in list_providers():
             missing = required_keys - set(item.keys())
             assert not missing, f"Provider '{item.get('name')}' 结果缺少: {missing}"
@@ -118,19 +108,13 @@ class TestListProviders:
     def test_models_is_list(self):
         """models 字段应为列表"""
         for item in list_providers():
-            assert isinstance(item["models"], list), (
-                f"Provider '{item['name']}' models 不是列表"
-            )
+            assert isinstance(item["models"], list), f"Provider '{item['name']}' models 不是列表"
 
     def test_supports_flags_are_bool(self):
         """supports_thinking 和 supports_vision 应为布尔值"""
         for item in list_providers():
-            assert isinstance(item["supports_thinking"], bool), (
-                f"Provider '{item['name']}' supports_thinking 不是 bool"
-            )
-            assert isinstance(item["supports_vision"], bool), (
-                f"Provider '{item['name']}' supports_vision 不是 bool"
-            )
+            assert isinstance(item["supports_thinking"], bool), f"Provider '{item['name']}' supports_thinking 不是 bool"
+            assert isinstance(item["supports_vision"], bool), f"Provider '{item['name']}' supports_vision 不是 bool"
 
 
 class TestGetProvider:

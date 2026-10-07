@@ -27,7 +27,6 @@ import pytest
 
 from tea_agent.image_ref import make_image_ref, parse_image_ref
 from tea_agent.server import turn_snapshot as ts
-from tea_agent.server.modules import state as state_mod
 from tea_agent.store import Storage
 
 
@@ -119,8 +118,7 @@ class TestPersistTurnImages:
 
         a, b = _data_url(b"\x89PNG-a"), _data_url(b"\x89PNG-b")
         refs = _persist_turn_images(storage, [a, b], label="t")
-        assert [storage.get_image(parse_image_ref(r))["blob"] for r in refs] == \
-            [b"\x89PNG-a", b"\x89PNG-b"]
+        assert [storage.get_image(parse_image_ref(r))["blob"] for r in refs] == [b"\x89PNG-a", b"\x89PNG-b"]
 
 
 # ════════════════════════════════════════════════════════════
@@ -131,7 +129,7 @@ class TestPersistTurnImages:
 class TestSnapshotCarriesImageRef:
     def test_data_url_would_be_truncated(self):
         """反证：完整 data URL 会被 _shrink 截断成损坏值（故必须改存引用）。"""
-        url = _data_url(_png() * 200)      # 放大到远超上限
+        url = _data_url(_png() * 200)  # 放大到远超上限
         assert len(url) > ts.DEFAULT_MAX_FIELD
         shrunk = ts._shrink(url, ts.DEFAULT_MAX_FIELD)
         assert shrunk != url, "前提失效：该 data URL 未被截断"
@@ -143,8 +141,7 @@ class TestSnapshotCarriesImageRef:
 
         refs = _persist_turn_images(storage, [_data_url()], label="t")
         ts.begin_turn("t1")
-        ts.record_event("t1", {"type": "user_message", "text": "看图",
-                               "images": refs}, 0, force=True)
+        ts.record_event("t1", {"type": "user_message", "text": "看图", "images": refs}, 0, force=True)
 
         snap = ts.read_snapshot("t1")
         got = snap["events"][0]["event"]["images"]
@@ -158,12 +155,13 @@ class TestSnapshotCarriesImageRef:
 
         refs = _persist_turn_images(storage, [_data_url()], label="t")
         ts.begin_turn("t1")
-        ts.record_event("t1", {"type": "user_message", "text": "看图",
-                               "images": refs}, 0, force=True)
+        ts.record_event("t1", {"type": "user_message", "text": "看图", "images": refs}, 0, force=True)
         ts.flush_pending("t1")
 
         # 模拟进程重启：清空全部内存态
-        ts._pending.clear(); ts._next_index.clear(); ts._begun.clear()
+        ts._pending.clear()
+        ts._next_index.clear()
+        ts._begun.clear()
 
         snap = ts.read_snapshot("t1")
         ref = snap["events"][0]["event"]["images"][0]
@@ -182,8 +180,7 @@ class TestImageOwnershipAdoption:
         img_id = storage.add_pending_image(_png(), "image/png")
         assert storage.get_image(img_id)["conversation_id"] == ""
 
-        cid = storage.save_msg(tid, {"text": "看图", "images": [make_image_ref(img_id)]},
-                               "", False)
+        cid = storage.save_msg(tid, {"text": "看图", "images": [make_image_ref(img_id)]}, "", False)
 
         assert storage.get_image(img_id)["conversation_id"] == cid
         c = storage.conn.cursor()
@@ -195,8 +192,7 @@ class TestImageOwnershipAdoption:
         """已归属的图片不被后续会话抢走（历史轮引用会指错会话）。"""
         tid = storage.create_topic("t")
         img_id = storage.add_pending_image(_png(), "image/png")
-        cid1 = storage.save_msg(tid, {"text": "a", "images": [make_image_ref(img_id)]},
-                                "", False)
+        cid1 = storage.save_msg(tid, {"text": "a", "images": [make_image_ref(img_id)]}, "", False)
         # 第二个会话重复引用同一张图
         storage.save_msg(tid, {"text": "b", "images": [make_image_ref(img_id)]}, "", False)
 
@@ -206,8 +202,7 @@ class TestImageOwnershipAdoption:
         """导出路径按 conv_id 查图：归属补齐后必须命中。"""
         tid = storage.create_topic("t")
         img_id = storage.add_pending_image(_png(), "image/png")
-        cid = storage.save_msg(tid, {"text": "看图", "images": [make_image_ref(img_id)]},
-                               "", False)
+        cid = storage.save_msg(tid, {"text": "看图", "images": [make_image_ref(img_id)]}, "", False)
         assert len(storage.get_images([cid]).get(cid, [])) == 1
 
 
@@ -225,7 +220,7 @@ class TestOrphanImageCleanup:
     def test_cleanup_keeps_referenced(self, storage):
         """被在途快照引用的图片必须保留 —— 它是待恢复回合要显示的内容。"""
         keep_id = storage.add_pending_image(_png(), "image/png")
-        storage.add_pending_image(_png(), "image/png")   # 真孤儿
+        storage.add_pending_image(_png(), "image/png")  # 真孤儿
 
         n = storage.cleanup_orphan_images(keep_ids={keep_id})
 
@@ -236,8 +231,7 @@ class TestOrphanImageCleanup:
         """已归属的图片绝不被清理（即使在 keep_ids 之外）。"""
         tid = storage.create_topic("t")
         img_id = storage.add_pending_image(_png(), "image/png")
-        storage.save_msg(tid, {"text": "看图", "images": [make_image_ref(img_id)]},
-                         "", False)
+        storage.save_msg(tid, {"text": "看图", "images": [make_image_ref(img_id)]}, "", False)
 
         assert storage.cleanup_orphan_images(keep_ids=set()) == 0
         assert storage.get_image(img_id) is not None
@@ -248,8 +242,7 @@ class TestOrphanImageCleanup:
 
         refs = _persist_turn_images(storage, [_data_url()], label="t")
         ts.begin_turn("t1")
-        ts.record_event("t1", {"type": "user_message", "text": "看图",
-                               "images": refs}, 0, force=True)
+        ts.record_event("t1", {"type": "user_message", "text": "看图", "images": refs}, 0, force=True)
         ts.flush_pending("t1")
 
         got = ts.snapshot_image_ids()
@@ -258,6 +251,7 @@ class TestOrphanImageCleanup:
 
     def test_snapshot_image_ids_none_on_failure(self, monkeypatch):
         """读不到快照 → None（表示"未知"），调用方应跳过清理而非删光。"""
+
         def _boom(*a, **k):
             raise OSError("unreadable")
 
@@ -278,8 +272,7 @@ class TestSwitchBackEndToEnd:
 
         refs = _persist_turn_images(storage, [_data_url()], label="t")
         ts.begin_turn("t1")
-        ts.record_event("t1", {"type": "user_message", "text": "看看这张图",
-                               "images": refs}, 0, force=True)
+        ts.record_event("t1", {"type": "user_message", "text": "看看这张图", "images": refs}, 0, force=True)
         ts.record_event("t1", {"type": "token", "text": "收到"}, 1, force=True)
 
         state_mod.create_background_buffer("t1")
@@ -308,11 +301,8 @@ class TestSwitchBackEndToEnd:
 
         ctx = _Ctx()
         ctx.storage = storage
-        out = to_multimodal({"role": "user", "content": "看图", "images": refs},
-                            supports_vision=True,
-                            image_resolver=_image_resolver_of(ctx))
-        urls = [p["image_url"]["url"] for p in out["content"]
-                if p.get("type") == "image_url"]
+        out = to_multimodal({"role": "user", "content": "看图", "images": refs}, supports_vision=True, image_resolver=_image_resolver_of(ctx))
+        urls = [p["image_url"]["url"] for p in out["content"] if p.get("type") == "image_url"]
         assert len(urls) == 1, f"LLM 未收到图片：{out}"
         assert b64.b64decode(urls[0].split(",", 1)[1]) == _png()
 
@@ -337,8 +327,7 @@ def _handler_source(func_name: str) -> str:
     with open(rh.__file__, encoding="utf-8") as f:
         src = f.read()
     for node in ast.walk(ast.parse(src)):
-        if (isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
-                and node.name == func_name):
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)) and node.name == func_name:
             return ast.get_source_segment(src, node) or ""
     raise AssertionError(f"{func_name} not found")
 
@@ -353,14 +342,10 @@ class TestHandlerWiring:
     def test_chat_handler_persists_images_before_snapshot(self):
         body = _handler_source("handle_web_chat")
 
-        assert "_persist_turn_images(storage, image_paths" in body, \
-            "handler 未在回合开始把图片入库"
-        assert '"images": _img_refs' in body, \
-            "快照事件未使用 img:<id> 短引用"
-        assert '"images": image_paths' not in body, \
-            "快照仍在写 data URL —— 会被 _shrink 截断成损坏值"
-        assert "_turn_payload" in body, \
-            "未把引用传给对话线程（LLM 将拿不到图片）"
+        assert "_persist_turn_images(storage, image_paths" in body, "handler 未在回合开始把图片入库"
+        assert '"images": _img_refs' in body, "快照事件未使用 img:<id> 短引用"
+        assert '"images": image_paths' not in body, "快照仍在写 data URL —— 会被 _shrink 截断成损坏值"
+        assert "_turn_payload" in body, "未把引用传给对话线程（LLM 将拿不到图片）"
 
     def test_turn_payload_prefers_refs(self):
         body = _handler_source("handle_web_chat")
@@ -370,5 +355,5 @@ class TestHandlerWiring:
         body = _handler_source("handle_web_chat")
         idx = body.find("user_message")
         assert idx > 0, "未记录 user_message 快照事件"
-        seg = body[idx:idx + 220]
+        seg = body[idx : idx + 220]
         assert "_img_refs" in seg, f"快照事件未带引用：{seg[:120]}"

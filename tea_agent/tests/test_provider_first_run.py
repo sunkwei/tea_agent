@@ -37,9 +37,7 @@ def _isolate_config(monkeypatch, yaml_path: str | None = None) -> None:
     monkeypatch.setattr(config_mod, "resolve_config_path", lambda p=None: yaml_path)
 
 
-def _use_provider_file(monkeypatch, tmp_path: Path, providers: dict,
-                       roles: dict | None = None,
-                       settings: dict | None = None) -> Path:
+def _use_provider_file(monkeypatch, tmp_path: Path, providers: dict, roles: dict | None = None, settings: dict | None = None) -> Path:
     """写 provider.yaml（含可选 roles/settings 段）并让单例指向它。"""
     data: dict = {"version": 1, "providers": providers}
     if roles:
@@ -84,10 +82,14 @@ class _InputSeq:
 def test_load_config_falls_back_to_first_provider_document_order(monkeypatch, tmp_path):
     """兜底取**文档序**第一个提供商（Zeta 在前；字母序 Alpha 在前——必须钉文档序）。"""
     _isolate_config(monkeypatch, yaml_path=None)
-    _use_provider_file(monkeypatch, tmp_path, {
-        "Zeta": _prov(["zm1", "zm2"], default="zm2", key="sk-zeta"),
-        "Alpha": _prov(["am1"], default="am1", key="sk-alpha"),
-    })
+    _use_provider_file(
+        monkeypatch,
+        tmp_path,
+        {
+            "Zeta": _prov(["zm1", "zm2"], default="zm2", key="sk-zeta"),
+            "Alpha": _prov(["am1"], default="am1", key="sk-alpha"),
+        },
+    )
 
     cfg = config_mod.load_config()
 
@@ -104,9 +106,13 @@ def test_load_config_falls_back_to_first_provider_document_order(monkeypatch, tm
 def test_first_model_rule_falls_back_to_first_model_key(monkeypatch, tmp_path):
     """无 default_model → models 键序第一个。"""
     _isolate_config(monkeypatch, yaml_path=None)
-    _use_provider_file(monkeypatch, tmp_path, {
-        "P": _prov(["first-model", "second-model"], default=""),
-    })
+    _use_provider_file(
+        monkeypatch,
+        tmp_path,
+        {
+            "P": _prov(["first-model", "second-model"], default=""),
+        },
+    )
 
     cfg = config_mod.load_config()
 
@@ -118,9 +124,9 @@ def test_roles_main_respected_not_overridden(monkeypatch, tmp_path):
     """provider.yaml roles.main 存在 → 用该绑定，不被「第一个提供商」兜底覆盖。"""
     _isolate_config(monkeypatch, yaml_path=None)
     _use_provider_file(
-        monkeypatch, tmp_path,
-        {"P": _prov(["pm"], default="pm", key="sk-p"),
-         "Q": _prov(["qm"], default="qm", key="sk-q")},
+        monkeypatch,
+        tmp_path,
+        {"P": _prov(["pm"], default="pm", key="sk-p"), "Q": _prov(["qm"], default="qm", key="sk-q")},
         roles={"main": {"provider": "Q", "model": "qm"}},
     )
 
@@ -134,9 +140,7 @@ def test_roles_main_respected_not_overridden(monkeypatch, tmp_path):
 def test_empty_roles_falls_back_and_settings_applied(monkeypatch, tmp_path):
     """roles.main 缺失 → 兜底第一个提供商；settings 段的运行时参数生效。"""
     _isolate_config(monkeypatch, yaml_path=None)
-    _use_provider_file(monkeypatch, tmp_path,
-                       {"P": _prov(["pm"], default="pm")},
-                       settings={"keep_turns": 7})
+    _use_provider_file(monkeypatch, tmp_path, {"P": _prov(["pm"], default="pm")}, settings={"keep_turns": 7})
 
     cfg = config_mod.load_config()
 
@@ -223,8 +227,8 @@ def test_wizard_single_provider_selected_model_first(tmp_path):
 
 def test_wizard_multi_provider_document_order(tmp_path):
     """多家循环：先写入者成为文档序第一个 = 启动默认主模型的取用对象。"""
-    from tea_agent.setup_wizard import run_provider_setup_wizard
     from tea_agent.config import _first_provider_ref
+    from tea_agent.setup_wizard import run_provider_setup_wizard
 
     path = tmp_path / "provider.yaml"
     monkey_iso = None  # noqa: F841 — 单测内直接用 store/env 对齐
@@ -284,9 +288,13 @@ def test_agent_load_config_no_config_file(monkeypatch, tmp_path):
 
     _isolate_config(monkeypatch, yaml_path=None)
     monkeypatch.setattr(agent_mod, "resolve_config_path", lambda p=None: None)
-    _use_provider_file(monkeypatch, tmp_path, {
-        "P": _prov(["pm1"], default="pm1", key="sk-agent"),
-    })
+    _use_provider_file(
+        monkeypatch,
+        tmp_path,
+        {
+            "P": _prov(["pm1"], default="pm1", key="sk-agent"),
+        },
+    )
 
     agent = _bare_agent()
     cfg = agent._load_config(None)
@@ -337,10 +345,8 @@ def _run_server_main(monkeypatch, argv_extra: list[str], *, needs: bool):
         calls.append(kwargs)
 
     monkeypatch.setattr(server_mod, "run_server", _fake_run_server)
-    monkeypatch.setattr(wizard_mod, "needs_provider_setup",
-                        lambda store=None: needs)
-    monkeypatch.setattr(config_mod, "load_config",
-                        lambda p=None, **kw: _fake_cfg(configured=True))
+    monkeypatch.setattr(wizard_mod, "needs_provider_setup", lambda store=None: needs)
+    monkeypatch.setattr(config_mod, "load_config", lambda p=None, **kw: _fake_cfg(configured=True))
     monkeypatch.setattr(sys, "argv", ["tea_agent", *argv_extra])
     monkeypatch.setattr(sys, "stdin", io.StringIO(""))  # isatty()=False
 
@@ -365,8 +371,7 @@ def test_server_main_missing_provider_nontty_starts_with_warning(monkeypatch):
 
 def test_server_main_deprecated_config_flag_still_starts(monkeypatch, capsys):
     """--config 已废弃（config.yaml 删除）→ 仅告警，不退出，照常启动。"""
-    calls, _ = _run_server_main(
-        monkeypatch, ["--config", "/no/such/config.yaml"], needs=False)
+    calls, _ = _run_server_main(monkeypatch, ["--config", "/no/such/config.yaml"], needs=False)
 
     assert len(calls) == 1, "废弃的 --config 不应阻断启动"
     assert "deprecated" in capsys.readouterr().out.lower()

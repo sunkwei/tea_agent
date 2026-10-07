@@ -57,42 +57,46 @@ CREATE TABLE images (
 
 
 ROUNDS = [
-    {"role": "assistant", "content": "调工具",
-     "tool_calls": [{"id": "c1", "type": "function",
-                     "function": {"name": "tk", "arguments": "{}"}}],
-     "reasoning_content": "思考"},
+    {
+        "role": "assistant",
+        "content": "调工具",
+        "tool_calls": [{"id": "c1", "type": "function", "function": {"name": "tk", "arguments": "{}"}}],
+        "reasoning_content": "思考",
+    },
     {"role": "tool", "content": "结果", "tool_call_id": "c1"},
 ]
 
 
-def _make_old_db(path, with_rounds_json=True, with_agent_rounds=False,
-                 rounds_json_raw=None):
+def _make_old_db(path, with_rounds_json=True, with_agent_rounds=False, rounds_json_raw=None):
     """构造一个「改动之前」的库，可选填充数据。"""
     c = sqlite3.connect(str(path))
     c.executescript(OLD_SCHEMA)
     c.execute("INSERT INTO topics (topic_id, title) VALUES ('t1', '旧主题')")
     raw = rounds_json_raw if rounds_json_raw is not None else json.dumps(ROUNDS, ensure_ascii=False)
     c.execute(
-        "INSERT INTO conversations (id, topic_id, user_msg, ai_msg, is_func_calling, rounds_json) "
-        "VALUES ('cv1', 't1', '旧问题', '旧回答', 1, ?)",
+        "INSERT INTO conversations (id, topic_id, user_msg, ai_msg, is_func_calling, rounds_json) VALUES ('cv1', 't1', '旧问题', '旧回答', 1, ?)",
         (raw if with_rounds_json else None,),
     )
     if with_agent_rounds:
         for i, r in enumerate(ROUNDS):
             c.execute(
-                "INSERT INTO agent_rounds "
-                "(id, conversation_id, round_num, role, content, tool_calls, tool_call_id) "
-                "VALUES (?,?,?,?,?,?,?)",
-                ("r%d" % i, "cv1", i, r["role"], r["content"],
-                 json.dumps(r.get("tool_calls"), ensure_ascii=False) if r.get("tool_calls") else None,
-                 r.get("tool_call_id")),
+                "INSERT INTO agent_rounds (id, conversation_id, round_num, role, content, tool_calls, tool_call_id) VALUES (?,?,?,?,?,?,?)",
+                (
+                    f"r{i}",
+                    "cv1",
+                    i,
+                    r["role"],
+                    r["content"],
+                    json.dumps(r.get("tool_calls"), ensure_ascii=False) if r.get("tool_calls") else None,
+                    r.get("tool_call_id"),
+                ),
             )
     c.commit()
     c.close()
 
 
 def _cols(conn, tbl):
-    return [r[1] for r in conn.execute("PRAGMA table_info(%s)" % tbl)]
+    return [r[1] for r in conn.execute(f"PRAGMA table_info({tbl})")]
 
 
 def _open(path):
@@ -121,8 +125,7 @@ class TestSchemaAutoUpgrade:
         p = tmp_path / "old.db"
         _make_old_db(p)
         s = _open(p)
-        row = s.conn.execute(
-            "SELECT status, deleted_at FROM conversations WHERE id='cv1'").fetchone()
+        row = s.conn.execute("SELECT status, deleted_at FROM conversations WHERE id='cv1'").fetchone()
         assert row[0] == "done", "status 默认值应为 done（旧数据视为已完成）"
         assert row[1] is None, "deleted_at 默认 NULL（未删除）"
         s.close()
@@ -159,9 +162,7 @@ class TestRoundsBackfill:
         p = tmp_path / "old.db"
         _make_old_db(p)
         s = _open(p)
-        rc = s.conn.execute(
-            "SELECT reasoning_content FROM agent_rounds WHERE conversation_id='cv1' "
-            "AND round_num=0").fetchone()[0]
+        rc = s.conn.execute("SELECT reasoning_content FROM agent_rounds WHERE conversation_id='cv1' AND round_num=0").fetchone()[0]
         assert rc == "思考", "reasoning_content 应独立成列保留"
         s.close()
 
@@ -172,19 +173,17 @@ class TestRoundsBackfill:
         counts = []
         for _ in range(4):
             s = _open(p)
-            counts.append(s.conn.execute(
-                "SELECT COUNT(*) FROM agent_rounds").fetchone()[0])
+            counts.append(s.conn.execute("SELECT COUNT(*) FROM agent_rounds").fetchone()[0])
             s.close()
-        assert counts == [2, 2, 2, 2], "回填不幂等: %s" % counts
+        assert counts == [2, 2, 2, 2], f"回填不幂等: {counts}"
 
     def test_no_duplicate_when_agent_rounds_exists(self, tmp_path):
         """已有 agent_rounds 行的对话不重复回填（避免明细翻倍）。"""
         p = tmp_path / "old.db"
         _make_old_db(p, with_agent_rounds=True)
         s = _open(p)
-        n = s.conn.execute(
-            "SELECT COUNT(*) FROM agent_rounds WHERE conversation_id='cv1'").fetchone()[0]
-        assert n == 2, "已有明细的对话被重复回填: %d 行" % n
+        n = s.conn.execute("SELECT COUNT(*) FROM agent_rounds WHERE conversation_id='cv1'").fetchone()[0]
+        assert n == 2, f"已有明细的对话被重复回填: {n} 行"
         s.close()
 
     def test_corrupt_json_skipped(self, tmp_path):
@@ -192,8 +191,7 @@ class TestRoundsBackfill:
         p = tmp_path / "old.db"
         _make_old_db(p, rounds_json_raw="{不是合法JSON")
         s = _open(p)
-        assert s.conn.execute(
-            "SELECT COUNT(*) FROM agent_rounds").fetchone()[0] == 0
+        assert s.conn.execute("SELECT COUNT(*) FROM agent_rounds").fetchone()[0] == 0
         assert s.get_topic("t1") is not None, "损坏数据不应阻断迁移"
         s.close()
 
@@ -202,7 +200,6 @@ class TestRoundsBackfill:
         p = tmp_path / "old.db"
         _make_old_db(p)
         s = _open(p)
-        raw = s.conn.execute(
-            "SELECT rounds_json FROM conversations WHERE id='cv1'").fetchone()[0]
+        raw = s.conn.execute("SELECT rounds_json FROM conversations WHERE id='cv1'").fetchone()[0]
         assert raw, "回填不应清除原始 rounds_json"
         s.close()

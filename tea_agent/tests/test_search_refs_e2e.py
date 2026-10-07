@@ -14,8 +14,8 @@ from tea_agent.session.context import SessionContext
 
 def _ctx():
     ctx = SessionContext()
-    ctx.storage = None       # 不落库
-    ctx.topic_id = ""        # 不写事件
+    ctx.storage = None  # 不落库
+    ctx.topic_id = ""  # 不写事件
     ctx.tool_log = None
     return ctx
 
@@ -69,9 +69,7 @@ def test_execute_tool_call_code_search_yields_no_refs():
         "toolkit_search",
         {"ok": True, "results": [{"file": "a.py", "line": 1, "content": "x"}], "returncode": 0},
     )
-    ToolComponent(ctx).execute_tool_call(
-        _call("toolkit_search", '{"query": "def f", "search_type": "code"}')
-    )
+    ToolComponent(ctx).execute_tool_call(_call("toolkit_search", '{"query": "def f", "search_type": "code"}'))
     assert ctx._search_refs == []
 
 
@@ -90,9 +88,7 @@ def test_execute_tool_call_refs_do_not_break_tool_result():
         "toolkit_search",
         {"ok": True, "results": [{"title": "A", "url": "https://a.com"}], "returncode": 0},
     )
-    _, name, result_str = ToolComponent(ctx).execute_tool_call(
-        _call("toolkit_search", '{"query": "x"}')
-    )
+    _, name, result_str = ToolComponent(ctx).execute_tool_call(_call("toolkit_search", '{"query": "x"}'))
     assert name == "toolkit_search"
     assert "https://a.com" in result_str
     assert "参考链接" not in result_str, "提示只走 callback，不得混进工具结果"

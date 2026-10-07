@@ -35,15 +35,16 @@ class TestAuthMiddlewareWithApiKey:
 
     def test_wrong_token_rejected(self):
         c = _client("secret-key")
-        assert c.get("/api/nonexistent-for-auth-check",
-                     headers={"Authorization": "Bearer nope"}).status_code == 401
-        assert c.get("/api/nonexistent-for-auth-check",
-                     headers={"x-api-key": "nope"}).status_code == 401
+        assert c.get("/api/nonexistent-for-auth-check", headers={"Authorization": "Bearer nope"}).status_code == 401
+        assert c.get("/api/nonexistent-for-auth-check", headers={"x-api-key": "nope"}).status_code == 401
 
-    @pytest.mark.parametrize("header", [
-        {"Authorization": "Bearer secret-key"},
-        {"x-api-key": "secret-key"},
-    ])
+    @pytest.mark.parametrize(
+        "header",
+        [
+            {"Authorization": "Bearer secret-key"},
+            {"x-api-key": "secret-key"},
+        ],
+    )
     def test_valid_token_passes_auth(self, header):
         """合法令牌必须放行（403/401 之外的状态码都说明已经越过鉴权）。"""
         r = _client("secret-key").get("/api/nonexistent-for-auth-check", headers=header)

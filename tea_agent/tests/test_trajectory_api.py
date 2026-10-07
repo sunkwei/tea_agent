@@ -15,6 +15,8 @@ import pytest
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..")))
 
+import contextlib
+
 from tea_agent.server.modules.storage_module import StorageModule  # noqa: E402
 from tea_agent.store._core import Storage  # noqa: E402
 
@@ -26,10 +28,8 @@ def storage():
     st = Storage(db_path)
     StorageModule._instance = st
     yield st
-    try:
+    with contextlib.suppress(Exception):
         st.close()
-    except Exception:
-        pass
     StorageModule._instance = None
 
 
@@ -38,20 +38,40 @@ def _build_topic_with_trajectory(storage) -> str:
     tid = storage.topics.create_topic("Traj")
     cid = storage.conversations.save_msg(tid, "查一下天气", "", False)
     # 工具调用 + 结果（模拟运行时写入）
-    storage.events.append_event(tid, "tool/call", {
-        "name": "toolkit_weather_my", "call_id": "call_1", "args": "{}",
-    }, conversation_id=cid)
-    storage.events.append_event(tid, "tool/result", {
-        "name": "toolkit_weather_my", "call_id": "call_1", "success": True,
-        "result": "晴 25°C", "duration_ms": 120.5,
-    }, conversation_id=cid)
+    storage.events.append_event(
+        tid,
+        "tool/call",
+        {
+            "name": "toolkit_weather_my",
+            "call_id": "call_1",
+            "args": "{}",
+        },
+        conversation_id=cid,
+    )
+    storage.events.append_event(
+        tid,
+        "tool/result",
+        {
+            "name": "toolkit_weather_my",
+            "call_id": "call_1",
+            "success": True,
+            "result": "晴 25°C",
+            "duration_ms": 120.5,
+        },
+        conversation_id=cid,
+    )
     # AI 回复 + 思考链（写入 rounds_json 模拟 update_msg_rounds）
     storage.conversations.update_msg_rounds(
-        cid, "今天晴天，25 度。", True,
+        cid,
+        "今天晴天，25 度。",
+        True,
         [
-            {"role": "assistant", "content": "",
-             "reasoning_content": "用户想知道天气，我调用天气工具",
-             "tool_calls": [{"function": {"name": "toolkit_weather_my", "arguments": "{}"}}]},
+            {
+                "role": "assistant",
+                "content": "",
+                "reasoning_content": "用户想知道天气，我调用天气工具",
+                "tool_calls": [{"function": {"name": "toolkit_weather_my", "arguments": "{}"}}],
+            },
             {"role": "assistant", "content": "今天晴天，25 度。"},
         ],
     )

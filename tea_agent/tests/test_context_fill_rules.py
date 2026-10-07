@@ -33,10 +33,13 @@ def _assistant_with_rc(idx: int, rc: str = "思考内容") -> dict:
         "role": "assistant",
         "content": "",
         "reasoning_content": f"{rc}-{idx}",
-        "tool_calls": [{
-            "id": f"c{idx}", "type": "function",
-            "function": {"name": "toolkit_file", "arguments": "{}"},
-        }],
+        "tool_calls": [
+            {
+                "id": f"c{idx}",
+                "type": "function",
+                "function": {"name": "toolkit_file", "arguments": "{}"},
+            }
+        ],
     }
 
 
@@ -85,13 +88,19 @@ class TestReasoningKeepSteps:
         build_api_messages(ctx, "sp")
         src = [m for m in ctx.messages if m.get("role") == "assistant"]
         assert [m["reasoning_content"] for m in src] == [
-            "", "", "思考内容-2", "思考内容-3",
+            "",
+            "",
+            "思考内容-2",
+            "思考内容-3",
         ]
         # 幂等：再次构建形态不变（前缀稳定，不会反复翻转）
         msgs2 = build_api_messages(ctx, "sp")
         asst2 = [m for m in msgs2 if m.get("role") == "assistant" and m.get("tool_calls")]
         assert [m["reasoning_content"] for m in asst2] == [
-            "", "", "思考内容-2", "思考内容-3",
+            "",
+            "",
+            "思考内容-2",
+            "思考内容-3",
         ]
 
     def test_chunk_boundary_flips_once_then_stays_stable(self):
@@ -106,7 +115,11 @@ class TestReasoningKeepSteps:
         msgs = build_api_messages(ctx, "sp")
         asst = [m for m in msgs if m.get("role") == "assistant" and m.get("tool_calls")]
         assert [m["reasoning_content"] for m in asst] == [
-            "", "", "", "", "思考内容-4",
+            "",
+            "",
+            "",
+            "",
+            "思考内容-4",
         ]
 
         # 追加第 6 步 → 仍在同一块（索引 4、5）→ 不再有任何改写
@@ -116,7 +129,12 @@ class TestReasoningKeepSteps:
         msgs2 = build_api_messages(ctx, "sp")
         asst2 = [m for m in msgs2 if m.get("role") == "assistant" and m.get("tool_calls")]
         assert [m["reasoning_content"] for m in asst2] == [
-            "", "", "", "", "思考内容-4", "思考内容-5",
+            "",
+            "",
+            "",
+            "",
+            "思考内容-4",
+            "思考内容-5",
         ]
 
     def test_negative_disables_optimization(self):
@@ -125,14 +143,11 @@ class TestReasoningKeepSteps:
         assert _get_rc_keep_steps(ctx) == 0
         msgs = build_api_messages(ctx, "sp")
         asst = [m for m in msgs if m.get("role") == "assistant" and m.get("tool_calls")]
-        assert [m["reasoning_content"] for m in asst] == [
-            f"思考内容-{i}" for i in range(4)
-        ]
+        assert [m["reasoning_content"] for m in asst] == [f"思考内容-{i}" for i in range(4)]
 
     def test_blank_helper_returns_count_and_is_idempotent(self):
         ctx = _build_ctx(turns=4, rc_keep_steps=1)
-        msgs = [dict(m, _src_idx=i) for i, m in enumerate(ctx.messages)
-                if m.get("role") == "assistant"]
+        msgs = [dict(m, _src_idx=i) for i, m in enumerate(ctx.messages) if m.get("role") == "assistant"]
         assert _blank_stale_reasoning(ctx, msgs, 1) == 3
         assert _blank_stale_reasoning(ctx, msgs, 1) == 0  # 二次调用无变化
 
@@ -156,8 +171,7 @@ class TestMaxHistoryTurns:
             ctx.messages.append({"role": "assistant", "content": f"a{i}"})
         assert _get_max_history_turns(ctx) == 2
         msgs = build_api_messages(ctx, "sp")
-        users = [m["content"] for m in msgs
-                 if m.get("role") == "user" and str(m.get("content", "")).startswith("u")]
+        users = [m["content"] for m in msgs if m.get("role") == "user" and str(m.get("content", "")).startswith("u")]
         assert users == ["u3", "u4"]
 
     def test_zero_means_unlimited(self):
@@ -220,14 +234,20 @@ class TestLevel2Governance:
 
     def test_thinking_is_capped(self):
         store = _L2Store()
-        rounds = [{
-            "role": "assistant",
-            "content": "中间步骤",
-            "reasoning_content": "思考" * 5000,  # 10000 字符
-            "tool_calls": [{"id": "c1", "function": {"name": "t", "arguments": "{}"}}],
-        }]
+        rounds = [
+            {
+                "role": "assistant",
+                "content": "中间步骤",
+                "reasoning_content": "思考" * 5000,  # 10000 字符
+                "tool_calls": [{"id": "c1", "function": {"name": "t", "arguments": "{}"}}],
+            }
+        ]
         store.push_to_level2(
-            "t", "u", "a", rounds=rounds, thinking_max_chars=1000,
+            "t",
+            "u",
+            "a",
+            rounds=rounds,
+            thinking_max_chars=1000,
         )
         thinking = store._l2[0]["thinking"]
         assert len(thinking) < 1200
@@ -236,11 +256,14 @@ class TestLevel2Governance:
 
     def test_zero_disables_thinking_cap(self):
         store = _L2Store()
-        rounds = [{
-            "role": "assistant", "content": "c",
-            "reasoning_content": "思考" * 500,
-            "tool_calls": [{"id": "c1", "function": {"name": "t", "arguments": "{}"}}],
-        }]
+        rounds = [
+            {
+                "role": "assistant",
+                "content": "c",
+                "reasoning_content": "思考" * 500,
+                "tool_calls": [{"id": "c1", "function": {"name": "t", "arguments": "{}"}}],
+            }
+        ]
         store.push_to_level2("t", "u", "a", rounds=rounds, thinking_max_chars=0)
         assert "思考链已截断" not in store._l2[0]["thinking"]
 
@@ -250,8 +273,12 @@ class TestLevel2Governance:
         seen = []
         for _i in range(3):
             count, overflow, should = store.push_to_level2(
-                "t", "u" * 40, "a" * 40,
-                max_level2=99, max_level2_chars=200, thinking_max_chars=0,
+                "t",
+                "u" * 40,
+                "a" * 40,
+                max_level2=99,
+                max_level2_chars=200,
+                thinking_max_chars=0,
             )
             seen.append((count, len(overflow), should))
         # 第 3 次：总 240 字符 ≥ 200 → 溢出 1 条（至少保留 1 条）
@@ -269,7 +296,12 @@ class TestLevel2Governance:
         overflow, should = [], False
         for _i in range(13):  # keep=8, batch=4 → 触发点 n>12
             _count, overflow, should = store.push_to_level2(
-                "t", "u", "a", keep_turns=8, max_level2_chars=0, thinking_max_chars=0,
+                "t",
+                "u",
+                "a",
+                keep_turns=8,
+                max_level2_chars=0,
+                thinking_max_chars=0,
             )
         assert should is True
         assert len(store._l2) == 8
@@ -279,8 +311,12 @@ class TestLevel2Governance:
         store = _L2Store()
         for _i in range(3):
             _count, overflow, should = store.push_to_level2(
-                "t", "u" * 1000, "a" * 1000,
-                max_level2=99, max_level2_chars=0, thinking_max_chars=0,
+                "t",
+                "u" * 1000,
+                "a" * 1000,
+                max_level2=99,
+                max_level2_chars=0,
+                thinking_max_chars=0,
             )
             assert should is False and overflow == []
         assert len(store._l2) == 3
@@ -293,15 +329,19 @@ class TestOutputReserveClamp:
         assert auto_max_tokens_cap(1_000_000) == 250_000
         assert auto_max_tokens_cap(150_000) == 37_500
         assert auto_max_tokens_cap(10_000) == 8_192  # 下限
-        assert auto_max_tokens_cap(0) == 8_192       # 未知窗口
+        assert auto_max_tokens_cap(0) == 8_192  # 未知窗口
 
     def test_auto_fill_clamped_but_explicit_wins(self, monkeypatch):
         monkeypatch.setattr(
             "tea_agent.config._resolve_ref_model",
             lambda provider, model: {
-                "api_key": "k", "api_url": "u", "model": model,
-                "max_context_tokens": 1_000_000, "max_output_tokens": 384_000,
-                "options": {}, "reasoning_effort": "auto",
+                "api_key": "k",
+                "api_url": "u",
+                "model": model,
+                "max_context_tokens": 1_000_000,
+                "max_output_tokens": 384_000,
+                "options": {},
+                "reasoning_effort": "auto",
             },
         )
         cfg = AgentConfig()
@@ -324,9 +364,7 @@ def test_source_file_replay_threshold_is_bounded():
 
     from tea_agent.basesession import BaseChatSession
 
-    threshold = BaseChatSession._guess_tool_threshold(
-        "toolkit_file", '{"filename": "main.py"}'
-    )
+    threshold = BaseChatSession._guess_tool_threshold("toolkit_file", '{"filename": "main.py"}')
     assert threshold == BaseChatSession._SOURCE_FILE_THRESHOLD
     assert threshold != sys.maxsize
     assert threshold <= 65536

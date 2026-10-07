@@ -45,6 +45,7 @@ def user_db(tmp_path):
 
 # ─────────────────────── 命名 ───────────────────────
 
+
 def test_default_db_name_is_chat_history_db():
     """默认 db 名固定 chat_history.db（沿用历史名，不做改名迁移）。"""
     assert ss.DEFAULT_DB_NAME == "chat_history.db"
@@ -54,6 +55,7 @@ def test_default_db_name_is_chat_history_db():
 
 
 # ─────────────────────── 项目级（默认） ───────────────────────
+
 
 def test_project_writable_uses_tea_agent_run(proj, user_db, monkeypatch):
     """启动目录可写 → <项目>/.tea_agent_run/chat_history.db。"""
@@ -75,9 +77,7 @@ def test_custom_relative_db_name_respected(proj, monkeypatch):
     run.mkdir()
     monkeypatch.setattr(ss, "project_run_dir", lambda cwd=None: str(run))
 
-    got = ss.resolve_db_path(
-        user_db_abs=str(proj / "custom.db"), cwd=str(proj)
-    )
+    got = ss.resolve_db_path(user_db_abs=str(proj / "custom.db"), cwd=str(proj))
     assert os.path.basename(got) == "custom.db"
 
 
@@ -86,9 +86,7 @@ def test_explicit_absolute_db_path_respected(proj, tmp_path, monkeypatch):
     abs_db = str(tmp_path / "elsewhere" / "mine.db")
     monkeypatch.setattr(ss, "project_run_dir", lambda cwd=None: str(proj / "run"))
 
-    got = ss.resolve_db_path(
-        user_db_abs=abs_db, db_path_cfg=abs_db, cwd=str(proj)
-    )
+    got = ss.resolve_db_path(user_db_abs=abs_db, db_path_cfg=abs_db, cwd=str(proj))
     assert got == abs_db
 
 
@@ -96,9 +94,7 @@ def test_scope_user_forces_user_level(proj, user_db, monkeypatch):
     """显式 scope=user → 用户级（durable，不提示）。"""
     monkeypatch.setattr(ss, "project_run_dir", lambda cwd=None: str(proj / "run"))
 
-    got = ss.resolve_db_path(
-        user_db_abs=user_db, cwd=str(proj), storage_scope_cfg="user"
-    )
+    got = ss.resolve_db_path(user_db_abs=user_db, cwd=str(proj), storage_scope_cfg="user")
     assert got == user_db
     assert ss.storage_notice(got) is None
 
@@ -114,6 +110,7 @@ def test_home_dir_uses_user_level(user_db, monkeypatch):
 
 
 # ─────────────────────── 临时目录回退 ───────────────────────
+
 
 def test_temp_fallback_when_project_unwritable(proj, user_db, tmp_path, monkeypatch):
     """项目目录不可用 → 回退系统临时目录（确定性注入，不依赖 chmod）。"""
@@ -153,6 +150,7 @@ def test_is_temp_fallback_rejects_non_temp(tmp_path, proj):
 
 # ─────────────────────── 提示内容 ───────────────────────
 
+
 def test_storage_notice_contains_path_and_copy_instruction(tmp_path, monkeypatch):
     """提示必须含**具体路径**与「手动复制」要求 —— 这是需求原文。"""
     monkeypatch.setattr(ss.tempfile, "gettempdir", lambda: str(tmp_path))
@@ -175,6 +173,7 @@ def test_storage_notice_none_for_project_db(proj, user_db, monkeypatch):
 
 
 # ─────────────────────── 提示接线（关键契约） ───────────────────────
+
 
 class _FakeStorage:
     def __init__(self, db_path):
@@ -230,9 +229,7 @@ def test_emit_notice_never_raises(monkeypatch):
 
     from tea_agent.onlinesession import OnlineToolSession
 
-    OnlineToolSession._emit_storage_notice(
-        type("S", (), {"storage": _Boom()})(), lambda t: None
-    )  # 不抛异常即通过
+    OnlineToolSession._emit_storage_notice(type("S", (), {"storage": _Boom()})(), lambda t: None)  # 不抛异常即通过
 
 
 def test_finalize_turn_reply_does_not_append_notice(tmp_path, monkeypatch):
@@ -252,9 +249,7 @@ def test_finalize_turn_reply_does_not_append_notice(tmp_path, monkeypatch):
     from tea_agent.onlinesession import OnlineToolSession
 
     got = []
-    reply, tools = OnlineToolSession._finalize_turn_reply(
-        _make_session(db), "原始回复正文", True, got.append
-    )
+    reply, tools = OnlineToolSession._finalize_turn_reply(_make_session(db), "原始回复正文", True, got.append)
 
     assert reply == "原始回复正文", "提示不得混入回复（会入库污染历史）"
     assert tools is True, "返回值不得改变 used_tools"
@@ -269,7 +264,9 @@ def test_finalize_turn_reply_silent_for_project_db(proj):
     got = []
     reply, _ = OnlineToolSession._finalize_turn_reply(
         _make_session(str(proj / ss.PROJECT_RUN_DIR / ss.DEFAULT_DB_NAME)),
-        "正文", False, got.append,
+        "正文",
+        False,
+        got.append,
     )
     assert reply == "正文"
     assert got == []
@@ -285,28 +282,18 @@ def test_finalize_turn_reply_never_raises():
 
     from tea_agent.onlinesession import OnlineToolSession
 
-    reply, tools = OnlineToolSession._finalize_turn_reply(
-        _make_session(""), "正文", True, lambda t: None
-    )
+    reply, tools = OnlineToolSession._finalize_turn_reply(_make_session(""), "正文", True, lambda t: None)
     assert reply == "正文" and tools is True
 
 
 def test_chat_stream_delegates_to_finalize():
     """chat_stream 必须经 _finalize_turn_reply 收尾（否则提示永远不会发出）。"""
     tree = ast.parse(pathlib.Path("tea_agent/onlinesession.py").read_text(encoding="utf-8"))
-    fn = next(
-        n for n in ast.walk(tree)
-        if isinstance(n, ast.FunctionDef) and n.name == "chat_stream"
-    )
-    calls = [
-        n for n in ast.walk(fn)
-        if isinstance(n, ast.Call) and getattr(n.func, "attr", "") == "_finalize_turn_reply"
-    ]
+    fn = next(n for n in ast.walk(tree) if isinstance(n, ast.FunctionDef) and n.name == "chat_stream")
+    calls = [n for n in ast.walk(fn) if isinstance(n, ast.Call) and getattr(n.func, "attr", "") == "_finalize_turn_reply"]
     assert calls, "chat_stream 未委派 _finalize_turn_reply → 用户看不到存储提示"
     # 必须在最后一个 return 处返回其结果（而非自行拼接）
     rets = [n for n in ast.walk(fn) if isinstance(n, ast.Return) and n.value is not None]
-    assert any(
-        isinstance(r.value, ast.Call)
-        and getattr(r.value.func, "attr", "") == "_finalize_turn_reply"
-        for r in rets
-    ), "chat_stream 应直接 return _finalize_turn_reply(...)"
+    assert any(isinstance(r.value, ast.Call) and getattr(r.value.func, "attr", "") == "_finalize_turn_reply" for r in rets), (
+        "chat_stream 应直接 return _finalize_turn_reply(...)"
+    )

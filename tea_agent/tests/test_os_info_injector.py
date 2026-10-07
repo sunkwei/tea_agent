@@ -18,6 +18,7 @@ import pytest
 # 辅助函数
 # ============================================================
 
+
 class TestGetOsSignature:
     """_get_os_signature 格式测试"""
 
@@ -35,6 +36,7 @@ class TestGetOsSignature:
 
         sig = _get_os_signature()
         import platform
+
         assert platform.system() in sig
 
     def test_format_has_dash_separators(self):
@@ -131,6 +133,7 @@ class TestPersistOsSig:
 # 状态文件健壮性（Linux/Windows 真实故障回归）
 # ============================================================
 
+
 class TestStateFileRobustness:
     """~/.tea_agent/os_state.json 是纯旁路缓存，必须 fail-open + 自愈。
 
@@ -144,6 +147,7 @@ class TestStateFileRobustness:
     def _reset_warn_flag(self):
         """每条测试重置「只提示一次」节流标志，避免相互串扰。"""
         import tea_agent.session.os_info_injector as mod
+
         mod._bad_state_warned = False
         yield
         mod._bad_state_warned = False
@@ -166,9 +170,11 @@ class TestStateFileRobustness:
     def test_empty_file_returns_empty_without_error_log(self, state_file, caplog):
         """0 字节文件（写入被中断）应返回 ""，且不得产生 ERROR/traceback。"""
         import logging
+
         self._write_raw(state_file, "")
         with caplog.at_level(logging.WARNING, logger="session.os_info_injector"):
             from tea_agent.session.os_info_injector import _load_persisted_os_sig
+
             assert _load_persisted_os_sig("topic_x") == ""
         assert not [r for r in caplog.records if r.levelno >= logging.ERROR]
 
@@ -178,31 +184,36 @@ class TestStateFileRobustness:
         旧实现用 encoding='utf-8' 读，BOM 会让 json.load 在 char 0 抛
         'Expecting value' —— 与线上报错完全一致。
         """
-        self._write_raw(state_file, '{"topics": {"t1": "Linux-6.8.0-arm64"}}',
-                        encoding="utf-8-sig")
+        self._write_raw(state_file, '{"topics": {"t1": "Linux-6.8.0-arm64"}}', encoding="utf-8-sig")
         # 前置检查：确认文件字节确实以 BOM 开头（否则这条测试就没测到 BOM）
         with open(state_file, "rb") as f:
             assert f.read(3) == b"\xef\xbb\xbf"
 
         from tea_agent.session.os_info_injector import _load_persisted_os_sig
+
         assert _load_persisted_os_sig("t1") == "Linux-6.8.0-arm64"
 
-    @pytest.mark.parametrize("bad_content", [
-        "{invalid json",
-        "not json at all",
-        "[1, 2, 3]",                       # 顶层不是对象
-        '{"topics": "oops"}',              # topics 不是对象
-        '{"topics": {"t1": 123}}',         # 值不是字符串
-    ])
+    @pytest.mark.parametrize(
+        "bad_content",
+        [
+            "{invalid json",
+            "not json at all",
+            "[1, 2, 3]",  # 顶层不是对象
+            '{"topics": "oops"}',  # topics 不是对象
+            '{"topics": {"t1": 123}}',  # 值不是字符串
+        ],
+    )
     def test_malformed_content_degrades_to_empty(self, state_file, bad_content):
         """各种畸形内容都应安全返回 ""，不抛异常。"""
         self._write_raw(state_file, bad_content)
         from tea_agent.session.os_info_injector import _load_persisted_os_sig
+
         assert _load_persisted_os_sig("t1") == ""
 
     def test_unreadable_file_is_swallowed(self, state_file, monkeypatch):
         """权限错误等 OSError 也必须静默降级（fail-open）。"""
         import builtins
+
         import tea_agent.session.os_info_injector as mod
 
         real_open = builtins.open
@@ -232,7 +243,7 @@ class TestStateFileRobustness:
         _save_os_sig("t1", "Linux-6.8.0-aarch64")
 
         with open(state_file, encoding="utf-8") as f:
-            data = json.loads(f.read())          # 现在是合法 JSON
+            data = json.loads(f.read())  # 现在是合法 JSON
         assert data["topics"]["t1"] == "Linux-6.8.0-aarch64"
         assert _load_persisted_os_sig("t1") == "Linux-6.8.0-aarch64"
 
@@ -245,13 +256,13 @@ class TestStateFileRobustness:
 
         assert _load_persisted_os_sig("t_keep") == "Windows-10-AMD64"
         assert _load_persisted_os_sig("t_new") == "Linux-6.8.0-x86_64"
-        leftovers = [p.name for p in os.listdir(os.path.dirname(state_file))
-                     if p.endswith(".tmp") or p.startswith(".os_state.")]
+        leftovers = [p.name for p in os.listdir(os.path.dirname(state_file)) if p.endswith(".tmp") or p.startswith(".os_state.")]
         assert leftovers == []
 
     def test_topics_capped_to_prevent_unbounded_growth(self, state_file, monkeypatch):
         """topic 数应有上限（嵌入式设备存储有限），旧条目被裁剪。"""
         import tea_agent.session.os_info_injector as mod
+
         monkeypatch.setattr(mod, "_MAX_TRACKED_TOPICS", 5)
 
         for i in range(12):
@@ -260,7 +271,7 @@ class TestStateFileRobustness:
         with open(state_file, encoding="utf-8") as f:
             topics = json.load(f)["topics"]
         assert len(topics) <= 5
-        assert topics.get("topic_11") == "sig-11"   # 最新的必须留下
+        assert topics.get("topic_11") == "sig-11"  # 最新的必须留下
 
     def test_env_override_takes_effect(self, tmp_path, monkeypatch):
         """TEA_OS_STATE_FILE 可改道（容器里 HOME 不可写时的逃生门）。"""
@@ -275,6 +286,7 @@ class TestStateFileRobustness:
     def test_state_file_path_is_usable_without_home(self, monkeypatch):
         """HOME 解析失败时退回临时目录，不得抛异常。"""
         import tea_agent.session.os_info_injector as mod
+
         monkeypatch.setattr(mod.os.path, "expanduser", lambda p: "~")
         path = mod._default_state_file()
         assert path.endswith(os.path.join("tea_agent", "os_state.json"))
@@ -285,6 +297,7 @@ class TestStateFileRobustness:
 # inject_os_info — OS 分支测试
 # ============================================================
 
+
 class BaseInjectTest:
     """inject_os_info 测试基类，提供公共辅助方法"""
 
@@ -292,26 +305,18 @@ class BaseInjectTest:
     def _call_inject(os_name: str, **kwargs):
         """使用 mock platform 调用 inject_os_info"""
         with (
-            patch("tea_agent.session.os_info_injector.platform.system",
-                  return_value=os_name),
-            patch("tea_agent.session.os_info_injector.platform.release",
-                  return_value="test-release"),
-            patch("tea_agent.session.os_info_injector.platform.version",
-                  return_value="test-version"),
-            patch("tea_agent.session.os_info_injector.platform.machine",
-                  return_value="x86_64"),
-            patch("tea_agent.session.os_info_injector.platform.python_version",
-                  return_value="3.11.0"),
-            patch("tea_agent.session.os_info_injector.socket.gethostname",
-                  return_value="test-host"),
-            patch("tea_agent.session.os_info_injector.os.getcwd",
-                  return_value="/fake/workdir"),
-            patch("tea_agent.session.os_info_injector.os.sep",
-                  "\\" if os_name == "Windows" else "/"),
-            patch("tea_agent.session.os_info_injector.os.pathsep",
-                  ";" if os_name == "Windows" else ":"),
+            patch("tea_agent.session.os_info_injector.platform.system", return_value=os_name),
+            patch("tea_agent.session.os_info_injector.platform.release", return_value="test-release"),
+            patch("tea_agent.session.os_info_injector.platform.version", return_value="test-version"),
+            patch("tea_agent.session.os_info_injector.platform.machine", return_value="x86_64"),
+            patch("tea_agent.session.os_info_injector.platform.python_version", return_value="3.11.0"),
+            patch("tea_agent.session.os_info_injector.socket.gethostname", return_value="test-host"),
+            patch("tea_agent.session.os_info_injector.os.getcwd", return_value="/fake/workdir"),
+            patch("tea_agent.session.os_info_injector.os.sep", "\\" if os_name == "Windows" else "/"),
+            patch("tea_agent.session.os_info_injector.os.pathsep", ";" if os_name == "Windows" else ":"),
         ):
             from tea_agent.session.os_info_injector import inject_os_info
+
             messages = kwargs.pop("messages", [{"role": "user", "content": "hello"}])
             return inject_os_info(messages, **kwargs)
 
@@ -477,20 +482,13 @@ class TestInjectOsInfoEdgeCases:
     def test_unknown_os(self):
         """未知 OS 名应仍然工作（无特有提示但通用规则在）"""
         with (
-            patch("tea_agent.session.os_info_injector.platform.system",
-                  return_value="FreeBSD"),
-            patch("tea_agent.session.os_info_injector.platform.release",
-                  return_value="13.0"),
-            patch("tea_agent.session.os_info_injector.platform.version",
-                  return_value="generic"),
-            patch("tea_agent.session.os_info_injector.platform.machine",
-                  return_value="amd64"),
-            patch("tea_agent.session.os_info_injector.platform.python_version",
-                  return_value="3.11.0"),
-            patch("tea_agent.session.os_info_injector.socket.gethostname",
-                  return_value="freebsd-host"),
-            patch("tea_agent.session.os_info_injector.os.getcwd",
-                  return_value="/usr/home"),
+            patch("tea_agent.session.os_info_injector.platform.system", return_value="FreeBSD"),
+            patch("tea_agent.session.os_info_injector.platform.release", return_value="13.0"),
+            patch("tea_agent.session.os_info_injector.platform.version", return_value="generic"),
+            patch("tea_agent.session.os_info_injector.platform.machine", return_value="amd64"),
+            patch("tea_agent.session.os_info_injector.platform.python_version", return_value="3.11.0"),
+            patch("tea_agent.session.os_info_injector.socket.gethostname", return_value="freebsd-host"),
+            patch("tea_agent.session.os_info_injector.os.getcwd", return_value="/usr/home"),
             patch("tea_agent.session.os_info_injector.os.sep", "/"),
             patch("tea_agent.session.os_info_injector.os.pathsep", ":"),
         ):
@@ -508,20 +506,13 @@ class TestInjectOsInfoEdgeCases:
     def test_does_not_mutate_original_messages_object(self):
         """原始消息对象引用应保持不变（但内容被追加，这是预期行为）"""
         with (
-            patch("tea_agent.session.os_info_injector.platform.system",
-                  return_value="Linux"),
-            patch("tea_agent.session.os_info_injector.platform.release",
-                  return_value="6.8.0"),
-            patch("tea_agent.session.os_info_injector.platform.version",
-                  return_value="#1"),
-            patch("tea_agent.session.os_info_injector.platform.machine",
-                  return_value="x86_64"),
-            patch("tea_agent.session.os_info_injector.platform.python_version",
-                  return_value="3.11.0"),
-            patch("tea_agent.session.os_info_injector.socket.gethostname",
-                  return_value="host"),
-            patch("tea_agent.session.os_info_injector.os.getcwd",
-                  return_value="/tmp"),
+            patch("tea_agent.session.os_info_injector.platform.system", return_value="Linux"),
+            patch("tea_agent.session.os_info_injector.platform.release", return_value="6.8.0"),
+            patch("tea_agent.session.os_info_injector.platform.version", return_value="#1"),
+            patch("tea_agent.session.os_info_injector.platform.machine", return_value="x86_64"),
+            patch("tea_agent.session.os_info_injector.platform.python_version", return_value="3.11.0"),
+            patch("tea_agent.session.os_info_injector.socket.gethostname", return_value="host"),
+            patch("tea_agent.session.os_info_injector.os.getcwd", return_value="/tmp"),
             patch("tea_agent.session.os_info_injector.os.sep", "/"),
             patch("tea_agent.session.os_info_injector.os.pathsep", ":"),
         ):
@@ -535,9 +526,11 @@ class TestInjectOsInfoEdgeCases:
             # 返回值应与传入的是同一个 list 对象
             assert result is original
 
+
 # ============================================================
 # generate_os_info_text 纯函数测试
 # ============================================================
+
 
 class BaseGenerateTest:
     """generate_os_info_text 测试基类"""
@@ -546,26 +539,18 @@ class BaseGenerateTest:
     def _call_generate(os_name: str = "Linux", **kwargs):
         """使用 mock platform 调用 generate_os_info_text"""
         with (
-            patch("tea_agent.session.os_info_injector.platform.system",
-                  return_value=os_name),
-            patch("tea_agent.session.os_info_injector.platform.release",
-                  return_value="test-release"),
-            patch("tea_agent.session.os_info_injector.platform.version",
-                  return_value="test-version"),
-            patch("tea_agent.session.os_info_injector.platform.machine",
-                  return_value="x86_64"),
-            patch("tea_agent.session.os_info_injector.platform.python_version",
-                  return_value="3.11.0"),
-            patch("tea_agent.session.os_info_injector.socket.gethostname",
-                  return_value="test-host"),
-            patch("tea_agent.session.os_info_injector.os.getcwd",
-                  return_value="/fake/workdir"),
-            patch("tea_agent.session.os_info_injector.os.sep",
-                  "\\" if os_name == "Windows" else "/"),
-            patch("tea_agent.session.os_info_injector.os.pathsep",
-                  ";" if os_name == "Windows" else ":"),
+            patch("tea_agent.session.os_info_injector.platform.system", return_value=os_name),
+            patch("tea_agent.session.os_info_injector.platform.release", return_value="test-release"),
+            patch("tea_agent.session.os_info_injector.platform.version", return_value="test-version"),
+            patch("tea_agent.session.os_info_injector.platform.machine", return_value="x86_64"),
+            patch("tea_agent.session.os_info_injector.platform.python_version", return_value="3.11.0"),
+            patch("tea_agent.session.os_info_injector.socket.gethostname", return_value="test-host"),
+            patch("tea_agent.session.os_info_injector.os.getcwd", return_value="/fake/workdir"),
+            patch("tea_agent.session.os_info_injector.os.sep", "\\" if os_name == "Windows" else "/"),
+            patch("tea_agent.session.os_info_injector.os.pathsep", ";" if os_name == "Windows" else ":"),
         ):
             from tea_agent.session.os_info_injector import generate_os_info_text
+
             return generate_os_info_text(**kwargs)
 
 
@@ -675,6 +660,7 @@ class TestGenerateOsInfoCrossPlatform:
 # _detect_interface_type 测试
 # ============================================================
 
+
 class TestDetectInterfaceType:
     """_detect_interface_type 接口类型检测测试"""
 
@@ -682,31 +668,39 @@ class TestDetectInterfaceType:
         """TEA_AGENT_INTERFACE=web 应返回 web"""
         with patch.dict(os.environ, {"TEA_AGENT_INTERFACE": "web"}, clear=True):
             from tea_agent.session.os_info_injector import _detect_interface_type
+
             assert _detect_interface_type() == "web"
 
     def test_env_var_case_insensitive(self):
         """环境变量值不区分大小写"""
         with patch.dict(os.environ, {"TEA_AGENT_INTERFACE": "WEB"}, clear=True):
             from tea_agent.session.os_info_injector import _detect_interface_type
+
             assert _detect_interface_type() == "web"
 
     def test_env_var_mcp(self):
         """TEA_AGENT_INTERFACE=mcp 应返回 mcp"""
         with patch.dict(os.environ, {"TEA_AGENT_INTERFACE": "mcp"}, clear=True):
             from tea_agent.session.os_info_injector import _detect_interface_type
+
             assert _detect_interface_type() == "mcp"
 
     def test_no_env_var_fallback(self):
         """无环境变量且无特征时回退 web —— 不得回退到已废弃的 cli"""
-        with patch.dict(os.environ, {}, clear=True), patch("tea_agent.session.os_info_injector.sys.modules", {}):
-            with patch("tea_agent.session.os_info_injector.sys.argv", [""]):
-                from tea_agent.session.os_info_injector import _detect_interface_type
-                assert _detect_interface_type() == "web"
+        with (
+            patch.dict(os.environ, {}, clear=True),
+            patch("tea_agent.session.os_info_injector.sys.modules", {}),
+            patch("tea_agent.session.os_info_injector.sys.argv", [""]),
+        ):
+            from tea_agent.session.os_info_injector import _detect_interface_type
+
+            assert _detect_interface_type() == "web"
 
     def test_invalid_env_var_fallback(self):
         """无效环境变量值应走正常检测流程"""
         with patch.dict(os.environ, {"TEA_AGENT_INTERFACE": "invalid"}, clear=True):
             from tea_agent.session.os_info_injector import _detect_interface_type
+
             assert _detect_interface_type() == "web"
 
 
@@ -714,12 +708,14 @@ class TestDetectInterfaceType:
 # 接口类型提示测试
 # ============================================================
 
+
 class TestGetInterfaceHints:
     """_get_interface_hints 测试"""
 
     def test_web_hints(self):
         """web 接口应返回 HTML/链接相关提示"""
         from tea_agent.session.os_info_injector import _get_interface_hints
+
         hints = _get_interface_hints("web")
         assert "#topic:" in hints or "HTML" in hints
         assert "Markdown" in hints or "链接" in hints
@@ -731,6 +727,7 @@ class TestGetInterfaceHints:
         Web 是当前唯一内置交互面，故未知类型按 web 口径组装提示。
         """
         from tea_agent.session.os_info_injector import _get_interface_hints
+
         web = _get_interface_hints("web")
         assert web, "web 提示不得为空"
         for legacy in ("gui", "cli", "tui", "invalid", ""):
@@ -739,12 +736,14 @@ class TestGetInterfaceHints:
     def test_mcp_hints(self):
         """MCP 接口应返回纯文本/JSON 提示"""
         from tea_agent.session.os_info_injector import _get_interface_hints
+
         hints = _get_interface_hints("mcp")
         assert "纯文本" in hints or "JSON" in hints
 
     def test_unknown_interface_falls_back_to_web(self):
         """未知接口类型回退 web 提示，而非空串（空串会让模型失去全部格式约定）"""
         from tea_agent.session.os_info_injector import _get_interface_hints
+
         hints = _get_interface_hints("nonexistent")
         assert hints != ""
         assert hints == _get_interface_hints("web")

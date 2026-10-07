@@ -19,6 +19,7 @@
 - OnlineToolSession / LiteSession 集成
 """
 
+import contextlib
 from unittest.mock import MagicMock
 
 import httpx
@@ -471,14 +472,16 @@ class TestSharedSslContext:
 
         monkeypatch.setattr(_httpx, "create_ssl_context", _strict)
         fresh._create_ssl_context(http2)
-        fake.set_alpn_protocols.assert_called_once_with(
-            ["http/1.1", "h2"] if http2 else ["http/1.1"])
+        fake.set_alpn_protocols.assert_called_once_with(["http/1.1", "h2"] if http2 else ["http/1.1"])
 
-    @pytest.mark.parametrize("explicit", [
-        {"verify": False},
-        {"cert": ("/nonexistent/cli.pem", "/nonexistent/cli.key")},
-        {"trust_env": True},
-    ])
+    @pytest.mark.parametrize(
+        "explicit",
+        [
+            {"verify": False},
+            {"cert": ("/nonexistent/cli.pem", "/nonexistent/cli.key")},
+            {"trust_env": True},
+        ],
+    )
     def test_explicit_tls_kwargs_are_not_overridden(self, fresh, monkeypatch, explicit):
         """显式 TLS 参数必须原样透传，不得被共享 context 顶掉。
 
@@ -486,10 +489,9 @@ class TestSharedSslContext:
         串给其它连接。
         """
         seen = self._spy_client(monkeypatch)
-        try:
+        # cert 指向不存在的文件时 httpx 会报错，此处只关心 verify 是否被注入
+        with contextlib.suppress(Exception):
             build_http_client(5.0, **explicit)
-        except Exception:
-            pass  # cert 指向不存在的文件时 httpx 会报错，此处只关心 verify 是否被注入
         if "verify" in explicit:
             assert seen.get("verify") is False
         else:

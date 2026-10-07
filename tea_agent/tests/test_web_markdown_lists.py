@@ -92,8 +92,7 @@ def render():
         # 关键契约：rc=0 **不代表**脚本真的执行过（shim 静默空跑正是 rc=0）。
         # 无输出必须判失败，否则「测试从未真正运行」会长期伪装成通过。
         assert proc.stdout.strip(), (
-            "node 未产出任何输出（rc=0 但 stdout 为空）—— harness 静默空跑，"
-            f"本测试并未真正执行 formatMarkdown。stderr={proc.stderr[:500]!r}"
+            f"node 未产出任何输出（rc=0 但 stdout 为空）—— harness 静默空跑，本测试并未真正执行 formatMarkdown。stderr={proc.stderr[:500]!r}"
         )
         return json.loads(proc.stdout)
 

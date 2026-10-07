@@ -16,6 +16,7 @@ ROOT = Path(__file__).resolve().parents[2]
 
 # ── 对照实验（先证明检测器会报、也不会乱报）──────────────────────
 
+
 def test_positive_control_catches_signature_drift():
     """阳性对照：委托层签名漂移（本仓库真实缺陷形态）必须被检出。"""
     from tea_agent.evaluation.api_smoke import Entry, smoke
@@ -61,8 +62,7 @@ def test_negative_control_healthy_entry_not_flagged():
             # 最小入参合法非法是业务判断，入口本身是通的
             raise ValueError("count must be > 0")
 
-    res = smoke([Entry("_Ok.get", _Ok().get), Entry("_Ok.strict", _Ok().strict)],
-                pool={"topic_id": "t"})
+    res = smoke([Entry("_Ok.get", _Ok().get), Entry("_Ok.strict", _Ok().strict)], pool={"topic_id": "t"})
     assert res.checked == 2
     assert res.failures == [], f"误报健康入口: {res.failures}"
 
@@ -75,7 +75,7 @@ def test_annotation_string_form_is_handled():
     from tea_agent.evaluation.api_smoke import Entry, smoke
 
     class _Mod:
-        def get(self, topic_id: "str", limit: "int" = 5):
+        def get(self, topic_id: str, limit: int = 5):
             assert isinstance(topic_id, str), f"应为 str，实得 {type(topic_id)}"
             return topic_id
 
@@ -84,6 +84,7 @@ def test_annotation_string_form_is_handled():
 
 
 # ── 真实仓库断言 ──────────────────────────────────────────────────
+
 
 def test_public_api_entries_all_resolve():
     """`tea_agent.__all__` 的每个公开名都必须可解析（公开契约）。"""
@@ -99,8 +100,7 @@ def test_repo_api_smoke_has_no_fatal_failures():
     from tea_agent.evaluation.api_smoke import run
 
     out = run(scope="all")
-    assert out["checked"] >= 40, (
-        f"仅调用 {out['checked']} 个入口，疑似非空转（应覆盖 Storage 公共方法）")
+    assert out["checked"] >= 40, f"仅调用 {out['checked']} 个入口，疑似非空转（应覆盖 Storage 公共方法）"
     assert out["failures"] == [], f"入口级致命失败: {out['failures'][:5]}"
 
 
@@ -119,8 +119,7 @@ def test_smoke_does_not_touch_real_user_data():
 
     db, _entries = discover_storage()
     path = str(getattr(db, "db_path", "") or getattr(db, "_db_path", ""))
-    assert "tmp" in path.lower() or "temp" in path.lower(), (
-        f"冒烟数据库不在临时目录: {path!r}")
+    assert "tmp" in path.lower() or "temp" in path.lower(), f"冒烟数据库不在临时目录: {path!r}"
 
 
 def test_vector_and_bytes_params_get_sized_values():

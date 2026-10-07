@@ -55,12 +55,8 @@ def test_frontend_reads_match_backend_shape(fake_server):
     # 取 search 函数体（含 'search-results' 的那段）
     i = src.index("search-results")
     seg = src[i : i + 3000]
-    assert "d.data || d || {}" in seg or "d.data || d" in seg, (
-        "前端未容忍后端的无 data 包裹形态 → 搜索将恒显示「没有结果」"
-    )
+    assert "d.data || d || {}" in seg or "d.data || d" in seg, "前端未容忍后端的无 data 包裹形态 → 搜索将恒显示「没有结果」"
     # 模拟前端取值：两种形态都必须拿到结果
     for wrapped in (backend, {"data": backend}):
         results = wrapped.get("data") or wrapped or {}
-        assert results.get("conversations") or results.get("memories"), (
-            f"前端取不到结果: {wrapped}"
-        )
+        assert results.get("conversations") or results.get("memories"), f"前端取不到结果: {wrapped}"

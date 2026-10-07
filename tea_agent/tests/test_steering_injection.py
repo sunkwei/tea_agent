@@ -23,6 +23,7 @@ from tea_agent.session.message_queue import (
 
 def _make_session(**kwargs):
     """构造最小可用的 session 桩（context.messages + 可选 hooks）。"""
+
     class _Ctx:
         def __init__(self):
             self.messages = []
@@ -46,10 +47,12 @@ def _make_session(**kwargs):
 
 # ── drain_steering_items ──────────────────────────────────
 
+
 class TestDrainSteeringItems:
     def test_provider_source(self):
         """server 队列（provider）项应被消费并标记 source=server_queue。"""
         provider_calls = []
+
         def provider():
             provider_calls.append(1)
             return [{"id": "a1", "message": "先检查依赖"}] if len(provider_calls) == 1 else []
@@ -92,6 +95,7 @@ class TestDrainSteeringItems:
 
     def test_provider_exception_graceful(self):
         """provider 抛异常不应影响主流程，返回空列表。"""
+
         def boom():
             raise RuntimeError("provider 挂了")
 
@@ -104,6 +108,7 @@ class TestDrainSteeringItems:
 
 
 # ── inject_steering_messages ──────────────────────────────
+
 
 class TestInjectSteeringMessages:
     def test_injects_user_message_with_prefix(self):
@@ -119,9 +124,16 @@ class TestInjectSteeringMessages:
     def test_preserves_images(self):
         """带图插话保留 images 字段（由 to_multimodal 后续转换）。"""
         sess = _make_session()
-        n = inject_steering_messages(sess, [{
-            "id": "a2", "message": "看这张图", "images": ["uploads/x.png"],
-        }])
+        n = inject_steering_messages(
+            sess,
+            [
+                {
+                    "id": "a2",
+                    "message": "看这张图",
+                    "images": ["uploads/x.png"],
+                }
+            ],
+        )
 
         assert n == 1
         msg = sess.context.messages[0]
@@ -143,10 +155,13 @@ class TestInjectSteeringMessages:
     def test_skips_empty_items(self):
         """空文本且无图的消息应跳过。"""
         sess = _make_session(notify=True)
-        n = inject_steering_messages(sess, [
-            {"id": "x1", "message": ""},
-            {"id": "x2", "message": "  ", "images": []},
-        ])
+        n = inject_steering_messages(
+            sess,
+            [
+                {"id": "x1", "message": ""},
+                {"id": "x2", "message": "  ", "images": []},
+            ],
+        )
 
         assert n == 0
         assert sess.context.messages == []
@@ -183,9 +198,14 @@ class TestToolLoopSteering:
         mock_tk.meta_map = {}
         mock_tk.call_tool.return_value = "mock_result"
         sess = OnlineToolSession(
-            toolkit=mock_tk, api_key="sk-test", api_url="https://api.test.com/v1",
-            model="test-model", enable_thinking=False, storage=None,
-            no_stream_chunk=True, **kwargs,
+            toolkit=mock_tk,
+            api_key="sk-test",
+            api_url="https://api.test.com/v1",
+            model="test-model",
+            enable_thinking=False,
+            storage=None,
+            no_stream_chunk=True,
+            **kwargs,
         )
         sess._build_api_messages = MagicMock(return_value=[{"role": "user", "content": "test"}])
         sess.api = MagicMock()
@@ -203,10 +223,8 @@ class TestToolLoopSteering:
 
         # 三轮响应：工具 → 工具 → 文本
         sess._process_stream_with_reasoning.side_effect = [
-            ("", [{"id": "c1", "type": "function",
-                   "function": {"name": "search", "arguments": "{}"}}], ""),
-            ("", [{"id": "c2", "type": "function",
-                   "function": {"name": "read_file", "arguments": "{}"}}], ""),
+            ("", [{"id": "c1", "type": "function", "function": {"name": "search", "arguments": "{}"}}], ""),
+            ("", [{"id": "c2", "type": "function", "function": {"name": "read_file", "arguments": "{}"}}], ""),
             ("完成", [], ""),
         ]
         sess.tools_comp.parse_tool_calls_from_stream.side_effect = [
@@ -219,19 +237,20 @@ class TestToolLoopSteering:
         # 插话：第一轮边界无消息，第二轮边界消费 1 条（模拟执行期间用户输入）
         provider_calls = []
         notified = []
+
         def provider():
             provider_calls.append(1)
             if len(provider_calls) == 2:
                 return [{"id": "s1", "message": "先检查配置再继续"}]
             return []
+
         sess._steering_provider = provider
         sess._steering_notify = lambda item: notified.append(item)
 
         result = execute_tool_loop(sess, {"msg": "test", "callback": lambda x: None})
 
         assert result["iterations"] >= 2
-        injected = [m for m in sess.context.messages
-                    if m.get("role") == "user" and "[即时指令]" in (m.get("content") or "")]
+        injected = [m for m in sess.context.messages if m.get("role") == "user" and "[即时指令]" in (m.get("content") or "")]
         assert len(injected) == 1
         assert injected[0]["content"] == "[即时指令] 先检查配置再继续"
         # 注入后已通知前端（SSE steering_injected）
@@ -254,7 +273,7 @@ class TestToolLoopSteering:
         """chat_stream 启动时应调用 provider 清理遗留排队消息（防重复注入）。"""
         sess = self._make_session()
         stale = [{"id": "old1", "message": "上轮遗留"}]
-        sess._steering_provider = lambda: ([stale.pop(0)] if stale else [])
+        sess._steering_provider = lambda: [stale.pop(0)] if stale else []
 
         # 模拟 chat_stream 启动时的清理调用（provider 消费并丢弃）
         _stale_provider = getattr(sess, "_steering_provider", None)
@@ -268,6 +287,7 @@ class TestToolLoopSteering:
 
 
 # ── 回合入口接线（回归：漏挂 provider 导致插话静默失效）──────────
+
 
 class TestAttachSteeringProvider:
     """attach_steering_provider：所有回合入口共用的接线助手。"""
@@ -301,6 +321,7 @@ class TestAttachSteeringProvider:
 
     def test_drain_failure_does_not_propagate(self):
         """drain 抛异常时必须吞掉并返回空（不能打断整轮对话）。"""
+
         class _S:
             current_topic_id = "t1"
 
@@ -342,9 +363,7 @@ class TestServerEntryPointsWired:
     def test_all_entry_points_call_wire_steering(self):
         from pathlib import Path
 
-        src = (Path(__file__).resolve().parents[1] / "server" / "modules" / "agent_module.py").read_text(
-            encoding="utf-8"
-        )
+        src = (Path(__file__).resolve().parents[1] / "server" / "modules" / "agent_module.py").read_text(encoding="utf-8")
         for entry in ("chat_completion", "_run_stream", "chat_stream_sse"):
             assert f"def {entry}" in src, f"入口 {entry} 不存在"
         # 三个入口各调用一次 _wire_steering
@@ -362,6 +381,7 @@ class TestServerEntryPointsWired:
         assert items[0]["message"] == "插话内容"
         # 已被消费（幂等：再次 drain 为空）
         assert AgentModule._steering_drain("topic-drain") == []
+
 
 class TestMessageQueueThreadSafety:
     def test_concurrent_push_ids_are_unique(self):
@@ -392,6 +412,7 @@ class TestMessageQueueThreadSafety:
 # 回归：queue_pop / queue_remove 曾在持锁状态下调用 _persist_queues（同一把非重入锁）
 # → 自死锁。后果：用户一插话，工具循环的 drain 把回合永久卡死，且锁被占住后
 # 所有队列操作（含新的插话入队）一并阻塞。
+
 
 class TestServerQueueNoDeadlock:
     @pytest.fixture(autouse=True)
@@ -474,6 +495,7 @@ class TestServerQueueNoDeadlock:
 # → 第一个 content 分片就抛 NameError，/v1/chat/completions stream=true 全挂，
 #   而此前没有任何测试覆盖该生成器。
 
+
 class TestGenerateSseFrames:
     @staticmethod
     def _frames(events):
@@ -494,24 +516,23 @@ class TestGenerateSseFrames:
         frames = []
         for c in chunks:
             assert c.startswith("data: "), c
-            body = c[len("data: "):].strip()
+            body = c[len("data: ") :].strip()
             frames.append("[DONE]" if body == "[DONE]" else json.loads(body))
         return frames
 
     def test_content_done_frames(self):
-        frames = self._frames([
-            {"type": "content", "text": "你好"},
-            {"type": "done", "ai_msg": "你好", "tools_used": []},
-        ])
+        frames = self._frames(
+            [
+                {"type": "content", "text": "你好"},
+                {"type": "done", "ai_msg": "你好", "tools_used": []},
+            ]
+        )
         assert frames[-1] == "[DONE]"
-        contents = [
-            f["choices"][0]["delta"].get("content")
-            for f in frames
-            if isinstance(f, dict) and f.get("choices")
-        ]
+        contents = [f["choices"][0]["delta"].get("content") for f in frames if isinstance(f, dict) and f.get("choices")]
         assert "你好" in contents, f"内容分片丢失（此前 NameError 会整段崩）: {frames}"
-        assert any(isinstance(f, dict) and f.get("choices", [{}])[0].get("finish_reason") == "stop"
-                   for f in frames), "缺少 finish_reason=stop 的收尾帧"
+        assert any(isinstance(f, dict) and f.get("choices", [{}])[0].get("finish_reason") == "stop" for f in frames), (
+            "缺少 finish_reason=stop 的收尾帧"
+        )
 
     def test_error_frame_terminates(self):
         frames = self._frames([{"type": "error", "error": "boom"}])
@@ -520,6 +541,7 @@ class TestGenerateSseFrames:
 
 
 # ── follow-up 投递（回归：此前整条链路无人调用，消息静默丢弃）──────
+
 
 class TestFollowupDelivery:
     """follow-up 的语义是"本轮所有工作完成后投递"，且必须真的到模型那里。"""
@@ -530,7 +552,7 @@ class TestFollowupDelivery:
         sess = _make_session()
         sess.current_topic_id = "t-fu"
         pending = [{"id": "f1", "message": "完成后总结"}]
-        attach_followup_provider(sess, lambda tid: ([pending.pop(0)] if pending else []))
+        attach_followup_provider(sess, lambda tid: [pending.pop(0)] if pending else [])
 
         items = drain_followup_items(sess)
         assert [i["id"] for i in items] == ["f1"]
@@ -552,10 +574,13 @@ class TestFollowupDelivery:
         from tea_agent.session.message_queue import inject_followup_messages
 
         sess = _make_session()
-        n = inject_followup_messages(sess, [
-            {"id": "a", "message": " 总结一下 "},
-            {"id": "b", "message": "   "},          # 空内容不注入
-        ])
+        n = inject_followup_messages(
+            sess,
+            [
+                {"id": "a", "message": " 总结一下 "},
+                {"id": "b", "message": "   "},  # 空内容不注入
+            ],
+        )
         assert n == 1
         assert sess.context.messages[0]["content"] == "[后续任务] 总结一下"
 
@@ -577,9 +602,14 @@ class TestFollowupInToolLoop:
         mock_tk = MagicMock()
         mock_tk.meta_map = {}
         sess = OnlineToolSession(
-            toolkit=mock_tk, api_key="sk-test", api_url="https://api.test.com/v1",
-            model="test-model", enable_thinking=False, storage=None,
-            no_stream_chunk=True, **kwargs,
+            toolkit=mock_tk,
+            api_key="sk-test",
+            api_url="https://api.test.com/v1",
+            model="test-model",
+            enable_thinking=False,
+            storage=None,
+            no_stream_chunk=True,
+            **kwargs,
         )
         sess._build_api_messages = MagicMock(return_value=[{"role": "user", "content": "test"}])
         sess.api = MagicMock()
@@ -596,7 +626,7 @@ class TestFollowupInToolLoop:
         sess.current_topic_id = "t-loop"
         # 第一次收尾投递 1 条 follow-up，之后为空
         pending = [{"id": "f1", "message": "完成后总结"}]
-        attach_followup_provider(sess, lambda tid: ([pending.pop(0)] if pending else []))
+        attach_followup_provider(sess, lambda tid: [pending.pop(0)] if pending else [])
 
         sess._process_stream_with_reasoning.side_effect = [
             ("第一段回答", [], ""),
@@ -606,8 +636,7 @@ class TestFollowupInToolLoop:
 
         result = execute_tool_loop(sess, {"msg": "干活", "callback": lambda x: None})
 
-        injected = [m for m in sess.context.messages
-                    if "[后续任务]" in (m.get("content") or "")]
+        injected = [m for m in sess.context.messages if "[后续任务]" in (m.get("content") or "")]
         assert len(injected) == 1, f"follow-up 未投递: {sess.context.messages}"
         assert injected[0]["content"] == "[后续任务] 完成后总结"
         # 投递后应再跑一轮，模型据此产出回答

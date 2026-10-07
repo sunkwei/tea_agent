@@ -53,12 +53,7 @@ class TestToolCallRecord:
         """测试带错误信息初始化"""
         from tea_agent.reflection import ToolCallRecord
 
-        record = ToolCallRecord(
-            name="test_tool",
-            success=False,
-            error="File not found",
-            duration_ms=150.5
-        )
+        record = ToolCallRecord(name="test_tool", success=False, error="File not found", duration_ms=150.5)
         assert record.success is False
         assert record.error == "File not found"
         assert record.duration_ms == 150.5
@@ -110,7 +105,7 @@ class TestSessionTrace:
             ToolCallRecord(name="t2", success=False),
             ToolCallRecord(name="t3", success=True),
         ]
-        assert trace.success_rate == pytest.approx(2/3)
+        assert trace.success_rate == pytest.approx(2 / 3)
 
     def test_duration_seconds_no_end(self):
         """测试未结束的持续时间"""
@@ -177,13 +172,7 @@ class TestReflectionManager:
         trace = manager.start_trace(topic_id="topic1", user_msg="Hello")
 
         time.sleep(0.1)
-        manager.finish_trace(
-            trace,
-            total_iterations=5,
-            used_tools=True,
-            interrupted=False,
-            error=None
-        )
+        manager.finish_trace(trace, total_iterations=5, used_tools=True, interrupted=False, error=None)
 
         assert trace.end_time > trace.start_time
         assert trace.total_iterations == 5
@@ -264,9 +253,9 @@ class TestReflectionManager:
         from tea_agent.reflection import ReflectionManager
 
         manager = ReflectionManager(None)
-        result_text = '''```json
+        result_text = """```json
 {"summary": "Test summary", "details": "Test details"}
-```'''
+```"""
 
         parsed = manager.parse_reflection_result(result_text)
 
@@ -278,7 +267,7 @@ class TestReflectionManager:
         from tea_agent.reflection import ReflectionManager
 
         manager = ReflectionManager(None)
-        result_text = 'This is not JSON'
+        result_text = "This is not JSON"
 
         parsed = manager.parse_reflection_result(result_text)
 

@@ -134,9 +134,9 @@ def test_all_regression_targets_restored(experiment):
     from tea_agent.evaluation.evo_bench import DEFAULT_TASKS
 
     assert not any("R1-env-scrub-remove" in str(t) for t in DEFAULT_TASKS)
-    src = (
-        pytest.importorskip("pathlib").Path(__file__).resolve().parents[2] / "tea_agent" / "toolkit" / "toolkit_exec.py"
-    ).read_text(encoding="utf-8")
+    src = (pytest.importorskip("pathlib").Path(__file__).resolve().parents[2] / "tea_agent" / "toolkit" / "toolkit_exec.py").read_text(
+        encoding="utf-8"
+    )
     # 阈值 = 保留的 env 清洗接入点数（单条/批量执行各 1 处）。
     # 历史值 4 含已删除的 _sudo_with_gui 提权路径（3 处），删除提权能力后重新校准；
     # 若将来新增执行路径，请同步上调此阈值，勿下调。

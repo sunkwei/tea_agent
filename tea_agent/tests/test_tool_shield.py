@@ -45,8 +45,7 @@ def _tools(*names) -> list[dict]:
     return [{"function": {"name": n}} for n in names]
 
 
-KNOWN = ["toolkit_exec", "toolkit_file", "toolkit_hot", "toolkit_cold",
-         "toolkit_never", "toolkit_config"]
+KNOWN = ["toolkit_exec", "toolkit_file", "toolkit_hot", "toolkit_cold", "toolkit_never", "toolkit_config"]
 
 
 # ═════════════ 不变式 1：无数据 = 不屏蔽 ═════════════
@@ -63,8 +62,7 @@ class TestNoDataNeverShields:
         assert len(kept) == len(tools)
 
     def test_none_known_tools_is_safe(self):
-        v = evaluate({"toolkit_hot": _row(5, 1)}, known_tools=None,
-                     idle_days=30, now=NOW)
+        v = evaluate({"toolkit_hot": _row(5, 1)}, known_tools=None, idle_days=30, now=NOW)
         assert v["shielded"] == {}
 
 
@@ -72,45 +70,36 @@ class TestNoDataNeverShields:
 class TestWarmupNotShielded:
     def test_recent_install_does_not_shield_unused_tools(self):
         """观测仅 3 天：零使用的工具不能被判定为"长期不用"。"""
-        usage = {"toolkit_exec": _row(9, 0.1, first_days_ago=3),
-                 "toolkit_never": _row(0, None)}
-        v = evaluate(usage, known_tools=KNOWN, idle_days=30, now=NOW,
-                     oldest_observed=_ago(3))
+        usage = {"toolkit_exec": _row(9, 0.1, first_days_ago=3), "toolkit_never": _row(0, None)}
+        v = evaluate(usage, known_tools=KNOWN, idle_days=30, now=NOW, oldest_observed=_ago(3))
         assert "toolkit_never" not in v["shielded"], "新环境的未用工具被误屏蔽"
 
     def test_full_observation_shields_never_used(self):
         usage = {"toolkit_exec": _row(9, 0.1), "toolkit_hot": _row(7, 2)}
-        v = evaluate(usage, known_tools=KNOWN, idle_days=30, now=NOW,
-                     oldest_observed=_ago(90))
+        v = evaluate(usage, known_tools=KNOWN, idle_days=30, now=NOW, oldest_observed=_ago(90))
         assert "toolkit_never" in v["shielded"]
         assert "toolkit_hot" not in v["shielded"]
 
     def test_idle_beyond_threshold_shielded(self):
-        usage = {"toolkit_exec": _row(9, 0.1), "toolkit_cold": _row(4, 45),
-                 "toolkit_hot": _row(4, 3)}
-        v = evaluate(usage, known_tools=KNOWN, idle_days=30, now=NOW,
-                     oldest_observed=_ago(120))
+        usage = {"toolkit_exec": _row(9, 0.1), "toolkit_cold": _row(4, 45), "toolkit_hot": _row(4, 3)}
+        v = evaluate(usage, known_tools=KNOWN, idle_days=30, now=NOW, oldest_observed=_ago(120))
         assert "toolkit_cold" in v["shielded"]
         assert "toolkit_hot" in v["kept"]
 
     def test_threshold_boundary_is_inclusive(self):
         """恰好等于阈值即屏蔽：边界语义必须显式固定，不随浮点误差漂移。"""
         usage = {"toolkit_exec": _row(9, 0.1), "toolkit_cold": _row(4, 30)}
-        v = evaluate(usage, known_tools=KNOWN, idle_days=30, now=NOW,
-                     oldest_observed=_ago(120))
+        v = evaluate(usage, known_tools=KNOWN, idle_days=30, now=NOW, oldest_observed=_ago(120))
         assert "toolkit_cold" in v["shielded"]
 
     def test_just_inside_threshold_not_shielded(self):
         usage = {"toolkit_exec": _row(9, 0.1), "toolkit_cold": _row(4, 29)}
-        v = evaluate(usage, known_tools=KNOWN, idle_days=30, now=NOW,
-                     oldest_observed=_ago(120))
+        v = evaluate(usage, known_tools=KNOWN, idle_days=30, now=NOW, oldest_observed=_ago(120))
         assert "toolkit_cold" not in v["shielded"]
 
     def test_malformed_timestamps_do_not_crash(self):
-        usage = {"toolkit_hot": {"uses": 3, "pin": None,
-                                 "first_used": "not-a-date", "last_used": "??"}}
-        v = evaluate(usage, known_tools=KNOWN, idle_days=30, now=NOW,
-                     oldest_observed="garbage")
+        usage = {"toolkit_hot": {"uses": 3, "pin": None, "first_used": "not-a-date", "last_used": "??"}}
+        v = evaluate(usage, known_tools=KNOWN, idle_days=30, now=NOW, oldest_observed="garbage")
         assert v["shielded"] == {}
 
 
@@ -118,35 +107,30 @@ class TestWarmupNotShielded:
 class TestSelfHealingAlwaysVisible:
     @pytest.mark.parametrize("tool", sorted(ALWAYS_PINNED))
     def test_pinned_survive_even_when_unused(self, tool):
-        v = evaluate({"toolkit_hot": _row(9, 1)}, known_tools=[tool],
-                     idle_days=30, now=NOW, oldest_observed=_ago(400))
+        v = evaluate({"toolkit_hot": _row(9, 1)}, known_tools=[tool], idle_days=30, now=NOW, oldest_observed=_ago(400))
         assert tool not in v["shielded"], f"屏蔽 {tool} 将导致无法自救"
 
     def test_apply_shield_never_hides_recovery_path(self):
         tools = _tools(*sorted(ALWAYS_PINNED), "toolkit_lsp")
         usage = {"toolkit_lsp": _row(1, 200)}
-        _, hidden = apply_shield(tools, storage=_StubStorage(
-            usage, oldest=_ago(400)))
+        _, hidden = apply_shield(tools, storage=_StubStorage(usage, oldest=_ago(400)))
         assert hidden == {"toolkit_lsp"}, f"屏蔽集超出预期: {hidden}"
 
 
 class TestPinOverrides:
     def test_pin_beats_data(self):
         usage = {"toolkit_hot": _row(2, 400, pin=1)}
-        v = evaluate(usage, known_tools=KNOWN, idle_days=30, now=NOW,
-                     oldest_observed=_ago(500))
+        v = evaluate(usage, known_tools=KNOWN, idle_days=30, now=NOW, oldest_observed=_ago(500))
         assert "toolkit_hot" not in v["shielded"]
 
     def test_unpin_forces_shield(self):
         usage = {"toolkit_hot": _row(999, 0, pin=0)}
-        v = evaluate(usage, known_tools=KNOWN, idle_days=30, now=NOW,
-                     oldest_observed=_ago(500))
+        v = evaluate(usage, known_tools=KNOWN, idle_days=30, now=NOW, oldest_observed=_ago(500))
         assert "toolkit_hot" in v["shielded"]
 
     def test_auto_restores_data_driven_judgement(self):
         usage = {"toolkit_hot": _row(999, 0, pin=None)}
-        v = evaluate(usage, known_tools=KNOWN, idle_days=30, now=NOW,
-                     oldest_observed=_ago(500))
+        v = evaluate(usage, known_tools=KNOWN, idle_days=30, now=NOW, oldest_observed=_ago(500))
         assert "toolkit_hot" not in v["shielded"]
 
 
@@ -155,8 +139,7 @@ class TestKillSwitch:
     def test_env_disable_shields_nothing(self, monkeypatch):
         monkeypatch.setenv("TEA_TOOL_SHIELD", "0")
         usage = {"toolkit_hot": _row(9, 1), "toolkit_cold": _row(2, 400)}
-        v = evaluate(usage, known_tools=KNOWN, idle_days=30, now=NOW,
-                     oldest_observed=_ago(500))
+        v = evaluate(usage, known_tools=KNOWN, idle_days=30, now=NOW, oldest_observed=_ago(500))
         assert v["shielded"] == {}
         assert not shield_enabled()
 
@@ -188,18 +171,14 @@ class TestPrefixCacheStability:
         工具列表顺序是 DeepSeek 前缀缓存的一部分；屏蔽集合若抖动，每轮都会换
         一套 schema → 缓存 100% 失效。
         """
-        usage = {"toolkit_hot": _row(9, 1), "toolkit_cold": _row(2, 400),
-                 "toolkit_never": _row(0, None)}
-        a = evaluate(usage, known_tools=KNOWN, idle_days=30, now=NOW,
-                     oldest_observed=_ago(200))
-        b = evaluate(usage, known_tools=KNOWN, idle_days=30, now=NOW,
-                     oldest_observed=_ago(200))
+        usage = {"toolkit_hot": _row(9, 1), "toolkit_cold": _row(2, 400), "toolkit_never": _row(0, None)}
+        a = evaluate(usage, known_tools=KNOWN, idle_days=30, now=NOW, oldest_observed=_ago(200))
+        b = evaluate(usage, known_tools=KNOWN, idle_days=30, now=NOW, oldest_observed=_ago(200))
         assert list(a["shielded"]) == list(b["shielded"])
         assert list(a["kept"]) == list(b["kept"])
 
     def test_shielded_is_sorted(self):
-        v = evaluate({"toolkit_hot": _row(9, 1)}, known_tools=list(reversed(KNOWN)),
-                     idle_days=30, now=NOW, oldest_observed=_ago(200))
+        v = evaluate({"toolkit_hot": _row(9, 1)}, known_tools=list(reversed(KNOWN)), idle_days=30, now=NOW, oldest_observed=_ago(200))
         assert list(v["shielded"]) == sorted(v["shielded"])
 
 
@@ -236,8 +215,7 @@ class _StubUsage:
         return self._u
 
     def oldest_observed(self):
-        return self._o or min((v["first_used"] for v in self._u.values()
-                               if v.get("first_used")), default=None)
+        return self._o or min((v["first_used"] for v in self._u.values() if v.get("first_used")), default=None)
 
 
 class _StubStorage:
@@ -278,6 +256,7 @@ class TestStoreBehaviour:
 
     def test_concurrent_records_do_not_lose_counts(self, store):
         """丢计数会把常用工具误判成不活跃 —— 与其他统计场景代价方向相反。"""
+
         def worker():
             for _ in range(25):
                 store.record_use("toolkit_burst")
@@ -332,8 +311,7 @@ class TestStorageWiring:
         st = Storage(path)
         conn = sqlite3.connect(path)
         try:
-            names = {r[0] for r in conn.execute(
-                "SELECT name FROM sqlite_master WHERE type='table'")}
+            names = {r[0] for r in conn.execute("SELECT name FROM sqlite_master WHERE type='table'")}
         finally:
             conn.close()
         assert "tool_usage" in names
@@ -367,8 +345,7 @@ class TestRecordPointWired:
         assert "toolkit_task_resume" in tk._CACHE_WHITELIST
         for _ in range(3):
             tk.call_tool("toolkit_task_resume", action="check")
-        assert tus.all_usage().get("toolkit_task_resume", {}).get("uses", 0) >= 1, \
-            "缓存路径未记录（会低估常用工具频率）"
+        assert tus.all_usage().get("toolkit_task_resume", {}).get("uses", 0) >= 1, "缓存路径未记录（会低估常用工具频率）"
 
     def test_no_storage_does_not_create_db(self, tmp_path, monkeypatch):
         """裸用 Toolkit（无会话/无库）时，统计写入本身不得建库。
@@ -386,8 +363,7 @@ class TestRecordPointWired:
         before = set(__import__("pathlib").Path(cwd).rglob("*.db"))
 
         assert tk._record_usage("toolkit_whatever") is None  # 不抛即可
-        assert set(__import__("pathlib").Path(cwd).rglob("*.db")) == before, \
-            "统计写入改变了主流程的建库行为"
+        assert set(__import__("pathlib").Path(cwd).rglob("*.db")) == before, "统计写入改变了主流程的建库行为"
 
     def test_broken_store_does_not_break_call(self, tmp_path, monkeypatch):
         import tea_agent.store as store_pkg

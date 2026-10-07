@@ -16,8 +16,7 @@ import pytest
 from tea_agent.toolkit import toolkit_export_last_pdf as ex
 
 PNG = bytes.fromhex(
-    "89504e470d0a1a0a0000000d49484452000000010000000108060000001f15c489"
-    "0000000d4944415478da63fcffff3f030005fe02fea72d4b960000000049454e44ae426082"
+    "89504e470d0a1a0a0000000d49484452000000010000000108060000001f15c4890000000d4944415478da63fcffff3f030005fe02fea72d4b960000000049454e44ae426082"
 )
 
 
@@ -94,9 +93,12 @@ class TestMarkdownExportEmbedsGenerated:
 
     def test_full_topic(self, exports):
         (exports / "图.png").write_bytes(PNG)
-        md = ex._build_full_topic_markdown("标题", [
-            {"stamp": "t", "user_msg": "问题", "ai_msg": "[图](/v1/download/图.png)"},
-        ])
+        md = ex._build_full_topic_markdown(
+            "标题",
+            [
+                {"stamp": "t", "user_msg": "问题", "ai_msg": "[图](/v1/download/图.png)"},
+            ],
+        )
         b64 = base64.b64encode(PNG).decode()
         assert f"data:image/png;base64,{b64}" in md
 
@@ -111,6 +113,7 @@ class TestMarkdownExportEmbedsGenerated:
             return real(pdf, images, *a, **k)
 
         import unittest.mock as mock
+
         with mock.patch.object(ex, "_render_images", spy):
             out = ex._make_pdf("标题", "t", "问题", "[图](/v1/preview/图.png)", "", str(exports / "o.pdf"))
         assert pathlib.Path(out).is_file()

@@ -9,7 +9,6 @@
 - A6: 无 _b64_cache/images 内部字段泄漏到 API 消息
 """
 
-
 from tea_agent.basesession import BaseChatSession
 from tea_agent.session.context import SessionContext
 from tea_agent.session.history_builder import build_api_messages
@@ -47,7 +46,7 @@ def _make_session() -> tuple[SessionContext, _Sess]:
 
 def _common_prefix_len(a: list[dict], b: list[dict]) -> int:
     n = 0
-    for x, y in zip(a, b):
+    for x, y in zip(a, b, strict=False):
         if x != y:
             break
         n += 1
@@ -66,19 +65,25 @@ class TestPrefixStability:
         sess.add_user_message("帮我审查代码并修复")
 
         reqs = []
-        ctx.messages.append({
-            "role": "assistant", "content": None,
-            "tool_calls": [{"id": "c1", "type": "function",
-                            "function": {"name": "toolkit_file", "arguments": '{"action": "read"}'}}],
-        })
+        ctx.messages.append(
+            {
+                "role": "assistant",
+                "content": None,
+                "tool_calls": [{"id": "c1", "type": "function", "function": {"name": "toolkit_file", "arguments": '{"action": "read"}'}}],
+            }
+        )
         reqs.append(build_api_messages(ctx, sp))
 
         sess.add_tool_result("c1", "文件内容 " * 1000)
-        ctx.messages.append({
-            "role": "assistant", "content": None,
-            "tool_calls": [{"id": "c2", "type": "function",
-                            "function": {"name": "toolkit_edit", "arguments": '{"file": "a.py", "action": "replace_text"}'}}],
-        })
+        ctx.messages.append(
+            {
+                "role": "assistant",
+                "content": None,
+                "tool_calls": [
+                    {"id": "c2", "type": "function", "function": {"name": "toolkit_edit", "arguments": '{"file": "a.py", "action": "replace_text"}'}}
+                ],
+            }
+        )
         reqs.append(build_api_messages(ctx, sp))
 
         sess.add_tool_result("c2", "修改成功")
@@ -89,8 +94,7 @@ class TestPrefixStability:
             n = _common_prefix_len(reqs[i], reqs[i + 1])
             # 允许最后一条（尾部动态上下文）移位；其余前缀必须逐字节相同
             assert n >= len(reqs[i]) - 1, (
-                f"Req{i + 1}->Req{i + 2} 公共前缀被改写: {n}/{len(reqs[i])} "
-                f"首处不同: {reqs[i][n] if n < len(reqs[i]) else 'EOF'}"
+                f"Req{i + 1}->Req{i + 2} 公共前缀被改写: {n}/{len(reqs[i])} 首处不同: {reqs[i][n] if n < len(reqs[i]) else 'EOF'}"
             )
 
     def test_tool_result_compressed_at_insert(self):

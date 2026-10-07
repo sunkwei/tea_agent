@@ -23,51 +23,57 @@ def env(tmp_path, monkeypatch):
     monkeypatch.setenv("TEA_PROVIDER_FILE", str(cfg))
 
     import tea_agent.config as cfg_mod
-    import tea_agent.model_config as mc_mod
     import tea_agent.model_manager as mm_mod
+    import tea_agent.provider_store as ps_mod
     from tea_agent.server.modules import state
     from tea_agent.server.modules.agent_module import AgentModule
 
-    import tea_agent.provider_store as ps_mod
     monkeypatch.setattr(ps_mod, "_store", None)
     monkeypatch.setattr(mm_mod, "_service", None)
     monkeypatch.setattr(ps_mod, "_store", None)
     # provider.yaml 隔离：能力/角色唯一来源（apply/switch 从 provider_store 读属性）
     import yaml
 
-    cfg.write_text(yaml.safe_dump({
-        "version": 1,
-        "roles": {"main": {"provider": "DeepSeek", "model": "deepseek-chat"}},
-        "settings": {"keep_turns": 5},
-        "providers": {
-            "DeepSeek": {
-                "api_url": "https://api.deepseek.com",
-                "api_key": "sk-test1234567890",
-                "default_model": "deepseek-chat",
-                "source": "builtin",
-                "models": {
-                    "deepseek-chat": {
-                        "max_context_tokens": 131072,
-                        "max_output_tokens": 8192,
-                        "supports_reasoning": True,
-                        "supports_vision": False,
-                        "supports_tools": True,
-                        "reasoning_effort": "auto",
-                        "note": "",
-                    },
-                    "deepseek-reasoner": {
-                        "max_context_tokens": 131072,
-                        "max_output_tokens": 65536,
-                        "supports_reasoning": True,
-                        "supports_vision": False,
-                        "supports_tools": True,
-                        "reasoning_effort": "auto",
-                        "note": "",
+    cfg.write_text(
+        yaml.safe_dump(
+            {
+                "version": 1,
+                "roles": {"main": {"provider": "DeepSeek", "model": "deepseek-chat"}},
+                "settings": {"keep_turns": 5},
+                "providers": {
+                    "DeepSeek": {
+                        "api_url": "https://api.deepseek.com",
+                        "api_key": "sk-test1234567890",
+                        "default_model": "deepseek-chat",
+                        "source": "builtin",
+                        "models": {
+                            "deepseek-chat": {
+                                "max_context_tokens": 131072,
+                                "max_output_tokens": 8192,
+                                "supports_reasoning": True,
+                                "supports_vision": False,
+                                "supports_tools": True,
+                                "reasoning_effort": "auto",
+                                "note": "",
+                            },
+                            "deepseek-reasoner": {
+                                "max_context_tokens": 131072,
+                                "max_output_tokens": 65536,
+                                "supports_reasoning": True,
+                                "supports_vision": False,
+                                "supports_tools": True,
+                                "reasoning_effort": "auto",
+                                "note": "",
+                            },
+                        },
                     },
                 },
             },
-        },
-    }, allow_unicode=True, sort_keys=False), encoding="utf-8")
+            allow_unicode=True,
+            sort_keys=False,
+        ),
+        encoding="utf-8",
+    )
     state.config_cache.clear()
     state.active_sessions.clear()
     state.background_sessions.clear()
@@ -75,8 +81,9 @@ def env(tmp_path, monkeypatch):
     cfg_mod._last_config_path = None
     monkeypatch.setattr(AgentModule, "_pending_switch", None, raising=False)
 
-    from tea_agent.server.server import create_app
     from starlette.testclient import TestClient
+
+    from tea_agent.server.server import create_app
 
     # 显式传 config_path：避免 create_app 默认空路径导致 apply/save 走
     # config.py 模块级粘滞全局（_last_config_path），跨测试互相污染
@@ -88,6 +95,7 @@ def env(tmp_path, monkeypatch):
 
 # ── 1. 面板全量视图 ───────────────────────────────────────
 
+
 def test_panel_full_view(env):
     client, _cfg, _state, _am = env
     r = client.get("/api/model-config")
@@ -98,8 +106,7 @@ def test_panel_full_view(env):
     assert ds["source"] == "builtin" and ds["api_url"] == "https://api.deepseek.com"
     m = next(x for x in ds["models"] if x["id"] == "deepseek-chat")
     cfgm = m["config"]
-    for key in ("max_context_tokens", "max_output_tokens",
-                "supports_thinking", "supports_vision"):
+    for key in ("max_context_tokens", "max_output_tokens", "supports_thinking", "supports_vision"):
         assert key in cfgm, key
     # active：读 config.yaml 实时值；api_key 必须掩码
     assert d["active"]["main"]["model"] == "deepseek-chat"
@@ -109,14 +116,24 @@ def test_panel_full_view(env):
 
 # ── 2. 模型配置 CRUD ──────────────────────────────────────
 
+
 def test_put_model_config(env):
     client, _cfg, _state, _am = env
-    r = client.put("/api/model-config/model", json={
-        "provider": "DeepSeek", "model": "deepseek-chat",
-        "config": {"max_context_tokens": 200000, "max_output_tokens": 128000,
-                   "supports_thinking": True, "supports_vision": False,
-                   "supports_tools": True, "note": "测试编辑"},
-    })
+    r = client.put(
+        "/api/model-config/model",
+        json={
+            "provider": "DeepSeek",
+            "model": "deepseek-chat",
+            "config": {
+                "max_context_tokens": 200000,
+                "max_output_tokens": 128000,
+                "supports_thinking": True,
+                "supports_vision": False,
+                "supports_tools": True,
+                "note": "测试编辑",
+            },
+        },
+    )
     assert r.status_code == 200 and r.json()["ok"]
     d = client.get("/api/model-config").json()
     ds = next(p for p in d["providers"] if p["name"] == "DeepSeek")
@@ -127,9 +144,7 @@ def test_put_model_config(env):
 
 def test_put_model_config_validation(env):
     client, _cfg, _state, _am = env
-    r = client.put("/api/model-config/model", json={
-        "provider": "DeepSeek", "model": "whatever",
-        "config": {"bogus_field": 1}})          # 未知字段
+    r = client.put("/api/model-config/model", json={"provider": "DeepSeek", "model": "whatever", "config": {"bogus_field": 1}})  # 未知字段
     assert r.status_code == 400
     assert r.json()["ok"] is False
     # 校验失败不得产生副作用条目
@@ -140,9 +155,7 @@ def test_put_model_config_validation(env):
 
 def test_add_and_delete_model(env):
     client, _cfg, _state, _am = env
-    r = client.post("/api/model-config/model", json={
-        "provider": "DeepSeek", "model": "brand-new-m",
-        "config": {"max_context_tokens": 65536}})
+    r = client.post("/api/model-config/model", json={"provider": "DeepSeek", "model": "brand-new-m", "config": {"max_context_tokens": 65536}})
     assert r.status_code == 200 and r.json()["ok"]
     r4 = client.delete("/api/model-config/model?provider=DeepSeek&model=brand-new-m")
     assert r4.status_code == 200 and r4.json()["ok"]
@@ -154,6 +167,7 @@ def test_add_and_delete_model(env):
 
 # ── 3. 同步入库 ───────────────────────────────────────────
 
+
 def test_sync_live_models_into_store(env, monkeypatch):
     client, _cfg, _state, _am = env
     import tea_agent.model_manager as mm_mod
@@ -161,12 +175,15 @@ def test_sync_live_models_into_store(env, monkeypatch):
     svc = mm_mod.get_provider_service()
 
     def fake_live(api_url, api_key):
-        return {"ok": True,
-                "models": [{"id": "deepseek-chat"}, {"id": "gw-only-model"}],
-                "total": 2, "endpoint": "https://api.deepseek.com/v1/models"}
+        return {
+            "ok": True,
+            "models": [{"id": "deepseek-chat"}, {"id": "gw-only-model"}],
+            "total": 2,
+            "endpoint": "https://api.deepseek.com/v1/models",
+        }
+
     monkeypatch.setattr(svc, "_query_live", fake_live)
-    r = client.post("/api/model-config/sync",
-                    json={"provider": "DeepSeek", "api_key": "sk-test1234567890"})
+    r = client.post("/api/model-config/sync", json={"provider": "DeepSeek", "api_key": "sk-test1234567890"})
     assert r.status_code == 200
     d = r.json()
     assert d["ok"] and d["query_source"] == "live"
@@ -179,21 +196,28 @@ def test_sync_live_models_into_store(env, monkeypatch):
 
 # ── 4. 切换并继续会话（空闲路径） ─────────────────────────
 
+
 def test_switch_persists_and_binds_role(env):
     client, cfg, _state, _am = env
     import yaml
-    r = client.post("/api/model-config/switch", json={
-        "provider": "DeepSeek", "model": "deepseek-reasoner",
-        "role": "main", "api_key": "sk-new123456789012", "continue_session": True,
-    })
+
+    r = client.post(
+        "/api/model-config/switch",
+        json={
+            "provider": "DeepSeek",
+            "model": "deepseek-reasoner",
+            "role": "main",
+            "api_key": "sk-new123456789012",
+            "continue_session": True,
+        },
+    )
     assert r.status_code == 200
     d = r.json()
     assert d["ok"] and d["model"] == "deepseek-reasoner"
     # 1) provider.yaml roles 落盘（config.yaml 已删除）
     from pathlib import Path
 
-    disk = yaml.safe_load(
-        Path(os.environ["TEA_PROVIDER_FILE"]).read_text(encoding="utf-8"))
+    disk = yaml.safe_load(Path(os.environ["TEA_PROVIDER_FILE"]).read_text(encoding="utf-8"))
     assert disk["roles"]["main"]["model"] == "deepseek-reasoner"
     # 2) 逐模型配置注入 options（reasoner 支持思考）
     assert disk["providers"]["DeepSeek"]["models"]["deepseek-reasoner"]["supports_reasoning"] is True
@@ -204,6 +228,7 @@ def test_switch_persists_and_binds_role(env):
     assert d["switch"]["mode"] in ("applied", "next_message")
     # 5) 下一条消息读到新模型（config_cache 已失效）
     from tea_agent.server.modules.agent_module import AgentModule
+
     sess, _ = AgentModule.create_session(str(cfg))
     model = getattr(sess.context, "model", None) or getattr(sess, "model", "")
     assert "deepseek-reasoner" in str(model)
@@ -211,20 +236,26 @@ def test_switch_persists_and_binds_role(env):
 
 # ── 5. 会话进行中：挂起 → 本轮结束自动应用 ────────────────
 
+
 def test_session_continue_deferred_switch(env, monkeypatch):
-    client, _cfg, state, AgentModule = env
+    client, _cfg, state, AgentModule = env  # noqa: N806 — 须与真实类同名
     # 模拟一个正在流式输出的回合
     state.active_sessions["t-busy"] = object()
-    r = client.post("/api/model-config/switch", json={
-        "provider": "DeepSeek", "model": "deepseek-v4-flash",
-        "role": "main", "api_key": "sk-k1234567890ab", "continue_session": True,
-    })
+    r = client.post(
+        "/api/model-config/switch",
+        json={
+            "provider": "DeepSeek",
+            "model": "deepseek-v4-flash",
+            "role": "main",
+            "api_key": "sk-k1234567890ab",
+            "continue_session": True,
+        },
+    )
     d = r.json()
     assert d["ok"] and d["switch"]["mode"] == "pending_next_turn"
     assert AgentModule.get_pending_switch()["model_name"] == "deepseek-v4-flash"
     # 面板可见排队状态（前端横幅数据源）
-    assert client.get("/api/model-config").json()["pending_switch"]["model_name"] \
-        == "deepseek-v4-flash"
+    assert client.get("/api/model-config").json()["pending_switch"]["model_name"] == "deepseek-v4-flash"
     # 挂起期间，其他会话仍在进行 → 不应用
     state.active_sessions["t-other"] = object()
     assert AgentModule.try_apply_pending_switch() is None
@@ -238,9 +269,7 @@ def test_session_continue_deferred_switch(env, monkeypatch):
 
     calls = []
     monkeypatch.setattr(AgentModule, "_instance", _FakeAgent())
-    monkeypatch.setattr(
-        AgentModule, "switch_model",
-        classmethod(lambda cls, *a, **k: calls.append((a, k))))
+    monkeypatch.setattr(AgentModule, "switch_model", classmethod(lambda cls, *a, **k: calls.append((a, k))))
     out = AgentModule.try_apply_pending_switch()
     assert out and out["mode"] == "applied_after_turn"
     assert calls and calls[0][0][2] == "deepseek-v4-flash"  # 新模型名
@@ -252,6 +281,7 @@ def test_session_continue_deferred_switch(env, monkeypatch):
 # 回归场景：invalidate_config_cache 曾被锁在 role=="main" and continue_session
 # 分支里 → cheap/vision 切换、continue_session=false 的 main 切换只落盘、
 # 不失效缓存 → 同一进程内下一轮 create_session 仍读旧配置（重启才恢复）。
+
 
 def _next_turn_models(env):
     """模拟下一轮对话：create_session 读到的 main/cheap 模型。"""
@@ -270,11 +300,16 @@ def test_switch_cheap_next_turn_reads_new_model(env):
     _, cheap_before = _next_turn_models(env)
     assert "deepseek-reasoner" not in cheap_before
 
-    r = client.post("/api/model-config/switch", json={
-        "provider": "DeepSeek", "model": "deepseek-reasoner",
-        "role": "cheap", "api_key": "sk-cheap-test1234567",
-        "continue_session": True,
-    })
+    r = client.post(
+        "/api/model-config/switch",
+        json={
+            "provider": "DeepSeek",
+            "model": "deepseek-reasoner",
+            "role": "cheap",
+            "api_key": "sk-cheap-test1234567",
+            "continue_session": True,
+        },
+    )
     assert r.status_code == 200 and r.json()["ok"], r.text
 
     _, cheap_after = _next_turn_models(env)
@@ -287,11 +322,16 @@ def test_switch_main_no_continue_next_turn_reads_new_model(env):
     main_before, _ = _next_turn_models(env)
     assert "deepseek-chat" in main_before
 
-    r = client.post("/api/model-config/switch", json={
-        "provider": "DeepSeek", "model": "deepseek-reasoner",
-        "role": "main", "api_key": "sk-nocontinue123456",
-        "continue_session": False,
-    })
+    r = client.post(
+        "/api/model-config/switch",
+        json={
+            "provider": "DeepSeek",
+            "model": "deepseek-reasoner",
+            "role": "main",
+            "api_key": "sk-nocontinue123456",
+            "continue_session": False,
+        },
+    )
     assert r.status_code == 200 and r.json()["ok"], r.text
     assert r.json()["switch"]["mode"] == "config_only"
 
@@ -305,8 +345,7 @@ def test_provider_store_apply_next_turn_reads_new_model(env):
     main_before, _ = _next_turn_models(env)
     assert "deepseek-chat" in main_before
 
-    r = client.post("/api/provider-store/DeepSeek/apply",
-                    json={"model": "deepseek-reasoner", "role": "main"})
+    r = client.post("/api/provider-store/DeepSeek/apply", json={"model": "deepseek-reasoner", "role": "main"})
     assert r.status_code == 200 and r.json()["ok"], r.text
 
     main_after, _ = _next_turn_models(env)

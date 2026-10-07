@@ -1,0 +1,108 @@
+# =============================================================================
+# Tea Agent — provider.yaml 配置模板（唯一事实源）
+# -----------------------------------------------------------------------------
+# 本文件是「供应商 → 模型 → 能力参数」的**唯一事实源**（single source of
+# truth）。Tea Agent 自 2026-09-06 起不再在代码中内置任何模型属性
+# （max_context_tokens / max_output_tokens / 能力标记），一律以此文件为准。
+#
+# 存放位置（按优先级）：
+#   1. 显式路径：TEA_PROVIDER_FILE 环境变量
+#   2. 默认路径：~/.tea_agent/provider.yaml   （Windows: C:\Users\<你>\.tea_agent\provider.yaml）
+#
+# config*.yaml 中仅通过「provider + model」引用本文件的条目，例如：
+#     main_model:
+#       provider: DeepSeek          # ← provider.yaml 中的供应商名（须唯一）
+#       model: deepseek-chat        # ← provider.yaml 中该供应商 models 下某条目
+#     # 该模型属性（max_context_tokens 等）运行时从 provider.yaml 解析，
+#     # 不再由代码猜测；provider.yaml 未收录的模型 → 窗口=0（未知），
+#     # 需在此文件显式补配后才会被 tool_profile 等按真实窗口分档。
+#
+# 复制方法：把本模板拷到 ~/.tea_agent/provider.yaml，填入自己的 api_keys，
+# 按需保留/增删 providers 与 models。字段均可选；缺省为中性值
+# （max_context_tokens: 0=未知、max_output_tokens: 0=未知、能力 false）。
+# =============================================================================
+
+version: 1            # schema 版本，勿改
+
+# ───────────────────────── 顶层字段说明 ─────────────────────────
+# providers:  dict<供应商名, provider 配置>
+#   <p_name>  供应商名（内置/自定义均可，全局唯一，大小写敏感）
+
+providers:
+
+  # ========================== DeepSeek 示例 ==========================
+  DeepSeek:                          # 供应商名（config.yaml 里 provider: 用它）
+    api_url: https://api.deepseek.com            # OpenAI 兼容端点
+    # api_keys:                                # API Key 列表（多 key 轮换/备用）
+    #   - sk-你的主key
+    #   - sk-备用key2
+    api_key: sk-你的key              # 兼容字段 = api_keys[0]（主 key）
+    default_model: deepseek-chat     # 默认模型 id（须存在于下方 models）
+    description: DeepSeek 官方端点    # 一句话说明（面板展示用）
+    supports_vision: false           # 供应商级能力：是否支持视觉（模型未声明时继承）
+    supports_thinking: true          # 供应商级能力：是否支持思考/推理
+    # source: builtin                # 来源标记：builtin|custom|config（迁移/展示用，可省）
+
+    # models: 本供应商的模型目录（逐模型参数，覆盖供应商级缺省）
+    models:
+      deepseek-chat:
+        max_context_tokens: 128000   # 最大上下文窗口（tokens）；0=未知
+        max_output_tokens: 8192      # 最大单次输出（tokens）；0=未知
+        supports_vision: false       # 该模型支持视觉输入
+        supports_reasoning: true     # 该模型支持思考/推理（thinking）
+        supports_tools: true         # 该模型支持 function calling
+        reasoning_effort: auto       # 推理档位：auto/low/medium/high 或可接受值域列表
+        note: 对话/工具主力           # 备注（≤200 字符）
+
+      deepseek-reasoner:
+        max_context_tokens: 128000
+        max_output_tokens: 64000
+        supports_vision: false
+        supports_reasoning: true
+        reasoning_effort: auto
+        note: 深度推理（R1 系）
+
+      # ── 模型省略写法：只给 id，能力全部中性（0/未知）────────────
+      # deepseek-coder:
+      #   note: 该模型属性未配置，窗口=未知；需要时补 max_context_tokens 等
+
+  # ========================== OpenAI 示例 ==========================
+  OpenAI:
+    api_url: https://api.openai.com/v1
+    api_key: sk-你的key
+    default_model: gpt-4o
+    description: OpenAI GPT / o 系列
+    supports_vision: true
+    supports_thinking: true
+    models:
+      gpt-4o:
+        max_context_tokens: 128000
+        max_output_tokens: 16384
+        supports_vision: true
+        supports_reasoning: false
+        supports_tools: true
+        note: 均衡旗舰，支持视觉
+      o3:
+        max_context_tokens: 200000
+        max_output_tokens: 100000
+        supports_vision: false
+        supports_reasoning: true
+        supports_tools: true
+        note: 深度推理
+
+  # ===================== 本地 / 自定义端点示例 =====================
+  # local:                                  # 例如 Ollama / vLLM / LM Studio
+  #   api_url: http://127.0.0.1:11434/v1
+  #   api_key: ollama
+  #   default_model: qwen3:8b
+  #   models:
+  #     qwen3:8b:
+  #       max_context_tokens: 32768
+  #       max_output_tokens: 8192
+  #       note: 本地 Qwen3（窗口以实际显存/上下文配置为准）
+
+  # 注意：
+  #   - 曾由代码内置速查表/家族窗口/名称 pattern 猜测的模型属性已全部删除。
+  #     未在此文件配置的模型一律视为未知窗口，不再按名字猜（如 qwen→131K）。
+  #   - 模型「能力/窗口」建议以厂商发布为准，此文件缺失时窗口=0 会令
+  #     tool_profile 走 full 保守档（能力完整优先，上下文预算按未知处理）。

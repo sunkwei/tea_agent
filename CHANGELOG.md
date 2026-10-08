@@ -2,6 +2,13 @@
 
 
 
+## [0.17.3] - 2026-10-08
+### Bug Fixes
+- LoopDetector: tool_repeat 加返回值变化豁免——同调用但结果仍在变化（合法轮询/等编译）不再误判循环
+- LoopDetector: 相似度由字符集 Jaccard 换为 difflib SequenceMatcher，消除字符撞车误判
+- tool_loop_runner: _loop_count 跨回合残留修复（上回合循环跳出后残留 3，下回合首次命中即被误杀）
+- 新增回归测试 test_loop_detector.py 扩充 9 项（含元验证：旧实现上全部变红）
+
 ## [0.17.2] - 2026-09-28
 ### Bug Fixes
 - toolkit_subagent: max_concurrent 参数真实生效（此前 accept-and-ignore，池硬编码 5）——扩容只增不减，spawn 按需扩到 N

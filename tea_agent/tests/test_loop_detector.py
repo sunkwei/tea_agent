@@ -222,3 +222,92 @@ class TestEdgeCases:
         detector.check_and_record("some content", [])
         result = detector.check_and_record("some content", [])
         assert "is_loop" in result
+
+
+class TestResultFluxExemption:
+    """返回值变化豁免（回归: 同调用但结果在变 = 合法轮询，不算循环）"""
+
+    def test_changing_results_exempt(self):
+        from tea_agent.session.tool_loop_runner import LoopDetector
+        detector = LoopDetector()
+        calls = [("toolkit_exec", '{"app": "build"}')]
+        detector.check_and_record("", calls, tool_results=["compiling 1/3"])
+        result = detector.check_and_record("", calls, tool_results=["compiling 2/3"])
+        assert result["is_loop"] is False
+
+    def test_same_results_still_detected(self):
+        from tea_agent.session.tool_loop_runner import LoopDetector
+        detector = LoopDetector()
+        calls = [("toolkit_exec", '{"app": "build"}')]
+        detector.check_and_record("", calls, tool_results=["done"])
+        result = detector.check_and_record("", calls, tool_results=["done"])
+        assert result["is_loop"] is True
+        assert result["type"] == "tool_repeat"
+
+    def test_missing_results_still_detected(self):
+        """未提供返回值 → 保守判循环（兼容旧调用方）"""
+        from tea_agent.session.tool_loop_runner import LoopDetector
+        detector = LoopDetector()
+        calls = [("toolkit_file", '{"action": "read"}')]
+        detector.check_and_record("", calls)
+        result = detector.check_and_record("", calls)
+        assert result["is_loop"] is True
+
+    def test_result_order_irrelevant(self):
+        """同批多工具返回顺序不同视为同一结果集"""
+        from tea_agent.session.tool_loop_runner import LoopDetector
+        detector = LoopDetector()
+        calls = [("toolkit_exec", '{"app": "a"}'), ("toolkit_exec", '{"app": "b"}')]
+        detector.check_and_record("", calls, tool_results=["ra", "rb"])
+        result = detector.check_and_record("", calls, tool_results=["rb", "ra"])
+        assert result["is_loop"] is True
+
+
+class TestContentSimilarityRegression:
+    """文本相似度回归：字符集撞车不得判高相似（旧 Jaccard 会误判 100%）"""
+
+    def test_charset_collision_not_similar(self):
+        from tea_agent.session.tool_loop_runner import LoopDetector
+        ld = LoopDetector()
+        assert ld._text_similarity("aaaaabbbbbccccc", "abc") < 0.85
+
+    def test_identical_text_still_max(self):
+        from tea_agent.session.tool_loop_runner import LoopDetector
+        assert LoopDetector()._text_similarity("相同输出内容", "相同输出内容") == 1.0
+
+    def test_unrelated_texts_not_similar(self):
+        from tea_agent.session.tool_loop_runner import LoopDetector
+        ld = LoopDetector()
+        assert ld._text_similarity("今天天气不错适合出门散步", "error: module not found") < 0.85
+
+
+class _StubToolsComp:
+    def collect_interruption_round(self, *a, **k):
+        pass
+
+    def collect_max_iterations_round(self, *a, **k):
+        pass
+
+
+class _StubSession:
+    """最小 stub：interrupted=True 使 execute_tool_loop 在 while 入口即返回。"""
+
+    def __init__(self):
+        self.max_iterations = 1
+        self._extra_iterations = 0
+        self.interrupted = True
+        self._loop_count = 3  # 模拟上一回合循环跳出的残留
+        self.tools_comp = _StubToolsComp()
+
+    def add_assistant_message(self, *a, **k):
+        pass
+
+
+class TestLoopCountTurnReset:
+    """循环计数归属回合（回归: 上回合残留不得让本回合首次命中即打断）"""
+
+    def test_loop_count_reset_on_new_turn(self):
+        from tea_agent.session.tool_loop_runner import execute_tool_loop
+        session = _StubSession()
+        execute_tool_loop(session, {"msg": "hi", "callback": lambda x: None})
+        assert session._loop_count == 0

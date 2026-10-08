@@ -580,8 +580,14 @@ class LoopDetector:
         self.window = window
         self.threshold = similarity_threshold
         self._tool_hashes: list[str] = []
+        self._tool_result_hashes: list[str] = []
         self._contents: list[str] = []
         self._tool_names: list[list[str]] = []
+
+    def _hash_results(self, results: list[str]) -> str:
+        """工具返回值集哈希（排序后拼接，与执行顺序无关）。"""
+        import hashlib
+        return hashlib.md5("\x1e".join(sorted(results)).encode("utf-8", "replace")).hexdigest()[:12]
 
     def _hash_tool_call(self, name: str, args: str) -> str:
         import hashlib
@@ -594,19 +600,25 @@ class LoopDetector:
         return hashlib.md5(f"{name}:{args_normalized}".encode()).hexdigest()[:12]
 
     def _text_similarity(self, a: str, b: str) -> float:
+        """文本相似度：difflib 序列匹配。
+
+        旧实现用字符集 Jaccard，会把语义无关但字符集相近的文本误判为高相似。
+        """
+        from difflib import SequenceMatcher
         if not a or not b:
             return 0.0
-        a, b = a[:500], b[:500]
-        set_a = set(a)
-        set_b = set(b)
-        if not set_a or not set_b:
-            return 0.0
-        intersection = len(set_a & set_b)
-        union = len(set_a | set_b)
-        return intersection / union if union > 0 else 0.0
+        return SequenceMatcher(None, a[:500], b[:500]).ratio()
 
-    def check_and_record(self, content: str, tool_calls: list) -> dict:
-        """检查当前轮是否循环，并记录。"""
+    def check_and_record(self, content: str, tool_calls: list,
+                         tool_results: list[str] | None = None) -> dict:
+        """检查当前轮是否循环，并记录。
+
+        Args:
+            content: 本轮模型输出文本
+            tool_calls: [(工具名, 参数JSON), ...]
+            tool_results: 本轮各工具返回值（可选）；提供后同调用但结果仍在
+                变化时豁免 tool_repeat（合法轮询场景）
+        """
         result = {"is_loop": False, "type": None, "detail": ""}
 
         current_hashes = []
@@ -617,10 +629,19 @@ class LoopDetector:
 
         # ── 检测 1: 工具调用完全重复（仅与上一轮比较） ──
         # 至少两条相邻消息完全相同才判定循环，避免隔轮相同（A→B→A）被误判。
+        # 返回值豁免：调用相同但结果集仍在变化 → 合法轮询（等编译/长任务），不算循环。
+        current_results_hash = self._hash_results(tool_results) if tool_results is not None else ""
         if current_hashes:
             current_hash_str = "|".join(current_hashes)
             if self._tool_hashes and current_hash_str == self._tool_hashes[-1]:
-                result = {"is_loop": True, "type": "tool_repeat", "detail": "工具调用与上一轮完全相同（连续重复）"}
+                prev_results_hash = self._tool_result_hashes[-1] if self._tool_result_hashes else ""
+                results_in_flux = (
+                    tool_results is not None
+                    and prev_results_hash != ""
+                    and prev_results_hash != current_results_hash
+                )
+                if not results_in_flux:
+                    result = {"is_loop": True, "type": "tool_repeat", "detail": "工具调用与上一轮完全相同（连续重复）"}
 
         # ── 检测 2: 输出内容与上一轮高度相似 ──
         if not result["is_loop"] and content and self._contents:
@@ -679,11 +700,13 @@ class LoopDetector:
 
         # ── 记录本轮 ──
         self._tool_hashes.append("|".join(current_hashes) if current_hashes else "")
+        self._tool_result_hashes.append(current_results_hash)
         self._contents.append(content or "")
         self._tool_names.append(current_names)
 
         if len(self._tool_hashes) > self.window * 2:
             self._tool_hashes = self._tool_hashes[-self.window :]
+            self._tool_result_hashes = self._tool_result_hashes[-self.window :]
             self._contents = self._contents[-self.window :]
             self._tool_names = self._tool_names[-self.window :]
 
@@ -691,6 +714,7 @@ class LoopDetector:
 
     def reset(self):
         self._tool_hashes.clear()
+        self._tool_result_hashes.clear()
         self._contents.clear()
         self._tool_names.clear()
 
@@ -896,6 +920,9 @@ def execute_tool_loop(session, context: dict) -> dict:
     used_tools = False
     iterations = 0
     loop_detector = LoopDetector(window=5, similarity_threshold=0.85)
+    # 循环计数归属本回合：上一回合因循环跳出会残留 _loop_count=3，不重置的话
+    # 本回合首次命中即累计到 4 → 立即打断，连警告机会都没有（误杀正常重试）。
+    session._loop_count = 0
     # M1: 跟踪最近调用的工具名，供打断锚点记录
     last_tool_names: list = []
     # 本轮全部调用过的工具名（去重保序），供 server 摘要输出
@@ -1108,6 +1135,8 @@ def execute_tool_loop(session, context: dict) -> dict:
             session.context.messages.append(assistant_msg)
 
             has_reload = any(tc.function.name == "toolkit_reload" for tc in valid_tool_calls)
+            # 本轮工具返回值收集（供 LoopDetector 返回值变化豁免；按集哈希，无需与调用对齐）
+            round_result_strs: list[str] = []
 
             # ═══ 新：并行工具执行 ═══════════════════════
             if enable_parallel and parallel_executor:
@@ -1122,6 +1151,7 @@ def execute_tool_loop(session, context: dict) -> dict:
                         call_id, func_name, result_str = _execute_single_tool(session, tc, callback, iterations, on_status)
                         session.tools_comp.collect_tool_call_round(call_id, result_str)
                         _emit_tool_results(callback, result_str)
+                        round_result_strs.append(result_str)
                     else:
                         # 多工具 — 并行执行
                         logger.info(f"⚡ 并行执行批次 {batch_idx + 1}: {[tc.function.name for tc in batch]}")
@@ -1137,11 +1167,13 @@ def execute_tool_loop(session, context: dict) -> dict:
                             if result["success"]:
                                 session.tools_comp.collect_tool_call_round(result["call_id"], result["result_str"])
                                 _emit_tool_results(callback, result["result_str"])
+                                round_result_strs.append(result["result_str"])
                             else:
                                 session.tools_comp.collect_tool_call_round(
                                     result["call_id"], json.dumps({"error": result.get("error", "Unknown error")})
                                 )
                                 callback(f"[TOOL_RESULT:ERROR:{result.get('error', '')[:120]}]")
+                                round_result_strs.append(json.dumps({"error": result.get("error", "Unknown error")}))
                             callback("[TOOL_DONE]")
             else:
                 # ═══ 旧版：顺序执行 ═══════════════════════
@@ -1149,13 +1181,16 @@ def execute_tool_loop(session, context: dict) -> dict:
                     call_id, func_name, result_str = _execute_single_tool(session, tc, callback, iterations, on_status)
                     session.tools_comp.collect_tool_call_round(call_id, result_str)
                     _emit_tool_results(callback, result_str)
+                    round_result_strs.append(result_str)
 
             if has_reload:
                 session._build_tools()
 
             # ── 循环检测 ──
             tool_calls_for_check = [(tc.function.name, tc.function.arguments) for tc in valid_tool_calls]
-            loop_result = loop_detector.check_and_record(content, tool_calls_for_check)
+            loop_result = loop_detector.check_and_record(
+                content, tool_calls_for_check, tool_results=round_result_strs
+            )
             if loop_result["is_loop"]:
                 loop_count = getattr(session, "_loop_count", 0) + 1
                 session._loop_count = loop_count

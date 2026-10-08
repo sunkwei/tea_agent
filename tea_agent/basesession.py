@@ -22,6 +22,30 @@ logger = logging.getLogger("basesession")
 _ARGS_COMPRESS_BYTES_DEFAULT = 2048  # 整个 arguments JSON 超过此字节数即触发压缩
 _ARGS_KEEP_BYTES_DEFAULT = 1024  # 单个 string 值超过此字节数即压缩（首尾各半）
 
+# ── 代码类工具例外：历史回放不受 2K 截断 ────────────────────────────
+# 代码/diff/脚本参数被截成首尾残片后，模型在后续轮次看到的是「残缺的自己写过
+# 的代码」，比没有更误导（后续编辑会基于错误前提）。这类工具参数默认按 64KB
+# 保留（对齐 _SOURCE_FILE_THRESHOLD），仍留上限以防超大写入打满上下文窗口。
+_ARGS_COMPRESS_BYTES_CODE_DEFAULT = 65536
+_ARGS_KEEP_BYTES_CODE_DEFAULT = 65536
+
+# 参数中携带大段代码/文本的工具（回放压缩时适用更高的代码类阈值）
+_CODE_ARG_TOOLS = frozenset(
+    {
+        "toolkit_file",
+        "toolkit_edit",
+        "toolkit_diff",
+        "toolkit_diff_edit",
+        "toolkit_save",
+        "toolkit_self_evolve",
+        "toolkit_batch_process",
+        "toolkit_custom_commands",
+        "toolkit_exec",
+        "toolkit_topic_prompt",
+        "toolkit_prompt_evolve",
+    }
+)
+
 
 def _int_env(name: str, default: int) -> int:
     """读取正整数 env 覆盖；缺失/非法/非正数一律回落默认值（绝不抛异常）。"""
@@ -39,17 +63,27 @@ def _int_env(name: str, default: int) -> int:
     return v
 
 
-def _args_compress_threshold() -> int:
-    """参数压缩触发阈值（字节）。``TEA_ARGS_COMPRESS_BYTES`` 可覆盖。"""
+def _args_compress_threshold(tool_name: str | None = None) -> int:
+    """参数压缩触发阈值（字节）。``TEA_ARGS_COMPRESS_BYTES`` 可覆盖。
+
+    代码类工具（``_CODE_ARG_TOOLS``）用独立的更高默认值（64KB，
+    ``TEA_ARGS_CODE_COMPRESS_BYTES`` 可覆盖）—— 代码回放被 2K 截断只会
+    给模型看残片，误导后续编辑。
+    """
+    if tool_name in _CODE_ARG_TOOLS:
+        return _int_env("TEA_ARGS_CODE_COMPRESS_BYTES", _ARGS_COMPRESS_BYTES_CODE_DEFAULT)
     return _int_env("TEA_ARGS_COMPRESS_BYTES", _ARGS_COMPRESS_BYTES_DEFAULT)
 
 
-def _args_keep_bytes() -> int:
+def _args_keep_bytes(tool_name: str | None = None) -> int:
     """单个 string 值触发压缩的阈值（字节）。``TEA_ARGS_KEEP_BYTES`` 可覆盖。
 
     提高它（如 4096）可让历史里的长参数（代码/ diff / 命令）保住更多内容；
     实测真代码在默认 1024 下只剩约 566B，往往连一个函数的意图都保不住。
+    代码类工具用 ``TEA_ARGS_CODE_KEEP_BYTES``（默认 64KB，基本不截）。
     """
+    if tool_name in _CODE_ARG_TOOLS:
+        return _int_env("TEA_ARGS_CODE_KEEP_BYTES", _ARGS_KEEP_BYTES_CODE_DEFAULT)
     return _int_env("TEA_ARGS_KEEP_BYTES", _ARGS_KEEP_BYTES_DEFAULT)
 
 
@@ -232,11 +266,17 @@ def relaxed_json_loads(raw: str):
     # Step 9: 尝试修复被截断的 JSON
     # 延迟导入避免循环依赖
     try:
-        from tea_agent.session.json_sanitizer import try_fix_truncated_json
+        from tea_agent.session.json_sanitizer import (
+            inject_truncation_fix,
+            try_fix_truncated_json,
+        )
 
         fixed = try_fix_truncated_json(s)
         if fixed is not None:
-            return json.loads(fixed)
+            # 修复成功 ≠ 内容完整：尾部缺失仍会静默写坏文件。注入标记，
+            # 执行点弹出后转为警告附在工具结果上（见 pop_truncation_fix）。
+            logger.warning("relaxed_json_loads: 参数 JSON 被截断，已自动修复（内容可能不完整）: %s", raw[:120])
+            return json.loads(inject_truncation_fix(fixed))
     except Exception as e:
         logger.debug("truncated JSON fix failed: %s", e)
 
@@ -573,7 +613,7 @@ class BaseChatSession(ABC):
         )
 
     @staticmethod
-    def _compress_json_args(args_str: str, args_bytes: int, max_bytes: int | None = None) -> str:
+    def _compress_json_args(args_str: str, args_bytes: int, max_bytes: int | None = None, tool_name: str | None = None) -> str:
         """
         JSON 感知截断 tool_calls 参数。
 
@@ -589,8 +629,10 @@ class BaseChatSession(ABC):
         Args:
             args_str: 原始 arguments JSON 字符串
             args_bytes: 原始字节数（用于截断标记）
-            max_bytes: 触发压缩的阈值；None 时取 _args_compress_threshold()
-                （默认 2048，TEA_ARGS_COMPRESS_BYTES 可覆盖）
+            max_bytes: 触发压缩的阈值；None 时取 _args_compress_threshold(tool_name)
+                （非代码工具默认 2048，TEA_ARGS_COMPRESS_BYTES 可覆盖；
+                代码类工具默认 65536，TEA_ARGS_CODE_COMPRESS_BYTES 可覆盖）
+        tool_name: 调用该参数的工具名，用于选取代码类/普通阈值
 
         Returns:
             压缩后的合法 JSON 字符串
@@ -598,7 +640,7 @@ class BaseChatSession(ABC):
         import json as _json
 
         if max_bytes is None:  # 单一事实源：默认值与 env 覆盖统一在 _args_compress_threshold()
-            max_bytes = _args_compress_threshold()
+            max_bytes = _args_compress_threshold(tool_name)
 
         # Step 1: 尝试解析
         try:
@@ -638,7 +680,7 @@ class BaseChatSession(ABC):
             )
 
         # Step 2: 递归压缩超长 string value
-        _keep = _args_keep_bytes()  # 单值触发阈值（默认 1024；TEA_ARGS_KEEP_BYTES 可覆盖）
+        _keep = _args_keep_bytes(tool_name)  # 单值阈值（默认 1024；代码类 65536；env 可覆盖）
         HALF = _keep // 2  # 首尾各保留半量（默认 512）  # noqa: N806
 
         def _compress_value(val, path=""):
@@ -758,8 +800,9 @@ class BaseChatSession(ABC):
         规则：
         - user 消息：完整保留
         - assistant 含 tool_calls（中间步骤）：保留 reasoning_content，
-          对每个 tool_call 的 function.arguments 若超过 _args_compress_threshold()
-          （默认 2048 字节，TEA_ARGS_COMPRESS_BYTES 可覆盖）则截断
+          对每个 tool_call 的 function.arguments 若超过 _args_compress_threshold(tool_name)
+          （非代码工具默认 2048 字节，TEA_ARGS_COMPRESS_BYTES 可覆盖；
+          代码类工具 65536 字节，见 _CODE_ARG_TOOLS）则截断
         - tool 消息：调用 _compress_tool_content 压缩输出
         - 最终 assistant 消息（末尾无 tool_calls）：完整保留，不压缩
 
@@ -810,8 +853,9 @@ class BaseChatSession(ABC):
                             args_str = func.get("arguments", "")
                             if isinstance(args_str, str):
                                 args_bytes = len(args_str.encode("utf-8"))
-                                if args_bytes > _args_compress_threshold():
-                                    func["arguments"] = BaseChatSession._compress_json_args(args_str, args_bytes)
+                                _tc_name = func.get("name", "")
+                                if args_bytes > _args_compress_threshold(_tc_name):
+                                    func["arguments"] = BaseChatSession._compress_json_args(args_str, args_bytes, tool_name=_tc_name)
                             tc_copy["function"] = func
                         new_tc.append(tc_copy)
                     compressed["tool_calls"] = new_tc

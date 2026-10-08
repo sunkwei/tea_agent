@@ -524,6 +524,11 @@ class LiteSession:
         except json.JSONDecodeError:
             args = {}
 
+        # 截断修复标记：执行前弹出（避免意外入参），转为警告附在结果上
+        from tea_agent.session.json_sanitizer import pop_truncation_fix
+
+        trunc_warn = pop_truncation_fix(args)
+
         # 执行工具
         try:
             # ── pre-execute 瀑布（默认放行） ──
@@ -544,6 +549,8 @@ class LiteSession:
             result_str = f"工具执行错误: {e}"
             logger.warning(f"工具 {func_name} 执行失败: {e}")
 
+        if trunc_warn:
+            result_str = f"{trunc_warn}\n{result_str}"
         return call_id, func_name, result_str
 
     def interrupt(self):

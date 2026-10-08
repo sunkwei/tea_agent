@@ -579,6 +579,45 @@ def sanitize_api_messages(messages: list[dict]) -> list[dict]:
     return sanitized
 
 
+# ── 截断修复标记：修复成功 ≠ 内容完整 ────────────────────────────────
+# try_fix_truncated_json 只补闭合括号，尾部内容仍然缺失。若静默执行，文件被
+# 不完整地写入后只能靠读回才发现。故修复时注入标记，工具执行点弹出并转为
+# 警告附在结果上（pop_truncation_fix），让模型立刻得知参数可能不完整。
+TRUNCATION_FIX_KEY = "_truncated_fix"
+TRUNCATION_FIX_WARNING = (
+    "⚠️ 该调用的原始参数 JSON 被输出截断，已自动修复——参数内容可能不完整。"
+    "若涉及文件写入，请读回核对；如有缺失，改用 chunks/append 小分块追加重写。"
+)
+
+
+def inject_truncation_fix(fixed: str) -> str:
+    """给修复成功的截断 JSON 注入 ``_truncated_fix`` 标记。
+
+    仅 dict 结构注入（工具参数恒为对象）；任何失败原样返回，绝不影响修复链。
+    """
+    import json as _json
+
+    try:
+        obj = _json.loads(fixed)
+        if isinstance(obj, dict):
+            obj[TRUNCATION_FIX_KEY] = True
+            return _json.dumps(obj, ensure_ascii=False)
+    except Exception:
+        pass
+    return fixed
+
+
+def pop_truncation_fix(args) -> str:
+    """执行前弹出截断修复标记（防止意外入参被工具入参绑定拒绝）。
+
+    Returns:
+        有标记 → 警告文案；无标记/非 dict → 空串。
+    """
+    if isinstance(args, dict) and args.pop(TRUNCATION_FIX_KEY, False):
+        return TRUNCATION_FIX_WARNING
+    return ""
+
+
 def normalize_tool_args(func_name: str, raw: str) -> str | None:
     """源头规范化 tool_call arguments：合法 JSON 原样返回；截断/非法 JSON 尝试修复。
 
@@ -626,11 +665,13 @@ def normalize_tool_args(func_name: str, raw: str) -> str | None:
         except json.JSONDecodeError:
             s = normalized
 
-    # 截断 JSON：先尝试补全闭合括号
+    # 截断 JSON：先尝试补全闭合括号；成功后注入截断修复标记（执行点会
+    # 弹出并转为警告，避免尾部缺失被静默写入）。兜底变换链多为补引号类
+    # 修复（不丢内容），不注入。
     try:
         fixed = try_fix_truncated_json(s)
         if fixed is not None:
-            return fixed
+            return inject_truncation_fix(fixed)
     except Exception:
         # 该函数内部自带有界保护；此处抛异常说明它自身出了 bug（递归/类型假设被
         # 新畸形输入打破）。静默会把这个 bug 永久藏起来，只表现为「修复率莫名下降」。

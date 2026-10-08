@@ -187,6 +187,11 @@ class ToolComponent(SessionComponent):
             )
             return call_id, func_name, err
 
+        # 截断修复标记：执行前弹出（避免意外入参被工具拒绝），转为警告附在结果上
+        from tea_agent.session.json_sanitizer import pop_truncation_fix
+
+        trunc_warn = pop_truncation_fix(args)
+
         if self.ctx.tool_log:
             self.ctx.tool_log(f"🔧 调用工具: {func_name}({args})")
 
@@ -219,6 +224,8 @@ class ToolComponent(SessionComponent):
                 self.ctx.tool_log(f"❌ 错误: {e}")
 
         result_str = str(result)
+        if trunc_warn:
+            result_str = f"{trunc_warn}\n{result_str}"
 
         # 搜索引用采集（纯旁路，fail-open）：刻意放在上面的 try/except **之外** ——
         # 那个 except 会把异常改写成「工具执行错误」，属控制流；旁路代码不得改写

@@ -7,7 +7,7 @@
 纯注入 api_get/api_post 假实现，不发真实网络请求，判定确定。
 """
 
-from tea_agent.channel.model_command import build_model_reply
+from tea_agent.channel.model_command import VALID_ROLES, build_model_reply, split_role
 
 _PANEL = {
     "active": {
@@ -126,3 +126,61 @@ def test_wechat_command_args_are_bound():
 
     src = pathlib.Path("tea_agent/channel/wechat_adapter.py").read_text(encoding="utf-8")
     assert "args = parts[1] if len(parts) > 1 else \"\"" in src
+
+
+# ── --role 支持 ──
+
+def test_split_role_default_and_extras():
+    assert split_role([]) == ([], "main", "")
+    assert split_role(["qwen", "glm-5.2"]) == (["qwen", "glm-5.2"], "main", "")
+    assert split_role(["mimo", "pro", "--role", "cheap"]) == (["mimo", "pro"], "cheap", "")
+    assert split_role(["--role", "cheap", "mimo", "pro"]) == (["mimo", "pro"], "cheap", "")
+    assert split_role(["mimo", "-r", "vision"]) == (["mimo"], "vision", "")
+    assert split_role(["mimo", "pro", "--cheap"]) == (["mimo", "pro"], "cheap", "")
+
+
+def test_split_role_errors():
+    rest, role, err = split_role(["qwen", "glm-5.2", "--role"])
+    assert err and "需要角色名" in err
+    rest, role, err = split_role(["qwen", "--role", "nope"])
+    assert err and "未知角色" in err and role == "nope"
+
+
+def test_model_role_cheap_posts_cheap_role():
+    api = _FakeApi(post_result={"ok": True, "switch": {"mode": "config_only"}})
+    reply = build_model_reply("mimo mimo-v2.6-pro --role cheap", api.get, api.post, "http://x")
+    posts = [c for c in api.calls if c[0] == "POST"]
+    assert posts[0][2] == {"provider": "mimo", "model": "mimo-v2.6-pro", "role": "cheap"}
+    assert "轻量" in reply and "子任务/后台" in reply
+    # 非 main 角色不走会话热切 → 不得宣称「已立即生效」
+    assert "已立即生效" not in reply
+
+
+def test_model_role_main_still_uses_session_switch_tip():
+    api = _FakeApi()
+    reply = build_model_reply("qwen glm-5.2", api.get, api.post, "http://x")
+    assert [c for c in api.calls if c[0] == "POST"][0][2]["role"] == "main"
+    assert "主力" in reply and "已立即生效" in reply
+
+
+def test_model_bad_role_does_not_switch():
+    api = _FakeApi()
+    reply = build_model_reply("qwen glm-5.2 --role foo", api.get, api.post, "http://x")
+    assert "未知角色" in reply
+    assert not [c for c in api.calls if c[0] == "POST"]
+
+
+def test_model_view_lists_all_roles_and_usage():
+    reply = build_model_reply("", _FakeApi().get, _FakeApi().post, "http://x")
+    assert "主力" in reply and "轻量" in reply
+    assert "--role cheap" in reply
+
+
+def test_model_list_marks_each_role():
+    reply = build_model_reply("list", _FakeApi().get, _FakeApi().post, "http://x")
+    assert "*qwen* ✅" in reply      # main
+    assert "*mimo* ⚡" in reply      # cheap
+
+
+def test_model_valid_roles_exposed():
+    assert VALID_ROLES == ("main", "cheap", "vision")

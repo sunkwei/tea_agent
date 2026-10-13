@@ -271,7 +271,7 @@ class TelegramAdapter:
             "/topics - 列出最近会话\n"
             "/topic - 查看/切换当前话题\n"
             "/new - 开始新话题\n"
-            "/model - 查看/切换模型\n"
+            "/model - 查看/切换模型（--role cheap 切轻量）\n"
             "/about - 关于本 Bot\n\n"
             "💬 提示：发送任意消息开始对话。"
         )

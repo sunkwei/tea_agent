@@ -511,6 +511,7 @@ class WeChatAdapter:
                 "/start - 显示此帮助\n"
                 "/model - 查看当前模型\n"
                 "/model list - 列出提供商与模型\n"
+                "/model <提供商> <模型> [--role cheap] - 切换模型\n"
                 "/new - 开始新话题\n"
                 "/topic - 查看当前话题\n"
                 "/about - 关于\n\n"

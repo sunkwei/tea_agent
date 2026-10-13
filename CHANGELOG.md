@@ -5,6 +5,9 @@
 - channel: 新增共用模块 `channel/model_command.py`，`/model` 命令（查看当前 / `list` 列提供商与模型 /
   `<提供商> [模型]` 切换）同时接入微信与 Telegram，两端文案与语义一致；数据源与 Web 面板共用 provider.yaml，
   生效时机沿用服务端 applied/pending_next_turn/next_message
+- channel: `/model` 支持 `--role main|cheap|vision`（别名 `-r`、简写 `--cheap`），可切换轻量/视觉模型；
+  非 main 角色不走会话热切，回复按「下次调用生效」表述，勿误报「已立即生效」
+- channel: `/model` 空参与 `list` 现展示全部角色绑定，`list` 以 `✅主力 / ⚡轻量 / 👁视觉` 标记各提供商
 
 ### Bug Fixes
 - telegram_adapter: `CommandHandler("config", self._handle_config)` 指向不存在的方法
@@ -16,7 +19,7 @@
   重生成 docs/TOOLS.md
 
 ### Tests
-- 新增回归测试 test_channel_model_command.py（12 项，含路由漏挂与命令参数丢失的回归）
+- 新增回归测试 test_channel_model_command.py（20 项，含路由漏挂、命令参数丢失与 --role 分派回归）
 
 ## [0.17.6] - 2026-10-13
 ### Bug Fixes

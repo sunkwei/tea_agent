@@ -34,7 +34,7 @@ tea-agent-telegram                   # Telegram 适配器
 tea-agent-wechat                     # 微信适配器
 
 # ── 测试 ──
-pytest                               # 运行全部测试（125 个测试文件，截至 2026-09-28）
+pytest                               # 运行全部测试（147 个测试文件 / 2739 用例，截至 2026-10-13 实测）
 pytest tea_agent/tests/test_xxx.py   # 运行单文件测试
 pytest -k "test_name" -xvs           # 按名匹配+详细输出
 pytest --collect-only -q             # 只收集用例（确认总数与新增文件已被发现）
@@ -86,7 +86,7 @@ tea_agent/                          # 40 个顶层模块 + 14 个子包（截至
 ├── permission.py                   # 工具权限管理（已禁用，恒放行；真实闸门见 tool_approval）
 ├── tlk.py                          # ★ 工具加载/注册/执行引擎（call_tool 为唯一汇聚点）
 │
-├── toolkit/                        # ★ 工具注册中心：toolkit_*.py 共 57 个 → 注册 60 个工具（58 个对模型可见）
+├── toolkit/                        # ★ 工具注册中心：toolkit_*.py 共 57 个 → 注册 65 个工具（63 个对模型可见）
 │   ├── __init__.py                 # 空文件（无手工注册；工具由 tlk.py 扫描加载）
 │   ├── toolkit_exec.py / toolkit_file.py / toolkit_edit.py / toolkit_diff.py
 │   ├── _git_snapshot.py            # 下划线前缀 → 不注册为工具（快照基础设施）
@@ -98,7 +98,7 @@ tea_agent/                          # 40 个顶层模块 + 14 个子包（截至
 ├── multi_agent/                    # 多 Agent 协作
 ├── workflow/                       # 工作流引擎（DAG）
 ├── protocol/                       # ACP 协议实现
-├── channel/                        # Telegram / 微信适配器
+├── channel/                        # Telegram / 微信适配器 + model_command.py（两端共用 /model）
 ├── lsp/                            # 代码智能（Jedi + Ruff）
 ├── skills/                         # 技能系统
 ├── evaluation/                     # 评测（EvolutionBench 等）
@@ -243,7 +243,7 @@ toolkit_reload()
 
 ### 测试规范
 
-- 测试文件：`tea_agent/tests/test_*.py`（125 个，截至 2026-09-28）
+- 测试文件：`tea_agent/tests/test_*.py`（147 个，截至 2026-10-13 实测）
 - 使用 `pytest`，fixture 集中在 `conftest.py`
 - 测试函数名：`test_<功能>_<场景>`
 - 重要模块须有 `test_` 文件覆盖；修复缺陷必须**带回归测试**，且回归测试要能真的失败（必要时做元验证：把实现还原成旧版，确认测试确实变红）

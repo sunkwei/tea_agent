@@ -1,5 +1,23 @@
 # Changelog
 
+## [Unreleased]
+### Features
+- channel: 新增共用模块 `channel/model_command.py`，`/model` 命令（查看当前 / `list` 列提供商与模型 /
+  `<提供商> [模型]` 切换）同时接入微信与 Telegram，两端文案与语义一致；数据源与 Web 面板共用 provider.yaml，
+  生效时机沿用服务端 applied/pending_next_turn/next_message
+
+### Bug Fixes
+- telegram_adapter: `CommandHandler("config", self._handle_config)` 指向不存在的方法
+  （`start()` 首帧即 AttributeError）→ `/config` 改为 `/model` 别名
+- telegram_adapter: `/topics` 中两行取值结果被丢弃（会话时间与 token 恒不显示）→ 纳入展示
+
+### Documentation
+- README/AGENTS 工具与测试口径同步为 65 注册 / 63 可见、2739 用例 / 147 测试文件（2026-10-13 实测）；
+  重生成 docs/TOOLS.md
+
+### Tests
+- 新增回归测试 test_channel_model_command.py（12 项，含路由漏挂与命令参数丢失的回归）
+
 ## [0.17.6] - 2026-10-13
 ### Bug Fixes
 - server: 注册 `POST /v1/chat/completions` 路由——handler 与 OpenAPI 声明均在，唯独漏挂路由，
@@ -22,9 +40,7 @@
 - toolkit_subagent: max_concurrent 参数真实生效（此前 accept-and-ignore，池硬编码 5）——扩容只增不减，spawn 按需扩到 N
 - 新增 TEA_SUBAGENT_WORKERS 环境变量：池初始容量（缺省 5，钳制 [1,64]，非法值回退并告警）
 - 新增回归测试 test_subagent_workers.py（9 项，含元验证：旧实现上全部变红）
- - README/AGENTS 工具口径同步为 60 注册 / 58 可见；重生成 docs/TOOLS.md
-## [Unreleased]
-
+- README/AGENTS 工具口径同步为 60 注册 / 58 可见；重生成 docs/TOOLS.md
 
 ## [0.17.1] - 2026-09-28
 

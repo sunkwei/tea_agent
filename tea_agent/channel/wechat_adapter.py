@@ -38,6 +38,8 @@ from pathlib import Path
 
 import httpx
 
+from .model_command import build_model_reply
+
 logger = logging.getLogger("wechat_adapter")
 
 # ── 常量 ──
@@ -553,99 +555,8 @@ class WeChatAdapter:
     # ──────────────────────────────────────────────
 
     def _cmd_model(self, args: str) -> str:
-        """模型选择。
-
-        /model                查看当前模型
-        /model list           列出全部提供商及其模型
-        /model <提供商>       切到该提供商的默认模型
-        /model <提供商> <模型> 指定切换
-
-        数据源与 Web 面板一致：provider.yaml（经 /api/model-config）。
-        切换为全局生效（Web / 微信 / API 共用同一份配置）。
-        """
-        panel = self._api_get("/api/model-config", timeout=15)
-        if not panel:
-            return f"❌ 读取模型配置失败\n请确认 tea_agent server 正在运行。\n当前 API: {self._api_base}"
-
-        providers = panel.get("providers") or []
-        active = panel.get("active") or {}
-        main = active.get("main") or {}
-        cur_p, cur_m = main.get("provider", ""), main.get("model", "")
-
-        def _ids(p: dict) -> list[str]:
-            return [m.get("id", "") for m in (p.get("models") or []) if m.get("id")]
-
-        tokens = args.split()
-        if not tokens:
-            cheap = active.get("cheap") or {}
-            lines = ["🎛 *当前模型*", f"• 主力: `{cur_p}` / `{cur_m}`"]
-            if cheap:
-                lines.append(f"• 轻量: `{cheap.get('provider', '')}` / `{cheap.get('model', '')}`")
-            lines += [
-                "",
-                "*用法*",
-                "`/model list` — 列出提供商与模型",
-                "`/model <提供商> <模型>` — 切换主力模型",
-                "`/model <提供商>` — 切到该提供商默认模型",
-                "",
-                "⚠️ 切换为全局生效（含 Web 界面）",
-            ]
-            return "\n".join(lines)
-
-        if tokens[0].lower() in ("list", "ls"):
-            if not providers:
-                return "❌ provider.yaml 中暂无提供商\n请先在 Web 界面「模型」面板添加。"
-            out = [f"📚 *提供商*（{len(providers)}）"]
-            for p in providers:
-                name = p.get("name", "?") or "?"
-                ids = _ids(p)
-                out.append("")
-                out.append(f"*{name}*" + (" ✅" if name == cur_p else ""))
-                out.append("  " + (", ".join(ids) if ids else "（无模型）"))
-                if p.get("default_model"):
-                    out.append(f"  默认: {p['default_model']}")
-            out += ["", "切换：`/model <提供商> <模型>`"]
-            return "\n".join(out)
-
-        provider = tokens[0]
-        model = tokens[1] if len(tokens) > 1 else ""
-        hit = next((p for p in providers if (p.get("name") or "").lower() == provider.lower()), None)
-        if hit is None:
-            return f"❌ 未找到提供商 `{provider}`\n\n`/model list` 查看可用列表"
-
-        name = hit.get("name") or provider
-        if not model:
-            model = hit.get("default_model") or ""
-            if not model:
-                ids = _ids(hit)
-                return (
-                    f"ℹ️ `{name}` 未设默认模型，可选：\n  "
-                    + (", ".join(ids) if ids else "（无模型）")
-                    + f"\n\n切换：`/model {name} <模型>`"
-                )
-
-        res = self._api_post(
-            "/api/model-config/switch",
-            {"provider": name, "model": model, "role": "main"},
-            timeout=40,
-        )
-        if not res:
-            return (
-                f"❌ 切换失败（服务端未返回成功）\n"
-                f"请求: {name} / {model}\n"
-                "请确认模型已登记在 provider.yaml，或查看服务端日志。"
-            )
-        if not res.get("ok"):
-            return f"❌ 切换失败: {res.get('error') or res}"
-
-        mode = (res.get("switch") or {}).get("mode", "")
-        tip = {
-            "applied": "✅ 已立即生效（当前话题无缝续接）",
-            "pending_next_turn": "⏳ 正在回复中，本轮结束后自动生效",
-            "next_message": "💾 已保存，下一条消息生效",
-            "config_only": "💾 配置已保存",
-        }.get(mode, "✅ 已切换")
-        return f"🎛 模型切换\n• 主力: `{name}` / `{model}`\n{tip}"
+        """/model — 查看/列出/切换模型（实现与 Telegram 共用 channel.model_command）。"""
+        return build_model_reply(args, self._api_get, self._api_post, self._api_base)
 
     # ──────────────────────────────────────────────
     #  发送消息 / Typing

@@ -42,6 +42,8 @@ try:
 except ImportError:
     httpx = None
 
+from .model_command import build_model_reply
+
 logger = logging.getLogger("telegram_adapter")
 
 SESSION_FILE = str(Path.home() / ".tea_agent" / "telegram_sessions.json")
@@ -269,6 +271,7 @@ class TelegramAdapter:
             "/topics - 列出最近会话\n"
             "/topic - 查看/切换当前话题\n"
             "/new - 开始新话题\n"
+            "/model - 查看/切换模型\n"
             "/about - 关于本 Bot\n\n"
             "💬 提示：发送任意消息开始对话。"
         )
@@ -320,9 +323,9 @@ class TelegramAdapter:
         for s in sessions:
             tid = s.get("id", "")[:8]
             title = s.get("title", "?") or "?"
-            s.get("updated", "")[:10]
-            s.get("total_tokens", 0)
-            lines.append(f"  `{tid}`  {title}")
+            updated = (s.get("updated", "") or "")[:10]
+            tokens = s.get("total_tokens", 0) or 0
+            lines.append(f"  `{tid}`  {title}  ({updated}, {tokens:,}t)")
         lines.append("")
         lines.append(f"共 {len(sessions)} 个会话")
         lines.append("💡 使用 `/topic <id>` 切换到指定会话")
@@ -387,6 +390,22 @@ class TelegramAdapter:
             else:
                 await update.message.reply_text("📌 暂无活跃话题，发送消息将自动创建。")
 
+    async def _handle_model(self, update, context):
+        """处理 /model 命令 - 查看当前/列出提供商与模型/切换（与微信共用实现）。
+
+        切换为全局生效（Web/渠道/API 共用 provider.yaml）。
+        """
+        if not update.message:
+            return
+        reply = build_model_reply(
+            " ".join(context.args or []), self._api_get, self._api_post, self._api_base
+        )
+        try:
+            await update.message.reply_text(reply, parse_mode="Markdown")
+        except Exception:
+            # 模型 id 含特殊字符导致 Markdown 解析失败 → 降级为纯文本，不丢回复
+            await update.message.reply_text(reply)
+
     # ── 启动/停止 ──
 
     def start(self):
@@ -415,7 +434,8 @@ class TelegramAdapter:
         self._application.add_handler(CommandHandler("new", self._handle_new))
         self._application.add_handler(CommandHandler("help", self._handle_start))
         self._application.add_handler(CommandHandler("about", self._handle_about))
-        self._application.add_handler(CommandHandler("config", self._handle_config))
+        self._application.add_handler(CommandHandler("model", self._handle_model))
+        self._application.add_handler(CommandHandler("config", self._handle_model))
         self._application.add_handler(CommandHandler("topics", self._handle_topics))
         self._application.add_handler(CommandHandler("topic", self._handle_topic))
         self._application.add_handler(CommandHandler("sessions", self._handle_topics))

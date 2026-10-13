@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.17.6] - 2026-10-13
+### Bug Fixes
+- server: 注册 `POST /v1/chat/completions` 路由——handler 与 OpenAPI 声明均在，唯独漏挂路由，
+  导致微信/Telegram 适配器发消息恒返回「服务器错误 (HTTP 404)」
+- wechat_adapter: 新增 `/model` 命令（查看当前 / `list` 列提供商与模型 / `<提供商> [模型]` 切换），
+  数据源与 Web 面板共用 provider.yaml；生效时机沿用服务端 applied/pending_next_turn/next_message
+- wechat_adapter: `_handle_command` 中 `parts[1] if ... else ""` 结果未赋值，命令参数长期被静默丢弃
+
 
 
 ## [0.17.3] - 2026-10-08
@@ -14,7 +22,7 @@
 - toolkit_subagent: max_concurrent 参数真实生效（此前 accept-and-ignore，池硬编码 5）——扩容只增不减，spawn 按需扩到 N
 - 新增 TEA_SUBAGENT_WORKERS 环境变量：池初始容量（缺省 5，钳制 [1,64]，非法值回退并告警）
 - 新增回归测试 test_subagent_workers.py（9 项，含元验证：旧实现上全部变红）
-- README/AGENTS 工具口径同步为 60 注册 / 58 可见；重生成 docs/TOOLS.md
+ - README/AGENTS 工具口径同步为 60 注册 / 58 可见；重生成 docs/TOOLS.md
 ## [Unreleased]
 
 

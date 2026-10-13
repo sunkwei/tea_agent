@@ -495,7 +495,11 @@ class WeChatAdapter:
         """处理以 / 开头的命令。"""
         parts = cmd_text.strip().split(maxsplit=1)
         cmd = parts[0].lower()
-        parts[1] if len(parts) > 1 else ""
+        args = parts[1] if len(parts) > 1 else ""
+
+        if cmd == "/model":
+            self._send_message(user_id, context_token, self._cmd_model(args))
+            return
 
         if cmd == "/start" or cmd == "/help":
             reply = (
@@ -503,6 +507,8 @@ class WeChatAdapter:
                 "已连接到 AI 助手，直接发送消息即可对话。\n\n"
                 "📋 *命令*\n"
                 "/start - 显示此帮助\n"
+                "/model - 查看当前模型\n"
+                "/model list - 列出提供商与模型\n"
                 "/new - 开始新话题\n"
                 "/topic - 查看当前话题\n"
                 "/about - 关于\n\n"
@@ -541,6 +547,105 @@ class WeChatAdapter:
             reply = f"❌ 未知命令: {cmd}\n使用 /help 查看可用命令。"
 
         self._send_message(user_id, context_token, reply)
+
+    # ──────────────────────────────────────────────
+    #  /model 命令（提供商 + 模型）
+    # ──────────────────────────────────────────────
+
+    def _cmd_model(self, args: str) -> str:
+        """模型选择。
+
+        /model                查看当前模型
+        /model list           列出全部提供商及其模型
+        /model <提供商>       切到该提供商的默认模型
+        /model <提供商> <模型> 指定切换
+
+        数据源与 Web 面板一致：provider.yaml（经 /api/model-config）。
+        切换为全局生效（Web / 微信 / API 共用同一份配置）。
+        """
+        panel = self._api_get("/api/model-config", timeout=15)
+        if not panel:
+            return f"❌ 读取模型配置失败\n请确认 tea_agent server 正在运行。\n当前 API: {self._api_base}"
+
+        providers = panel.get("providers") or []
+        active = panel.get("active") or {}
+        main = active.get("main") or {}
+        cur_p, cur_m = main.get("provider", ""), main.get("model", "")
+
+        def _ids(p: dict) -> list[str]:
+            return [m.get("id", "") for m in (p.get("models") or []) if m.get("id")]
+
+        tokens = args.split()
+        if not tokens:
+            cheap = active.get("cheap") or {}
+            lines = ["🎛 *当前模型*", f"• 主力: `{cur_p}` / `{cur_m}`"]
+            if cheap:
+                lines.append(f"• 轻量: `{cheap.get('provider', '')}` / `{cheap.get('model', '')}`")
+            lines += [
+                "",
+                "*用法*",
+                "`/model list` — 列出提供商与模型",
+                "`/model <提供商> <模型>` — 切换主力模型",
+                "`/model <提供商>` — 切到该提供商默认模型",
+                "",
+                "⚠️ 切换为全局生效（含 Web 界面）",
+            ]
+            return "\n".join(lines)
+
+        if tokens[0].lower() in ("list", "ls"):
+            if not providers:
+                return "❌ provider.yaml 中暂无提供商\n请先在 Web 界面「模型」面板添加。"
+            out = [f"📚 *提供商*（{len(providers)}）"]
+            for p in providers:
+                name = p.get("name", "?") or "?"
+                ids = _ids(p)
+                out.append("")
+                out.append(f"*{name}*" + (" ✅" if name == cur_p else ""))
+                out.append("  " + (", ".join(ids) if ids else "（无模型）"))
+                if p.get("default_model"):
+                    out.append(f"  默认: {p['default_model']}")
+            out += ["", "切换：`/model <提供商> <模型>`"]
+            return "\n".join(out)
+
+        provider = tokens[0]
+        model = tokens[1] if len(tokens) > 1 else ""
+        hit = next((p for p in providers if (p.get("name") or "").lower() == provider.lower()), None)
+        if hit is None:
+            return f"❌ 未找到提供商 `{provider}`\n\n`/model list` 查看可用列表"
+
+        name = hit.get("name") or provider
+        if not model:
+            model = hit.get("default_model") or ""
+            if not model:
+                ids = _ids(hit)
+                return (
+                    f"ℹ️ `{name}` 未设默认模型，可选：\n  "
+                    + (", ".join(ids) if ids else "（无模型）")
+                    + f"\n\n切换：`/model {name} <模型>`"
+                )
+
+        res = self._api_post(
+            "/api/model-config/switch",
+            {"provider": name, "model": model, "role": "main"},
+            timeout=40,
+        )
+        if not res:
+            return (
+                f"❌ 切换失败（服务端未返回成功）\n"
+                f"请求: {name} / {model}\n"
+                "请确认模型已登记在 provider.yaml，或查看服务端日志。"
+            )
+        if not res.get("ok"):
+            return f"❌ 切换失败: {res.get('error') or res}"
+
+        mode = (res.get("switch") or {}).get("mode", "")
+        tip = {
+            "applied": "✅ 已立即生效（当前话题无缝续接）",
+            "pending_next_turn": "⏳ 正在回复中，本轮结束后自动生效",
+            "next_message": "💾 已保存，下一条消息生效",
+            "config_only": "💾 配置已保存",
+        }.get(mode, "✅ 已切换")
+        return f"🎛 模型切换\n• 主力: `{name}` / `{model}`\n{tip}"
 
     # ──────────────────────────────────────────────
     #  发送消息 / Typing

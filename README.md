@@ -1,5 +1,7 @@
 # Tea Agent v0.17.3
 
+> ⚠️ **本项目已经废弃，建议使用 https://github.com/sunkwei/tea_a2 **
+
 > ⚠️ **AI 写 AI 的实验项目，自行承担责任。**
 
 > 🌐 **[English Version](README.en.md)**
